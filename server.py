@@ -1617,17 +1617,17 @@ def get_monitoring_history():
     """Return summary of all saved monitoring dates (newest first)."""
     try:
         conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
-        c.execute('''
+        c.execute("""
             SELECT plan_date,
                    COUNT(*) as total_stops,
-                   SUM(CASE WHEN status="DONE" THEN 1 ELSE 0 END) as done_count,
-                   SUM(CASE WHEN otif_status LIKE "%OTIF%" THEN 1 ELSE 0 END) as otif_count,
+                   SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END) as done_count,
+                   SUM(CASE WHEN otif_status LIKE '%OTIF%' THEN 1 ELSE 0 END) as otif_count,
                    COUNT(DISTINCT truck_id) as truck_count
             FROM monitoring_records
             GROUP BY plan_date
             ORDER BY plan_date DESC
             LIMIT 90
-        ''')
+        """)
         rows = c.fetchall(); conn.close()
         result = []
         for row in rows:

@@ -3857,7 +3857,10 @@ function saveMonitoringAll() {
       body: JSON.stringify({plan_date: today, monitoring: monData})
     });
   }).then(r=>r.json()).then(d=>{
-    showToast(d.message||'Monitoring saved to database','success');
+    if (d.error) { showToast('Save error: '+d.error,'error'); return; }
+    showToast((d.message||'Monitoring saved') + ' ✔ ' + (d.saved||'') + ' records','success');
+    // Refresh Mon. History grid silently so it's ready when user switches to it
+    loadMonitoringHistory();
   }).catch(e=>showToast('Save error: '+e.message,'error'));
 }
 
