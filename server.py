@@ -107,6 +107,14 @@ app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024
 DB_PATH = os.path.join(_DATA_DIR, 'pfc_logistics.db')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+def open_db():
+    """Open SQLite with WAL mode + generous busy timeout to prevent 'database is locked' errors."""
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")   # 30 s retry window
+    conn.execute("PRAGMA synchronous=NORMAL")   # safe + faster than FULL
+    return conn
+
 # ─────────────────────────────────────────────────────────────
 #  WAREHOUSE DATA
 # ─────────────────────────────────────────────────────────────
@@ -366,7 +374,7 @@ def lookup_rate(trucker: str, capacity_kg: int, wh_group: str, area: str):
     cap         = int(capacity_kg)
 
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+        conn = open_db()
         c = conn.cursor()
         # Exact match: trucker + capacity + wh + area
         c.execute('''SELECT rate, cost_per_kg FROM rate_master
@@ -425,7 +433,7 @@ def lookup_highest_rate(trucker: str, capacity_kg: int, wh_group: str, areas: li
     trucker_up = trucker.upper().strip()
     cap        = int(capacity_kg)
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+        conn = open_db()
         c    = conn.cursor()
         best_rate = None
         best_cpk  = None
@@ -696,7 +704,7 @@ def run_routing_engine(orders_df) -> list:
 
     # ── Step 1.5: Resolve lat/lng from shipping address ────────
     import urllib.request as _ureq, urllib.parse as _uparse, time as _gtime
-    conn_geo = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+    conn_geo = open_db()
     c_geo    = conn_geo.cursor()
 
     for stop in all_stops:
@@ -852,7 +860,7 @@ def run_routing_engine(orders_df) -> list:
 #  DATABASE
 # ─────────────────────────────────────────────────────────────
 def init_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+    conn = open_db()
     c = conn.cursor()
 
     # WAL mode: readers never block writers; multiple threads can read simultaneously
@@ -1510,7 +1518,7 @@ def save_plan():
             'total_km':        round(sum(safe_float(t.get('total_km')) for t in trucks), 1),
             'total_cost':      round(sum(safe_float(t.get('truck_rate')) for t in trucks), 2),
         }
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+        conn = open_db()
         c = conn.cursor()
         # If THIS user already saved a plan for this date, update it — never overwrite another user's plan
         c.execute('SELECT id FROM route_plans WHERE plan_date=? AND created_by=? ORDER BY id DESC LIMIT 1', (plan_date, created_by))
@@ -1544,7 +1552,7 @@ def save_plan():
 @app.route('/api/history', methods=['GET'])
 def get_history():
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+        conn = open_db()
         c = conn.cursor()
         c.execute('SELECT id,plan_date,plan_name,created_at,created_by,status,summary FROM route_plans ORDER BY created_at DESC LIMIT 60')
         rows = c.fetchall()
@@ -1563,7 +1571,7 @@ def get_history():
 @app.route('/api/latest-plan-meta', methods=['GET'])
 def latest_plan_meta():
     """Lightweight poll endpoint — returns just the ID + metadata of the newest saved plan."""
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+    conn = open_db(); c = conn.cursor()
     c.execute('SELECT id, plan_date, plan_name, created_at, created_by, summary '
               'FROM route_plans ORDER BY id DESC LIMIT 1')
     row = c.fetchone(); conn.close()
@@ -1586,7 +1594,7 @@ def latest_plan_meta():
 def get_history_plan(plan_id):
     router    = request.args.get('router', 'default')
     temp_plan = get_router_temp('plan', router)
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+    conn = open_db()
     c = conn.cursor()
     c.execute('SELECT id,plan_date,plan_name,created_at,created_by,status,data,summary FROM route_plans WHERE id=?',(plan_id,))
     row = c.fetchone(); conn.close()
@@ -1602,7 +1610,7 @@ def get_history_plan(plan_id):
 @app.route('/api/history/<int:plan_id>', methods=['DELETE'])
 def delete_history_plan(plan_id):
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        conn = open_db(); c = conn.cursor()
         c.execute('SELECT id FROM route_plans WHERE id=?', (plan_id,))
         if not c.fetchone():
             conn.close()
@@ -1618,7 +1626,7 @@ def delete_history_plan(plan_id):
 def get_monitoring_history():
     """Return summary of all saved monitoring dates (newest first)."""
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        conn = open_db(); c = conn.cursor()
         c.execute("""
             SELECT plan_date,
                    COUNT(*) as total_stops,
@@ -1652,7 +1660,7 @@ def get_monitoring_history():
 def get_monitoring_history_detail(plan_date):
     """Return full monitoring records for a specific date."""
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        conn = open_db(); c = conn.cursor()
         c.execute('''SELECT truck_id,truck_type,seq,customer_name,cluster_id,area,
                             status,receiving_time,actual_done,otif_status,concerns,remarks,trucker_code
                      FROM monitoring_records WHERE plan_date=?
@@ -1672,7 +1680,7 @@ def delete_monitoring_db():
         date = request.args.get('date', '')
         if not date:
             return jsonify({'error': 'date param required'}), 400
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        conn = open_db(); c = conn.cursor()
         c.execute('DELETE FROM monitoring_records WHERE plan_date=?', (date,))
         deleted = c.rowcount
         conn.commit(); conn.close()
@@ -1743,7 +1751,7 @@ def save_monitoring_db():
         monitoring=data.get('monitoring',[]); plan_id=data.get('plan_id')
         plan_date=data.get('plan_date',datetime.now().strftime('%Y-%m-%d'))
         if not monitoring: return jsonify({'error':'No monitoring data to save'}), 400
-        conn=sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c=conn.cursor()
+        conn=open_db(); c=conn.cursor()
         c.execute('DELETE FROM monitoring_records WHERE plan_date=?',(plan_date,))
         saved = 0
         for row in monitoring:
@@ -1764,7 +1772,7 @@ def save_monitoring_db():
 def debug_db():
     """Debug endpoint — shows row counts and sample data from key tables."""
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        conn = open_db(); c = conn.cursor()
         c.execute('SELECT COUNT(*) FROM monitoring_records'); mon_count = c.fetchone()[0]
         c.execute('SELECT COUNT(*) FROM route_plans');        plan_count = c.fetchone()[0]
         c.execute('SELECT plan_date, COUNT(*) FROM monitoring_records GROUP BY plan_date ORDER BY plan_date DESC LIMIT 10')
@@ -1789,7 +1797,7 @@ def get_rates():
     wh      = request.args.get('wh', '')
     search  = request.args.get('search', '').strip()
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        conn = open_db(); c = conn.cursor()
         q = 'SELECT id,trucker,capacity_kg,pickup_wh,area,rate,cost_per_kg,is_active,updated_at FROM rate_master WHERE 1=1'
         params = []
         if trucker: q += ' AND UPPER(trucker)=?'; params.append(trucker.upper())
@@ -1852,7 +1860,7 @@ def import_rates():
         try: return float(str(v).replace('₱', '').replace(',', '').strip() or 0)
         except: return 0.0
 
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+    conn = open_db(); c = conn.cursor()
     c.execute('DELETE FROM rate_master')
     inserted = 0
     for _, row in df.iterrows():
@@ -1877,7 +1885,7 @@ def import_rates():
 @app.route('/api/rates/<int:rate_id>', methods=['PUT'])
 def update_rate(rate_id):
     data=request.get_json() or {}
-    conn=sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c=conn.cursor()
+    conn=open_db(); c=conn.cursor()
     c.execute("UPDATE rate_master SET rate=?,cost_per_kg=?,is_active=?,updated_at=datetime('now','localtime') WHERE id=?",
               (data.get('rate',0),data.get('cost_per_kg',0),1 if data.get('is_active',True) else 0,rate_id))
     conn.commit(); conn.close(); return jsonify({'success':True})
@@ -1885,7 +1893,7 @@ def update_rate(rate_id):
 
 @app.route('/api/rates/<int:rate_id>', methods=['DELETE'])
 def delete_rate(rate_id):
-    conn=sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c=conn.cursor()
+    conn=open_db(); c=conn.cursor()
     c.execute('UPDATE rate_master SET is_active=0 WHERE id=?',(rate_id,))
     conn.commit(); conn.close(); return jsonify({'success':True})
 
@@ -1893,7 +1901,7 @@ def delete_rate(rate_id):
 @app.route('/api/rates/add', methods=['POST'])
 def add_rate():
     data=request.get_json() or {}
-    conn=sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c=conn.cursor()
+    conn=open_db(); c=conn.cursor()
     c.execute('INSERT INTO rate_master (trucker,capacity_kg,pickup_wh,area,rate,cost_per_kg) VALUES (?,?,?,?,?,?)',
               (str(data.get('trucker','')).strip(),int(data.get('capacity_kg',0)),
                str(data.get('pickup_wh','')).upper(),str(data.get('area','')).upper(),
@@ -1952,7 +1960,7 @@ def get_truck_rate():
         rate_wh    = WH_TO_RATE_WH.get(wh_group, wh_group).upper()
         trucker_up = trucker.upper()
         try:
-            conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+            conn = open_db()
             c    = conn.cursor()
             best_r = None
             for area in set(areas):
@@ -1982,7 +1990,7 @@ def rate_debug():
     if not trucker:
         return jsonify({'error': 'trucker param required'}), 400
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+        conn = open_db()
         c    = conn.cursor()
         c.execute('''SELECT id, trucker, capacity_kg, pickup_wh, area, rate, cost_per_kg, is_active
                      FROM rate_master WHERE UPPER(trucker)=? ORDER BY pickup_wh, capacity_kg, area''',
@@ -2146,7 +2154,7 @@ def merge_orders():
 
         # ── Geocode new stops (address → lat/lng) ─────────
         import time as _gtime2
-        conn_geo = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+        conn_geo = open_db()
         c_geo    = conn_geo.cursor()
         for stop in new_stops:
             addr2     = stop.get('shipping_address', '').strip()
@@ -2436,7 +2444,7 @@ def export_monitoring_csv():
 @app.route('/api/clear-coord-cache', methods=['POST'])
 def clear_coord_cache():
     """Wipe the forward-geocoding cache (address -> lat/lng)."""
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+    conn = open_db(); c = conn.cursor()
     c.execute('DELETE FROM address_fwd_cache')
     deleted = c.rowcount
     conn.commit(); conn.close()
@@ -2451,7 +2459,7 @@ def verify_addresses():
     stops = data.get('stops', [])
     if not stops:
         return jsonify({'results': []})
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+    conn = open_db(); c = conn.cursor()
     results = []
     for stop in stops:
         lat = stop.get('lat'); lng = stop.get('lng')
@@ -2562,7 +2570,7 @@ def update_stop_coord():
         addr = stop.get('shipping_address') or stop.get('customer_name') or ''
         if addr:
             cache_key = re.sub(r'\s+', ' ', addr.upper().strip())
-            conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+            conn = open_db(); c = conn.cursor()
             c.execute('INSERT OR REPLACE INTO address_fwd_cache (address_key,lat,lng,display_name) VALUES (?,?,?,?)',
                       (cache_key, stop['lat'], stop['lng'], addr))
             conn.commit(); conn.close()
@@ -2581,7 +2589,7 @@ def fix_coords():
     stops = data.get('stops', [])
     if not stops:
         return jsonify({'results': [], 'fixed': 0, 'total': 0})
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+    conn = open_db(); c = conn.cursor()
     results = []
     for stop in stops:
         addr = stop.get('shipping_address') or stop.get('customer_name') or ''

@@ -617,6 +617,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
     <div class="kpi orange"><div class="kpi-label">Total Volume (KG)</div><div class="kpi-value orange" id="kpi-vol">—</div></div>
     <div class="kpi green"><div class="kpi-label">Avg Utilization</div><div class="kpi-value green" id="kpi-util">—</div></div>
     <div class="kpi"><div class="kpi-label">Total Trip Cost</div><div class="kpi-value" id="kpi-cost">—</div></div>
+    <div class="kpi"><div class="kpi-label">Avg Cost / KG</div><div class="kpi-value" id="kpi-cpk">—</div></div>
   </div>
   <div id="util-breakdown" class="util-breakdown"></div>
   <div id="collab-live-badge" style="display:none;background:#dbeafe;color:#1e40af;border-radius:6px;
@@ -2483,6 +2484,11 @@ function updatePlanKPIs() {
   const totalCost = t.reduce((a,x)=>a+(parseFloat(String(x.truck_rate||'').replace(/[^\d.]/g,''))||0),0);
   const costEl = document.getElementById('kpi-cost');
   if (costEl) costEl.innerHTML = totalCost>0?'₱'+Math.round(totalCost).toLocaleString():'—';
+  const cpkEl = document.getElementById('kpi-cpk');
+  if (cpkEl) {
+    const avgCpk = (totalCost > 0 && vol > 0) ? (totalCost / vol) : 0;
+    cpkEl.innerHTML = avgCpk > 0 ? '₱' + avgCpk.toFixed(2) + '/kg' : '—';
+  }
 }
 
 // ======================================================
@@ -3657,7 +3663,8 @@ function renderPerf(){
     <div class="kpi green"><div class="kpi-label">Fleet Avg Util</div><div class="kpi-value green">${avgUtil.toFixed(1)}%</div></div>
     <div class="kpi"><div class="kpi-label">Trucks &ge;80%</div><div class="kpi-value">${above80}/${currentPlan.length}</div></div>
     <div class="kpi"><div class="kpi-label">Fleet Total KM</div><div class="kpi-value">&#x1F6E3; ${totalKm.toFixed(1)}</div></div>
-    ${totalCost>0?`<div class="kpi"><div class="kpi-label">Total Trip Cost</div><div class="kpi-value">&#x20B1;${Math.round(totalCost).toLocaleString()}</div></div>`:''}`;
+    ${totalCost>0?`<div class="kpi"><div class="kpi-label">Total Trip Cost</div><div class="kpi-value">&#x20B1;${Math.round(totalCost).toLocaleString()}</div></div>`:''}
+    ${(totalCost>0&&totalVol>0)?`<div class="kpi orange"><div class="kpi-label">Avg Cost / KG</div><div class="kpi-value orange">&#x20B1;${(totalCost/totalVol).toFixed(2)}/kg</div></div>`:''}`;
 
   document.getElementById('perf-tbody').innerHTML=currentPlan.map((truck,ti)=>{
     const color=TRUCK_COLORS[ti%TRUCK_COLORS.length];
