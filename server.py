@@ -897,22 +897,24 @@ def init_db():
         concerns      TEXT,
         remarks       TEXT,
         trucker_code  TEXT,
+        shipping_address TEXT DEFAULT '',
         saved_at      TEXT DEFAULT (datetime('now','localtime'))
     )''')
     # Migrations: add any columns that may be missing in older DBs
     _mon_cols = [
-        ("plan_id",       "INTEGER"),
-        ("plan_date",     "TEXT"),
-        ("truck_type",    "TEXT"),
-        ("cluster_id",    "TEXT"),
-        ("area",          "TEXT"),
-        ("receiving_time","TEXT"),
-        ("actual_done",   "TEXT"),
-        ("otif_status",   "TEXT"),
-        ("concerns",      "TEXT"),
-        ("remarks",       "TEXT"),
-        ("trucker_code",  "TEXT"),
-        ("saved_at",      "TEXT DEFAULT (datetime('now','localtime'))"),
+        ("plan_id",          "INTEGER"),
+        ("plan_date",        "TEXT"),
+        ("truck_type",       "TEXT"),
+        ("cluster_id",       "TEXT"),
+        ("area",             "TEXT"),
+        ("receiving_time",   "TEXT"),
+        ("actual_done",      "TEXT"),
+        ("otif_status",      "TEXT"),
+        ("concerns",         "TEXT"),
+        ("remarks",          "TEXT"),
+        ("trucker_code",     "TEXT"),
+        ("shipping_address", "TEXT DEFAULT ''"),
+        ("saved_at",         "TEXT DEFAULT (datetime('now','localtime'))"),
     ]
     for col, coltype in _mon_cols:
         try:
@@ -1756,6 +1758,29 @@ def save_monitoring_db():
     except Exception as e:
         import traceback
         return jsonify({'error': f'Monitoring DB save error: {str(e)}', 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/debug/db', methods=['GET'])
+def debug_db():
+    """Debug endpoint — shows row counts and sample data from key tables."""
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        c.execute('SELECT COUNT(*) FROM monitoring_records'); mon_count = c.fetchone()[0]
+        c.execute('SELECT COUNT(*) FROM route_plans');        plan_count = c.fetchone()[0]
+        c.execute('SELECT plan_date, COUNT(*) FROM monitoring_records GROUP BY plan_date ORDER BY plan_date DESC LIMIT 10')
+        mon_dates = [{'date': r[0], 'count': r[1]} for r in c.fetchall()]
+        c.execute('SELECT plan_date, plan_name, created_by FROM route_plans ORDER BY id DESC LIMIT 5')
+        plans = [{'date': r[0], 'name': r[1], 'by': r[2]} for r in c.fetchall()]
+        conn.close()
+        return jsonify({
+            'db_path': DB_PATH,
+            'monitoring_records_total': mon_count,
+            'route_plans_total': plan_count,
+            'monitoring_by_date': mon_dates,
+            'recent_plans': plans,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'db_path': DB_PATH}), 500
 
 
 @app.route('/api/rates', methods=['GET'])
