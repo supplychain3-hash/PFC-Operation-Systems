@@ -1590,6 +1590,57 @@ def delete_history_plan(plan_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/monitoring-history', methods=['GET'])
+def get_monitoring_history():
+    """Return summary of all saved monitoring dates (newest first)."""
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        c.execute('''
+            SELECT plan_date,
+                   COUNT(*) as total_stops,
+                   SUM(CASE WHEN status="DONE" THEN 1 ELSE 0 END) as done_count,
+                   SUM(CASE WHEN otif_status LIKE "%OTIF%" THEN 1 ELSE 0 END) as otif_count,
+                   COUNT(DISTINCT truck_id) as truck_count
+            FROM monitoring_records
+            GROUP BY plan_date
+            ORDER BY plan_date DESC
+            LIMIT 90
+        ''')
+        rows = c.fetchall(); conn.close()
+        result = []
+        for row in rows:
+            plan_date, total, done, otif, trucks = row
+            result.append({
+                'plan_date': plan_date,
+                'total_stops': total or 0,
+                'done_count': done or 0,
+                'otif_count': otif or 0,
+                'truck_count': trucks or 0,
+                'completion_pct': round((done or 0) / total * 100) if total else 0,
+                'otif_pct': round((otif or 0) / total * 100) if total else 0,
+            })
+        return jsonify({'dates': result})
+    except Exception as e:
+        return jsonify({'dates': [], 'error': str(e)})
+
+
+@app.route('/api/monitoring-history/<plan_date>', methods=['GET'])
+def get_monitoring_history_detail(plan_date):
+    """Return full monitoring records for a specific date."""
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        c.execute('''SELECT truck_id,truck_type,seq,customer_name,cluster_id,area,
+                            status,receiving_time,actual_done,otif_status,concerns,remarks,trucker_code
+                     FROM monitoring_records WHERE plan_date=?
+                     ORDER BY truck_id,seq''', (plan_date,))
+        rows = c.fetchall(); conn.close()
+        cols = ['truck_id','truck_type','seq','customer_name','cluster_id','area',
+                'status','receiving_time','actual_done','otif_status','concerns','remarks','trucker_code']
+        return jsonify({'records': [dict(zip(cols, r)) for r in rows]})
+    except Exception as e:
+        return jsonify({'records': [], 'error': str(e)})
+
+
 @app.route('/api/monitoring-db', methods=['DELETE'])
 def delete_monitoring_db():
     """Delete all monitoring records for a given date."""

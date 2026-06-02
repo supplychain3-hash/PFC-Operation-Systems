@@ -494,7 +494,8 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
   <button class="nav-btn" id="nav-plan-btn" onclick="showPage('plan',this)">🗺️ Route Plan</button>
   <button class="nav-btn" onclick="showPage('perf',this)">📊 Performance</button>
   <button class="nav-btn" onclick="showPage('monitoring',this)">🚚 Monitoring</button>
-  <button class="nav-btn" onclick="showPage('history',this)">📁 History</button>
+  <button class="nav-btn" onclick="showPage('history',this)">📁 Route History</button>
+  <button class="nav-btn" onclick="showPage('mon-history',this)">🗂️ Mon. History</button>
   <button class="nav-btn" onclick="showPage('rates',this)">💰 Rate Master</button>
   <button class="nav-btn" onclick="showPage('analytics',this)">📈 Analytics</button>
 </div>
@@ -760,6 +761,20 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
     <div class="empty-state">
       <div class="icon">📂</div><h3>No saved plans yet</h3>
       <p>Use the 💾 Save Plan button after routing to save a plan here.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MONITORING HISTORY ══════════════ -->
+<div class="page" id="page-mon-history">
+  <div class="section-row">
+    <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">🗂️ Monitoring History</span>
+    <button class="btn btn-outline btn-sm" onclick="loadMonitoringHistory()">🔄 Refresh</button>
+  </div>
+  <div class="history-grid" id="mon-history-grid">
+    <div class="empty-state">
+      <div class="icon">🗂️</div><h3>No monitoring records yet</h3>
+      <p>Use "💾 Save &amp; Persist to DB" in the Monitoring tab to save records here.</p>
     </div>
   </div>
 </div>
@@ -1355,7 +1370,8 @@ function showPage(name, btn) {
   if (name==='perf')       renderPerf();
   if (name==='rates')      loadRates();
   if (name==='analytics')  loadAnalytics();
-  if (name==='history')    loadHistory();
+  if (name==='history')      loadHistory();
+  if (name==='mon-history')  loadMonitoringHistory();
   if (name==='plan')       { setTimeout(()=>leafletMap&&leafletMap.invalidateSize(),180); }
   // Start/stop live poller based on active tab
   if (name==='monitoring') startLiveMonitoring();
@@ -3809,7 +3825,7 @@ function loadMonitoring() {
 function deleteMonitoringDb(planDate) {
   if (!planDate) { showToast('No date specified','error'); return; }
   if (!confirm('Delete all monitoring records for '+planDate+'?')) return;
-  fetch('/api/monitoring-db?plan_date='+encodeURIComponent(planDate), {method:'DELETE'})
+  fetch('/api/monitoring-db?date='+encodeURIComponent(planDate), {method:'DELETE'})
     .then(r=>r.json()).then(d=>{
       showToast(d.message||'Records deleted','success');
       monData = []; renderMonitoring();
@@ -3905,6 +3921,124 @@ function loadHistoryPlan(id) {
       showToast('Plan loaded: '+( d.name||d.date||'saved plan'),'success');
     })
     .catch(e=>showToast('Load error: '+e.message,'error'));
+}
+
+// ======================================================
+//  MONITORING HISTORY
+// ======================================================
+function loadMonitoringHistory() {
+  fetch('/api/monitoring-history')
+    .then(r=>r.json()).then(d=>{
+      const grid = document.getElementById('mon-history-grid');
+      if (!d || !d.dates || !d.dates.length) {
+        grid.innerHTML='<div class="empty-state"><div class="icon">&#x1F5C2;&#xFE0F;</div><h3>No monitoring records yet</h3><p>Use "&#x1F4BE; Save &amp; Persist to DB" in the Monitoring tab to save records here.</p></div>';
+        return;
+      }
+      grid.innerHTML = d.dates.map(row => {
+        let dateLabel = row.plan_date;
+        try {
+          const dt = new Date(row.plan_date + 'T00:00:00');
+          dateLabel = dt.toLocaleDateString('en-PH', {weekday:'short', year:'numeric', month:'short', day:'numeric'});
+        } catch(e) {}
+
+        const compPct  = row.completion_pct || 0;
+        const otifPct  = row.otif_pct || 0;
+        const compColor = compPct >= 80 ? '#16a34a' : compPct >= 50 ? '#f59e0b' : '#e53935';
+        const otifColor = otifPct >= 80 ? '#16a34a' : otifPct >= 50 ? '#f59e0b' : '#e53935';
+
+        return `<div class="history-date-group">
+          <div class="hist-date-header" style="cursor:pointer" onclick="toggleMonHistoryDetail('mhd-${row.plan_date}')">
+            <div class="hist-date-label">&#x1F4C5; ${dateLabel}</div>
+            <div style="display:flex;align-items:center;gap:16px">
+              <span style="font-size:.74rem;color:var(--muted)">${row.truck_count} truck${row.truck_count!==1?'s':''} &nbsp;·&nbsp; ${row.total_stops} stop${row.total_stops!==1?'s':''}</span>
+              <span style="font-size:.74rem;font-weight:700;color:${compColor}">✔ ${compPct}% done</span>
+              <span style="font-size:.74rem;font-weight:700;color:${otifColor}">OTIF ${otifPct}%</span>
+              <button class="btn btn-sm" style="border:1px solid #fca5a5;color:#e53935;background:#fff;font-size:.7rem;padding:3px 9px"
+                onclick="event.stopPropagation();deleteMonHistoryDate('${row.plan_date}')">&#x1F5D1;</button>
+            </div>
+          </div>
+          <div id="mhd-${row.plan_date}" style="display:none">
+            <div style="padding:10px 16px;text-align:center;color:var(--muted);font-size:.78rem">Loading…</div>
+          </div>
+        </div>`;
+      }).join('');
+    }).catch(e=>showToast('Load error: '+e.message,'error'));
+}
+
+function toggleMonHistoryDetail(divId) {
+  const div = document.getElementById(divId);
+  if (!div) return;
+  if (div.style.display !== 'none') { div.style.display = 'none'; return; }
+  div.style.display = 'block';
+  // Only fetch if not yet loaded
+  if (div.dataset.loaded) return;
+  div.dataset.loaded = '1';
+  const planDate = divId.replace('mhd-', '');
+  fetch('/api/monitoring-history/' + encodeURIComponent(planDate))
+    .then(r=>r.json()).then(d=>{
+      if (!d.records || !d.records.length) {
+        div.innerHTML='<div style="padding:14px 16px;color:var(--muted);font-size:.78rem">No detail records found.</div>';
+        return;
+      }
+      // Group by truck
+      const byTruck = {};
+      d.records.forEach(r => {
+        const key = r.truck_id || 'Unknown';
+        if (!byTruck[key]) byTruck[key] = {type: r.truck_type||'', trucker: r.trucker_code||'', stops:[]};
+        byTruck[key].stops.push(r);
+      });
+
+      div.innerHTML = '<div style="overflow-x:auto">' +
+        Object.entries(byTruck).map(([truckId, t]) => {
+          const rows = t.stops.map((s,i) => {
+            const statusColor = s.status==='DONE' ? '#16a34a' : s.status==='IN TRANSIT' ? '#1976d2' : '#64748b';
+            const otifColor   = (s.otif_status||'').includes('OTIF') ? '#16a34a' : '#e53935';
+            return `<tr style="border-top:1px solid var(--border);font-size:.74rem">
+              <td style="padding:5px 10px;color:var(--muted)">${i+1}</td>
+              <td style="padding:5px 10px;font-weight:600">${s.customer_name||''}</td>
+              <td style="padding:5px 10px;color:var(--muted)">${s.area||''}</td>
+              <td style="padding:5px 10px"><span style="font-weight:700;color:${statusColor}">${s.status||''}</span></td>
+              <td style="padding:5px 10px">${s.receiving_time||''}</td>
+              <td style="padding:5px 10px">${s.actual_done||''}</td>
+              <td style="padding:5px 10px;color:${otifColor};font-weight:700">${s.otif_status||'—'}</td>
+              <td style="padding:5px 10px;color:var(--muted)">${s.concerns||''}</td>
+              <td style="padding:5px 10px;color:var(--muted)">${s.remarks||''}</td>
+            </tr>`;
+          }).join('');
+
+          return `<div style="margin:10px 12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+            <div style="background:var(--light);padding:7px 12px;font-size:.78rem;font-weight:700;color:var(--navy);display:flex;gap:10px;align-items:center">
+              <span>🚛 Truck ${truckId}</span>
+              <span style="font-weight:400;color:var(--muted)">${t.type}</span>
+              ${t.trucker ? '<span style="font-weight:400;color:var(--muted)">· '+t.trucker+'</span>' : ''}
+              <span style="margin-left:auto;font-weight:400;color:var(--muted)">${t.stops.length} stop${t.stops.length!==1?'s':''}</span>
+            </div>
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr style="background:#f8fafc;font-size:.7rem;color:var(--muted)">
+                <th style="padding:5px 10px;text-align:left">#</th>
+                <th style="padding:5px 10px;text-align:left">Customer</th>
+                <th style="padding:5px 10px;text-align:left">Area</th>
+                <th style="padding:5px 10px;text-align:left">Status</th>
+                <th style="padding:5px 10px;text-align:left">Sched</th>
+                <th style="padding:5px 10px;text-align:left">Actual</th>
+                <th style="padding:5px 10px;text-align:left">OTIF</th>
+                <th style="padding:5px 10px;text-align:left">Concerns</th>
+                <th style="padding:5px 10px;text-align:left">Remarks</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+        }).join('') + '</div>';
+    }).catch(e=>{ div.innerHTML='<div style="padding:14px;color:#e53935">Load error: '+e.message+'</div>'; });
+}
+
+function deleteMonHistoryDate(planDate) {
+  if (!confirm('Delete all monitoring records for '+planDate+'?')) return;
+  fetch('/api/monitoring-db?date='+encodeURIComponent(planDate), {method:'DELETE'})
+    .then(r=>r.json()).then(d=>{
+      showToast(d.message||'Records deleted','success');
+      loadMonitoringHistory();
+    }).catch(e=>showToast('Delete error: '+e.message,'error'));
 }
 
 // ======================================================
