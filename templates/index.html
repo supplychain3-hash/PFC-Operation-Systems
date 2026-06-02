@@ -619,6 +619,8 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
     <div class="kpi"><div class="kpi-label">Total Trip Cost</div><div class="kpi-value" id="kpi-cost">—</div></div>
   </div>
   <div id="util-breakdown" class="util-breakdown"></div>
+  <div id="collab-live-badge" style="display:none;background:#dbeafe;color:#1e40af;border-radius:6px;
+    padding:4px 12px;font-size:.75rem;font-weight:700;margin:4px 0;text-align:center"></div>
   <!-- Search bar -->
   <div style="display:flex;align-items:center;gap:8px;margin:6px 0 4px">
     <div style="position:relative;flex:1;max-width:340px">
@@ -857,15 +859,21 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
       <table class="analytics-table" id="analytics-table">
         <thead>
           <tr>
-            <th>Date / Period</th><th>Trucks</th><th>Drops</th>
-            <th>Volume (KG)</th><th>Avg Util %</th>
-            <th>OTIF Rate</th><th>Concerns</th>
-            <th>Days</th>
+            <th id="analytics-period-hdr">Date</th>
+            <th style="text-align:center">Trucks</th>
+            <th style="text-align:center">Drops</th>
+            <th style="text-align:right">Volume (KG)</th>
+            <th style="text-align:center">Avg Util</th>
+            <th style="text-align:center">Total Stops</th>
+            <th style="text-align:center">OTIF Rate</th>
+            <th style="text-align:center">Done %</th>
+            <th style="text-align:right">Total Cost</th>
+            <th style="text-align:right">Cost/KG</th>
           </tr>
         </thead>
         <tbody id="analytics-tbody">
-          <tr><td colspan="8" class="analytics-empty">
-            No data yet. Save route plans and persist monitoring progress to see analytics.</td></tr>
+          <tr><td colspan="10" class="analytics-empty">
+            No data yet. Save route plans and persist monitoring to see analytics.</td></tr>
         </tbody>
       </table>
     </div>
@@ -1373,9 +1381,11 @@ function showPage(name, btn) {
   if (name==='history')      loadHistory();
   if (name==='mon-history')  loadMonitoringHistory();
   if (name==='plan')       { setTimeout(()=>leafletMap&&leafletMap.invalidateSize(),180); }
-  // Start/stop live poller based on active tab
+  // Start/stop live pollers based on active tab
   if (name==='monitoring') startLiveMonitoring();
   else                     stopLiveMonitoring();
+  if (name==='plan')       startLiveCollab();
+  else                     stopLiveCollab();
 }
 
 // ======================================================
@@ -1595,12 +1605,12 @@ function renderPlan() {
     const rateBadge = hasRate
       ? `<span style="font-size:.68rem;font-weight:700;color:#0f766e;background:#ccfbf1;border-radius:10px;padding:2px 7px;margin-left:4px">&#x20B1;${Number(truck.truck_rate).toLocaleString()}</span>`
       : '';
-    // Always recompute CPK from actual load unless manually overridden
-    const _cpkCap = truck.rated_cap || truck.truck_cap || 0;
-    const computedCpk = (hasRate && _cpkCap > 0 && !truck._cpk_manual)
-      ? parseFloat((truck.truck_rate / _cpkCap).toFixed(4))
+    // CPK = rate ÷ actual loaded weight (falls back to rated cap if truck is empty)
+    const _cpkBase = (truck.acc_weight > 0) ? truck.acc_weight : (truck.rated_cap || truck.truck_cap || 0);
+    const computedCpk = (hasRate && _cpkBase > 0 && !truck._cpk_manual)
+      ? parseFloat((truck.truck_rate / _cpkBase).toFixed(4))
       : (truck.truck_cpk || 0);
-    if (!truck._cpk_manual && hasRate && _cpkCap > 0) truck.truck_cpk = computedCpk;
+    if (!truck._cpk_manual && hasRate && _cpkBase > 0) truck.truck_cpk = computedCpk;
     const cpkBadge = hasRate && computedCpk
       ? `<span style="font-size:.66rem;color:var(--muted);margin-left:2px">&#x20B1;${Number(computedCpk).toFixed(2)}/kg</span>`
       : '';
@@ -1667,7 +1677,7 @@ function renderPlan() {
         <div>
           <label>&#x20B1; Trip Rate (PHP)</label>
           <input type="number" class="rate-inp" placeholder="${truck.trucker_code?'Auto':'Enter trucker first'}" value="${truck.truck_rate||''}"
-            oninput="currentPlan[${ti}].truck_rate=parseFloat(this.value)||0;currentPlan[${ti}]._rate_manual=true;if(!currentPlan[${ti}]._cpk_manual){var _rc=currentPlan[${ti}].rated_cap||currentPlan[${ti}].truck_cap||0;currentPlan[${ti}].truck_cpk=_rc>0?parseFloat((currentPlan[${ti}].truck_rate/_rc).toFixed(4)):0;var _ci=document.querySelector('#tc-${ti} .cpk-inp');if(_ci)_ci.value=currentPlan[${ti}].truck_cpk||'';}autosave()"/>
+            oninput="currentPlan[${ti}].truck_rate=parseFloat(this.value)||0;currentPlan[${ti}]._rate_manual=true;if(!currentPlan[${ti}]._cpk_manual){var _cpkB=(currentPlan[${ti}].acc_weight>0?currentPlan[${ti}].acc_weight:(currentPlan[${ti}].rated_cap||currentPlan[${ti}].truck_cap||0));currentPlan[${ti}].truck_cpk=_cpkB>0?parseFloat((currentPlan[${ti}].truck_rate/_cpkB).toFixed(4)):0;var _ci=document.querySelector('#tc-${ti} .cpk-inp');if(_ci)_ci.value=currentPlan[${ti}].truck_cpk||'';}autosave()"/>
         </div>
         <div>
           <label>Cost / KG</label>
@@ -2428,10 +2438,10 @@ function fetchRateForArea(ti, areaOverride) {
     if (d.rate != null) {
       if (!truck._rate_manual) { truck.truck_rate = d.rate; }
       if (!truck._area_manual) { truck.rate_area  = billingArea || d.best_area || ''; }
-      // CPK = rate ÷ rated capacity
+      // CPK = rate ÷ actual loaded weight
       if (!truck._cpk_manual) {
-        const _rc = truck.rated_cap || truck.truck_cap || 0;
-        truck.truck_cpk = (_rc > 0) ? parseFloat((d.rate / _rc).toFixed(4)) : 0;
+        const _cpkBase = (truck.acc_weight > 0) ? truck.acc_weight : (truck.rated_cap || truck.truck_cap || 0);
+        truck.truck_cpk = (_cpkBase > 0) ? parseFloat((d.rate / _cpkBase).toFixed(4)) : 0;
       }
       autosave();
       // Update DOM inputs without full re-render
@@ -2560,6 +2570,50 @@ function startLiveMonitoring() {
 function stopLiveMonitoring() {
   document.getElementById('live-badge').style.display = 'none';
   if (_liveInterval) { clearInterval(_liveInterval); _liveInterval = null; }
+}
+
+// ── Live Plan Collaboration ────────────────────────────────────────────────
+// Polls every 5 s. If a teammate updated the plan (server version > our version),
+// silently fetches and re-renders — no Save needed.
+let _liveCollabInterval = null;
+
+function startLiveCollab() {
+  if (_liveCollabInterval) return;
+  _liveCollabInterval = setInterval(_pollLiveCollab, 5000);
+}
+
+function stopLiveCollab() {
+  if (_liveCollabInterval) { clearInterval(_liveCollabInterval); _liveCollabInterval = null; }
+}
+
+function _pollLiveCollab() {
+  // Skip if user edited within the last 4 s — avoid fighting a teammate mid-drag
+  if (Date.now() - _lastEditTime < 4000) return;
+
+  fetch('/api/plan-state?router=' + encodeURIComponent(currentRouter))
+    .then(r => r.json())
+    .then(d => {
+      if (!d.exists || !d.version) return;
+      if (d.version <= _myPlanVersion) return;  // our own write or nothing new
+
+      // A teammate updated the plan — pull it
+      _myPlanVersion = d.version;
+      fetch('/api/plan?router=' + encodeURIComponent(currentRouter))
+        .then(r => r.json())
+        .then(data => {
+          if (!data.trucks || !data.trucks.length) return;
+          currentPlan = data.trucks;
+          renderPlan();
+          updatePlanKPIs();
+          // Show a small non-intrusive indicator
+          const badge = document.getElementById('collab-live-badge');
+          if (badge) {
+            badge.textContent = '🔄 Plan updated by teammate';
+            badge.style.display = 'inline-block';
+            setTimeout(() => { badge.style.display = 'none'; }, 4000);
+          }
+        }).catch(() => {});
+    }).catch(() => {});
 }
 
 function _pollMonitoring() {
@@ -2955,11 +3009,7 @@ function updateRatedCap(ti,val){
   currentPlan[ti].rated_cap=cap;
   currentPlan[ti]._rated_cap_manual=true;
   currentPlan[ti].util_pct=round2((currentPlan[ti].acc_weight||0)/cap);
-  // Recalculate CPK dynamically when rated cap changes
-  if (!currentPlan[ti]._cpk_manual) {
-    const _rate = parseFloat(currentPlan[ti].truck_rate) || 0;
-    currentPlan[ti].truck_cpk = (_rate > 0 && cap > 0) ? parseFloat((_rate / cap).toFixed(4)) : 0;
-  }
+  // CPK uses actual weight — no change needed when rated cap changes
   autosave();
   const card=document.getElementById('tc-'+ti);
   if(card){
@@ -2978,12 +3028,18 @@ function updateRatedCap(ti,val){
 //  SAVE / EXPORT
 // ======================================================
 let _autosaveTimer = null;
+let _myPlanVersion  = 0;    // mtime of the plan version WE last wrote
+let _lastEditTime   = 0;    // timestamp of user's last edit action
 function autosave() {
+  _lastEditTime = Date.now();
   clearTimeout(_autosaveTimer);
   _autosaveTimer = setTimeout(()=>{
     fetch('/api/update-plan?router='+encodeURIComponent(currentRouter),
       {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trucks:currentPlan})})
-    .then(r=>r.json()).then(d=>{if(d.trucks){currentPlan=d.trucks; updatePlanKPIs();}});
+    .then(r=>r.json()).then(d=>{
+      if(d.trucks){currentPlan=d.trucks; updatePlanKPIs();}
+      if(d.version){ _myPlanVersion = d.version; }  // record our version so poller won't re-pull it
+    });
     collabPush();
   }, 400);
 }
@@ -3640,9 +3696,9 @@ function loadAndShowCosts(){
           if(!currentPlan[ti]._rate_manual) currentPlan[ti].truck_rate=c.rate;
           if(!currentPlan[ti]._area_manual) currentPlan[ti].rate_area=c.primary_area;
           if(!currentPlan[ti]._cpk_manual){
-            const _rc2=currentPlan[ti].rated_cap||currentPlan[ti].truck_cap||0;
+            const _cpkB2=(currentPlan[ti].acc_weight>0?currentPlan[ti].acc_weight:(currentPlan[ti].rated_cap||currentPlan[ti].truck_cap||0));
             const rate=parseFloat(c.rate)||0;
-            currentPlan[ti].truck_cpk=_rc2>0?round2(rate/_rc2):0;
+            currentPlan[ti].truck_cpk=_cpkB2>0?round2(rate/_cpkB2):0;
           }
         }
       });
@@ -4047,28 +4103,84 @@ function deleteMonHistoryDate(planDate) {
 function loadAnalytics() {
   fetch('/api/analytics?period='+encodeURIComponent(analyticsPeriod||'daily'))
     .then(r=>r.json()).then(rows=>{
-      const tbody = document.getElementById('analytics-tbody');
+      const tbody   = document.getElementById('analytics-tbody');
+      const kpiStrip = document.getElementById('analytics-kpi-strip');
+      const titleEl  = document.getElementById('analytics-title');
       if (!tbody) return;
-      if (!rows.length) {
-        tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">No data yet. Save route plans and persist monitoring to see analytics.</td></tr>';
+
+      // Update title
+      const titles = {daily:'Daily Performance Summary',weekly:'Weekly Summary',
+                      monthly:'Monthly Summary',quarterly:'Quarterly Summary',yearly:'Yearly Summary'};
+      if (titleEl) titleEl.textContent = titles[analyticsPeriod] || 'Performance Summary';
+
+      if (!rows || !rows.length) {
+        tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">No data yet — save route plans and persist monitoring to see analytics.</td></tr>';
+        if (kpiStrip) kpiStrip.innerHTML='';
         return;
       }
+
+      // Aggregate KPIs across all rows
+      const totVol   = rows.reduce((a,r)=>a+(r.total_volume||0),0);
+      const totDrops = rows.reduce((a,r)=>a+(r.total_drops||0),0);
+      const totCost  = rows.reduce((a,r)=>a+(r.total_cost||0),0);
+      const totStops = rows.reduce((a,r)=>a+(r.total_stops||0),0);
+      const totOtif  = rows.reduce((a,r)=>a+(r.otif_count||0),0);
+      const avgUtil  = rows.filter(r=>r.avg_util>0).length
+        ? Math.round(rows.filter(r=>r.avg_util>0).reduce((a,r)=>a+r.avg_util,0) / rows.filter(r=>r.avg_util>0).length * 10) / 10
+        : 0;
+      const overallOtif = totStops ? Math.round(totOtif/totStops*1000)/10 : 0;
+      const cpkOverall  = totVol > 0 ? (totCost/totVol).toFixed(2) : '--';
+      const otifColor   = overallOtif>=95?'#16a34a':overallOtif>=80?'#f59e0b':'#e53935';
+      const utilColor   = avgUtil>=80?'#16a34a':avgUtil>=60?'#f59e0b':'#e53935';
+
+      if (kpiStrip) kpiStrip.innerHTML = `
+        <div class="kpi"><div class="kpi-label">Total Volume</div><div class="kpi-value">${Number(totVol).toLocaleString(undefined,{maximumFractionDigits:0})} kg</div></div>
+        <div class="kpi"><div class="kpi-label">Total Drops</div><div class="kpi-value">${totDrops.toLocaleString()}</div></div>
+        <div class="kpi"><div class="kpi-label">Avg Truck Util</div><div class="kpi-value" style="color:${utilColor}">${avgUtil}%</div></div>
+        <div class="kpi"><div class="kpi-label">OTIF Rate</div><div class="kpi-value" style="color:${otifColor}">${overallOtif}%</div></div>
+        <div class="kpi"><div class="kpi-label">Total Cost</div><div class="kpi-value">₱${Number(totCost).toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+        <div class="kpi"><div class="kpi-label">Cost / KG</div><div class="kpi-value">₱${cpkOverall}</div></div>
+      `;
+
+      // Update table header for period column
+      const hdr = document.getElementById('analytics-period-hdr');
+      if (hdr) {
+        const hdrLabels = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'};
+        hdr.textContent = hdrLabels[analyticsPeriod] || 'Period';
+      }
+
       tbody.innerHTML = rows.map(r=>{
-        const s = r.summary||{};
-        const rate = r.otif_rate||0;
-        const rateColor = rate>=95?'#43a047':rate>=80?'#f9a825':'#e53935';
+        const otif     = r.otif_rate || 0;
+        const util     = r.avg_util  || 0;
+        const done     = r.completion_pct || 0;
+        const otifClr  = otif>=95?'#16a34a':otif>=80?'#f59e0b':'#e53935';
+        const utilClr  = util>=80?'#16a34a':util>=60?'#f59e0b':'#e53935';
+        const doneClr  = done>=90?'#16a34a':done>=70?'#f59e0b':'#e53935';
+        const vol      = r.total_volume ? Number(r.total_volume).toLocaleString(undefined,{maximumFractionDigits:0}) : '--';
+        const cost     = r.total_cost   ? '₱'+Number(r.total_cost).toLocaleString(undefined,{maximumFractionDigits:0}) : '--';
+        const cpk      = (r.total_cost&&r.total_volume&&r.total_volume>0) ? '₱'+(r.total_cost/r.total_volume).toFixed(2) : '--';
+        const days     = analyticsPeriod!=='daily' && r.plan_days ? `<span style="font-size:.7rem;color:var(--muted)">(${r.plan_days}d)</span>` : '';
         return `<tr>
-          <td style="font-weight:700">${r.date}</td>
-          <td>${s.truck_count||'--'}</td>
-          <td>${s.total_drops||'--'}</td>
-          <td>${s.total_volume?Number(s.total_volume).toLocaleString()+' kg':'--'}</td>
-          <td>${s.avg_utilization?s.avg_utilization+'%':'--'}</td>
+          <td style="font-weight:700;white-space:nowrap">${r.date} ${days}</td>
+          <td style="text-align:center">${r.truck_count||'--'}</td>
+          <td style="text-align:center">${r.total_drops||'--'}</td>
+          <td style="text-align:right">${vol}</td>
+          <td style="text-align:center;font-weight:700;color:${utilClr}">${util?util+'%':'--'}</td>
           <td style="text-align:center">${r.total_stops||0}</td>
-          <td style="text-align:center">${r.otif_count||0} / ${r.total_stops||0}</td>
-          <td style="font-weight:700;color:${rateColor}">${rate}%</td>
+          <td style="text-align:center;font-weight:700;color:${otifClr}">${otif?otif+'%':'--'}</td>
+          <td style="text-align:center;font-weight:700;color:${doneClr}">${done?done+'%':'--'}</td>
+          <td style="text-align:right;font-size:.75rem">${cost}</td>
+          <td style="text-align:right;font-size:.75rem;color:var(--muted)">${cpk}</td>
         </tr>`;
       }).join('');
     }).catch(e=>showToast('Analytics error: '+e.message,'error'));
+}
+
+function setAnalyticsPeriod(period, btn) {
+  analyticsPeriod = period;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  loadAnalytics();
 }
 
 // ======================================================

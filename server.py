@@ -1100,7 +1100,29 @@ def update_plan():
                 s['add_drop_fee'] = 0
     with open(temp_plan, 'w') as fp:
         json.dump(data['trucks'], fp, default=str)
-    return jsonify({'success': True, 'trucks': data['trucks']})
+    version = os.path.getmtime(temp_plan)
+    return jsonify({'success': True, 'trucks': data['trucks'], 'version': version})
+
+
+@app.route('/api/plan-state', methods=['GET'])
+def get_plan_state():
+    """Lightweight collab poll — returns the mtime version of the current temp plan."""
+    router    = request.args.get('router', 'default')
+    temp_plan = get_router_temp('plan', router)
+    if not os.path.exists(temp_plan):
+        return jsonify({'version': 0, 'exists': False})
+    version = os.path.getmtime(temp_plan)
+    try:
+        with open(temp_plan) as fp:
+            trucks = json.load(fp)
+        return jsonify({
+            'version':     version,
+            'exists':      True,
+            'truck_count': len(trucks),
+            'total_stops': sum(len(t.get('stops', [])) for t in trucks),
+        })
+    except Exception:
+        return jsonify({'version': version, 'exists': True})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1488,8 +1510,8 @@ def save_plan():
         }
         conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
         c = conn.cursor()
-        # If a plan already exists for this date, update it instead of creating a duplicate
-        c.execute('SELECT id FROM route_plans WHERE plan_date=? ORDER BY id DESC LIMIT 1', (plan_date,))
+        # If THIS user already saved a plan for this date, update it — never overwrite another user's plan
+        c.execute('SELECT id FROM route_plans WHERE plan_date=? AND created_by=? ORDER BY id DESC LIMIT 1', (plan_date, created_by))
         existing = c.fetchone()
         if existing:
             plan_id = existing[0]
@@ -3025,64 +3047,103 @@ def gsheets_push_monitoring():
 
 
 # Analytics helpers
-def _iso_week(date_str):
+def _iso_week(d):
     from datetime import datetime as _dt
-    try: return _dt.strptime(date_str, '%Y-%m-%d').strftime('%G-W%V')
-    except Exception: return date_str
+    try: return _dt.strptime(d, '%Y-%m-%d').strftime('%G-W%V')
+    except: return d
 
-def _iso_month(date_str):
-    return date_str[:7] if date_str else date_str
-
-def _group_entries(daily, key_fn):
-    from collections import OrderedDict
-    groups = OrderedDict()
-    for e in daily:
-        k = key_fn(e['date'])
-        if k not in groups:
-            groups[k] = {'date': k, 'summary': {}, 'created_by': e.get('created_by',''), 'days': []}
-        groups[k]['days'].append(e)
-    return list(groups.values())
-
-def group_by_week(daily):  return _group_entries(daily, _iso_week)
-def group_by_month(daily): return _group_entries(daily, _iso_month)
+def _quarter_key(d):
+    try:
+        m = int(d[5:7])
+        return d[:4] + '-Q' + str((m - 1) // 3 + 1)
+    except: return d
 
 
 @app.route('/api/analytics', methods=['GET'])
 def get_analytics():
     period = request.args.get('period', 'daily')
     conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-    c.execute('SELECT id,plan_date,summary,created_by FROM route_plans ORDER BY plan_date')
+    # Use the most recent plan per date (handles multiple routers saving same day)
+    c.execute('''SELECT plan_date, summary FROM route_plans
+                 WHERE id IN (SELECT MAX(id) FROM route_plans GROUP BY plan_date)
+                 ORDER BY plan_date''')
     plans_raw = c.fetchall()
-    mon_sql = ('SELECT plan_date,COUNT(*),'
-               "SUM(CASE WHEN otif_status LIKE '%OTIF%' THEN 1 ELSE 0 END),"
-               "SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END)"
-               ' FROM monitoring_records GROUP BY plan_date')
-    c.execute(mon_sql)
+    c.execute('''SELECT plan_date, COUNT(*),
+                        SUM(CASE WHEN otif_status LIKE '%OTIF%' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END)
+                 FROM monitoring_records GROUP BY plan_date''')
     mon_raw = c.fetchall()
     conn.close()
-    mon_by_date = {row[0]: {'total': row[1], 'otif': row[2], 'done': row[3]} for row in mon_raw}
+    mon_by_date = {r[0]: {'total': r[1], 'otif': r[2], 'done': r[3]} for r in mon_raw}
+
+    # Build flat daily list
     daily = []
-    for _pid, plan_date, summary_json, created_by in plans_raw:
-        try:
-            summary = json.loads(summary_json)
-        except Exception:
-            summary = {}
-        daily.append({'date': plan_date, 'summary': summary, 'created_by': created_by})
+    for plan_date, summary_json in plans_raw:
+        try: s = json.loads(summary_json) if summary_json else {}
+        except: s = {}
+        mon = mon_by_date.get(plan_date, {})
+        total = int(mon.get('total') or 0)
+        otif  = int(mon.get('otif') or 0)
+        done  = int(mon.get('done') or 0)
+        daily.append({
+            'date':          plan_date,
+            'truck_count':   int(s.get('truck_count') or 0),
+            'total_drops':   int(s.get('total_drops') or 0),
+            'total_volume':  round(float(s.get('total_volume') or 0), 0),
+            'avg_util':      round(float(s.get('avg_utilization') or 0), 1),
+            'total_cost':    round(float(s.get('total_cost') or 0), 2),
+            'total_stops':   total,
+            'otif_count':    otif,
+            'done_count':    done,
+            'otif_rate':     round(otif / total * 100, 1) if total else 0,
+            'completion_pct':round(done / total * 100, 1) if total else 0,
+            'plan_days':     1,
+        })
 
-    if period == 'weekly':
-        result = group_by_week(daily)
-    elif period == 'monthly':
-        result = group_by_month(daily)
-    else:
-        result = daily
+    # Period grouping
+    key_fns = {
+        'daily':     lambda d: d,
+        'weekly':    _iso_week,
+        'monthly':   lambda d: d[:7],
+        'quarterly': _quarter_key,
+        'yearly':    lambda d: d[:4],
+    }
+    key_fn = key_fns.get(period, key_fns['daily'])
 
-    for entry in result:
-        date_key = entry.get('date', '')
-        if date_key in mon_by_date:
-            stats = mon_by_date[date_key]
-            entry['total_stops'] = stats['total']
-            entry['otif_count']  = stats['otif']
-            entry['done_count']  = stats['done']
+    if period == 'daily':
+        return jsonify(daily)
+
+    from collections import OrderedDict
+    groups = OrderedDict()
+    for e in daily:
+        k = key_fn(e['date'])
+        if k not in groups:
+            groups[k] = {'date': k, 'truck_count': 0, 'total_drops': 0, 'total_volume': 0.0,
+                         '_util_sum': 0.0, '_util_cnt': 0, 'total_cost': 0.0,
+                         'total_stops': 0, 'otif_count': 0, 'done_count': 0, 'plan_days': 0}
+        g = groups[k]
+        g['truck_count']  += e['truck_count']
+        g['total_drops']  += e['total_drops']
+        g['total_volume'] += e['total_volume']
+        g['total_cost']   += e['total_cost']
+        g['total_stops']  += e['total_stops']
+        g['otif_count']   += e['otif_count']
+        g['done_count']   += e['done_count']
+        g['plan_days']    += 1
+        if e['avg_util'] > 0:
+            g['_util_sum'] += e['avg_util']
+            g['_util_cnt'] += 1
+
+    result = []
+    for g in groups.values():
+        ts = g['total_stops']
+        g['avg_util']       = round(g['_util_sum'] / g['_util_cnt'], 1) if g['_util_cnt'] else 0
+        g['otif_rate']      = round(g['otif_count'] / ts * 100, 1) if ts else 0
+        g['completion_pct'] = round(g['done_count'] / ts * 100, 1) if ts else 0
+        g['total_volume']   = round(g['total_volume'], 0)
+        g['total_cost']     = round(g['total_cost'], 2)
+        del g['_util_sum']; del g['_util_cnt']
+        result.append(g)
     return jsonify(result)
 
 
