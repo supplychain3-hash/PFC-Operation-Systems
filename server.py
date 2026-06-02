@@ -151,6 +151,7 @@ TRUCK_TYPES = [
 SETTINGS = {
     'util_target':               0.80,
     'cap_tolerance':             1.05,
+    'two_ton_max_util':          1.20,   # 2T trucks allow up to 120% (2400 kg)
     'add_drop_fee':              300,
     'add_drop_threshold_5mt':    5,
     'add_drop_threshold_25mt':   7,
@@ -167,9 +168,13 @@ def select_truck_type(vol: float) -> dict:
     return TRUCK_TYPES[0]
 
 def best_truck_type(vol: float, drops: int) -> dict:
-    """Smallest truck type that fits both volume AND drop count."""
+    """Smallest truck type that fits both volume AND drop count.
+    2T trucks are preferred for routes ≤2400 kg (120% utilization allowed).
+    """
     for t in TRUCK_TYPES:
-        if t['cap'] * SETTINGS['cap_tolerance'] >= vol and t['max_drops'] >= drops:
+        # 2T trucks get extended 120% utilization cap (2400 kg effective max)
+        tol = SETTINGS['two_ton_max_util'] if t['label'] == '2T' else SETTINGS['cap_tolerance']
+        if t['cap'] * tol >= vol and t['max_drops'] >= drops:
             return t
     return TRUCK_TYPES[-1]
 
@@ -1514,18 +1519,21 @@ def save_plan():
 
 @app.route('/api/history', methods=['GET'])
 def get_history():
-    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
-    c = conn.cursor()
-    c.execute('SELECT id,plan_date,plan_name,created_at,created_by,status,summary FROM route_plans ORDER BY created_at DESC LIMIT 60')
-    rows = c.fetchall()
-    conn.close()
-    plans = []
-    for row in rows:
-        try: summary = json.loads(row[6]) if row[6] else {}
-        except Exception: summary = {}
-        plans.append({'id':row[0],'date':row[1],'name':row[2],'created_at':row[3],
-                      'created_by':row[4] or '','status':row[5],'summary':summary})
-    return jsonify({'plans': plans})
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
+        c = conn.cursor()
+        c.execute('SELECT id,plan_date,plan_name,created_at,created_by,status,summary FROM route_plans ORDER BY created_at DESC LIMIT 60')
+        rows = c.fetchall()
+        conn.close()
+        plans = []
+        for row in rows:
+            try: summary = json.loads(row[6]) if row[6] else {}
+            except Exception: summary = {}
+            plans.append({'id':row[0],'date':row[1],'name':row[2],'created_at':row[3],
+                          'created_by':row[4] or '','status':row[5],'summary':summary})
+        return jsonify({'plans': plans})
+    except Exception as e:
+        return jsonify({'plans': [], 'error': str(e)})
 
 
 @app.route('/api/latest-plan-meta', methods=['GET'])
@@ -1679,49 +1687,93 @@ def save_monitoring_db():
 
 @app.route('/api/rates', methods=['GET'])
 def get_rates():
-    trucker=request.args.get('trucker',''); wh=request.args.get('wh','')
-    conn=sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c=conn.cursor()
-    q='SELECT id,trucker,capacity_kg,pickup_wh,area,rate,cost_per_kg,is_active,updated_at FROM rate_master WHERE 1=1'
-    params=[]
-    if trucker: q+=' AND UPPER(trucker)=?'; params.append(trucker.upper())
-    if wh: q+=' AND UPPER(pickup_wh)=?'; params.append(wh.upper())
-    q+=' ORDER BY trucker,capacity_kg,pickup_wh,area'
-    c.execute(q,params); rows=c.fetchall(); conn.close()
-    return jsonify({'rates':[{'id':r[0],'trucker':r[1],'capacity_kg':r[2],'pickup_wh':r[3],
-                              'area':r[4],'rate':r[5],'cost_per_kg':r[6],'is_active':r[7],'updated_at':r[8]}
-                             for r in rows]})
+    trucker = request.args.get('trucker', '')
+    wh      = request.args.get('wh', '')
+    search  = request.args.get('search', '').strip()
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+        q = 'SELECT id,trucker,capacity_kg,pickup_wh,area,rate,cost_per_kg,is_active,updated_at FROM rate_master WHERE 1=1'
+        params = []
+        if trucker: q += ' AND UPPER(trucker)=?'; params.append(trucker.upper())
+        if wh:      q += ' AND UPPER(pickup_wh)=?'; params.append(wh.upper())
+        if search:
+            q += ' AND (UPPER(trucker) LIKE ? OR UPPER(area) LIKE ? OR UPPER(pickup_wh) LIKE ?)'
+            s = '%' + search.upper() + '%'
+            params += [s, s, s]
+        q += ' ORDER BY trucker,capacity_kg,pickup_wh,area'
+        c.execute(q, params); rows = c.fetchall(); conn.close()
+        return jsonify({'rates': [{'id':r[0],'trucker':r[1],'capacity_kg':r[2],'pickup_wh':r[3],
+                                   'area':r[4],'rate':r[5],'cost_per_kg':r[6],'is_active':r[7],'updated_at':r[8]}
+                                  for r in rows]})
+    except Exception as e:
+        return jsonify({'rates': [], 'error': str(e)})
 
 
 @app.route('/api/rates/import', methods=['POST'])
 def import_rates():
-    if 'file' not in request.files: return jsonify({'error':'No file uploaded'}), 400
-    f=request.files['file']; filename=secure_filename(f.filename)
-    filepath=os.path.join(app.config['UPLOAD_FOLDER'],'rates_'+filename); f.save(filepath)
+    if 'file' not in request.files: return jsonify({'error': 'No file uploaded'}), 400
+    f = request.files['file']; filename = secure_filename(f.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'rates_' + filename); f.save(filepath)
     try:
         pd = _get_pd()
-        df=pd.read_excel(filepath,header=0)
-        df.columns=[str(c).strip().lower().replace(' ','_') for c in df.columns]
-        expected={'trucker','capacity_kg','pickup_wh','area','rate','cost_per_kg'}
-        if not expected.issubset(set(df.columns)):
-            df=pd.read_excel(filepath,header=None)
-            if len(df.columns)>=6:
-                df=df.iloc[:,:6]; df.columns=['trucker','capacity_kg','pickup_wh','area','rate','cost_per_kg']
-            else: return jsonify({'error':'File must have 6 columns'}), 400
-    except Exception as e: return jsonify({'error':str(e)}), 400
-    df=df.dropna(subset=['trucker']); df=df[df['trucker'].astype(str).str.strip()!='']
-    conn=sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c=conn.cursor(); c.execute('DELETE FROM rate_master')
-    inserted=0
-    for _,row in df.iterrows():
+        # Try with header first
+        df = pd.read_excel(filepath, header=0)
+        cols_norm = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
+
+        # Column name aliases — handles "TRUCKING", "trucker", "PICK UP LOCATION", etc.
+        col_map_aliases = {
+            'trucking': 'trucker', 'trucker': 'trucker',
+            'std_capacity': 'capacity_kg', 'capacity_kg': 'capacity_kg', 'capacity': 'capacity_kg',
+            'pick_up_location': 'pickup_wh', 'pickup_wh': 'pickup_wh', 'wh': 'pickup_wh',
+            'area': 'area',
+            'rate': 'rate',
+            'cost_per_kg': 'cost_per_kg', 'cpk': 'cost_per_kg',
+        }
+        mapped = {col_map_aliases.get(c, c): orig for c, orig in zip(cols_norm, df.columns)}
+
+        if 'trucker' not in mapped:
+            # No recognisable headers — treat as headerless, use positional mapping
+            df = pd.read_excel(filepath, header=None)
+            if len(df.columns) >= 5:
+                df = df.iloc[:, :6] if len(df.columns) >= 6 else df
+                pos_cols = ['trucker', 'capacity_kg', 'pickup_wh', 'area', 'rate', 'cost_per_kg']
+                df.columns = pos_cols[:len(df.columns)]
+            else:
+                return jsonify({'error': 'File must have at least 5 columns: Trucker, Capacity, WH, Area, Rate'}), 400
+        else:
+            # Rename to standard names
+            df = df.rename(columns={v: k for k, v in mapped.items() if k in col_map_aliases.values()})
+            df.columns = [col_map_aliases.get(str(c).strip().lower().replace(' ', '_'), c) for c in df.columns]
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+    df = df[df['trucker'].astype(str).str.strip().str.len() > 0]
+    df = df[df['trucker'].astype(str) != 'nan']
+
+    def safe_float(v):
+        try: return float(str(v).replace('₱', '').replace(',', '').strip() or 0)
+        except: return 0.0
+
+    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False); c = conn.cursor()
+    c.execute('DELETE FROM rate_master')
+    inserted = 0
+    for _, row in df.iterrows():
         try:
+            trucker   = str(row.get('trucker', '')).strip()
+            cap       = int(float(row.get('capacity_kg', 0) or 0))
+            wh        = str(row.get('pickup_wh', '')).strip().upper()
+            area      = str(row.get('area', '')).strip().upper()
+            rate      = safe_float(row.get('rate', 0))
+            cpk_raw   = row.get('cost_per_kg', None)
+            cpk       = safe_float(cpk_raw) if cpk_raw and str(cpk_raw) not in ('nan', 'None', '') else (rate / cap if cap > 0 else 0)
+            if not trucker or trucker == 'nan': continue
             c.execute('INSERT INTO rate_master (trucker,capacity_kg,pickup_wh,area,rate,cost_per_kg) VALUES (?,?,?,?,?,?)',
-                      (str(row.get('trucker','')).strip(),int(float(row.get('capacity_kg',0) or 0)),
-                       str(row.get('pickup_wh','')).strip().upper(),str(row.get('area','')).strip().upper(),
-                       float(str(row.get('rate',0)).replace('₱','').replace(',','') or 0),
-                       float(str(row.get('cost_per_kg',0)).replace('₱','').replace(',','') or 0)))
-            inserted+=1
-        except Exception: pass
+                      (trucker, cap, wh, area, rate, round(cpk, 4)))
+            inserted += 1
+        except Exception:
+            pass
     conn.commit(); conn.close()
-    return jsonify({'success':True,'imported':inserted})
+    return jsonify({'success': True, 'imported': inserted})
 
 
 @app.route('/api/rates/<int:rate_id>', methods=['PUT'])
@@ -2982,6 +3034,9 @@ def get_analytics():
             entry['done_count']  = stats['done']
     return jsonify(result)
 
+
+# Initialise DB tables on startup (works with both gunicorn and direct run)
+init_db()
 
 if __name__ == '__main__':
     _PORT = 5050

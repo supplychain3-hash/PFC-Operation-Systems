@@ -363,6 +363,9 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
 .rate-edit-inp{border:1px solid var(--border);border-radius:4px;padding:4px 7px;
   font-size:.78rem;width:90px;font-family:inherit;text-align:right}
 .rate-edit-inp:focus{outline:none;border-color:var(--orange)}
+.rate-cell{cursor:pointer;display:inline-block;min-width:30px;border-radius:3px;
+  padding:1px 3px;transition:background .15s}
+.rate-cell:hover{background:#e8f0fe}
 .inactive-row td{opacity:.45;text-decoration:line-through}
 
 /* ── ANALYTICS TAB ── */
@@ -786,7 +789,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
     <div class="rates-filter">
       <label>Trucker:</label>
       <select id="rate-filter-trucker" onchange="loadRates()">
-        <option value="">All</option>
+        <option value="">All Truckers</option>
       </select>
       <label>WH:</label>
       <select id="rate-filter-wh" onchange="loadRates()">
@@ -795,6 +798,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
         <option>CARMONA</option>
         <option>BALAGTAS</option>
       </select>
+      <label>Search:</label>
+      <input id="rate-search-input" type="text" placeholder="Trucker, area, WH..."
+             style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:.8rem;min-width:160px"
+             oninput="loadRates()"/>
     </div>
     <span id="rate-count" style="font-size:.76rem;color:var(--muted);margin-left:auto"></span>
   </div>
@@ -1028,6 +1035,132 @@ function showToast(msg, type, duration) {
 function confirmAddRate() {
   addRate();
   closeOverlay('add-rate-overlay');
+}
+
+// ── RATE MASTER ───────────────────────────────────────────────────────
+let _allRates = [];
+
+function loadRates() {
+  const trucker = document.getElementById('rate-filter-trucker').value;
+  const wh      = document.getElementById('rate-filter-wh').value;
+  const search  = (document.getElementById('rate-search-input') || {}).value || '';
+  const params  = new URLSearchParams();
+  if (trucker) params.set('trucker', trucker);
+  if (wh)      params.set('wh', wh);
+  if (search)  params.set('search', search);
+
+  fetch('/api/rates?' + params.toString())
+    .then(r => r.json()).then(d => {
+      _allRates = d.rates || [];
+      renderRatesTable(_allRates);
+      populateTruckerFilter(_allRates);
+      const cnt = document.getElementById('rate-count');
+      if (cnt) cnt.textContent = _allRates.length + ' row' + (_allRates.length !== 1 ? 's' : '');
+    }).catch(e => showToast('Rate load error: ' + e.message, 'error'));
+}
+
+function populateTruckerFilter(rates) {
+  const sel = document.getElementById('rate-filter-trucker');
+  const cur = sel.value;
+  const truckers = [...new Set(rates.map(r => r.trucker).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All Truckers</option>' +
+    truckers.map(t => `<option value="${t}" ${t===cur?'selected':''}>${t}</option>`).join('');
+}
+
+function renderRatesTable(rates) {
+  const tbody = document.getElementById('rates-tbody');
+  if (!rates.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">No rates found. Import a Rate Master file to get started.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rates.map((r, i) => {
+    const rate   = r.rate ? Number(r.rate).toLocaleString() : '—';
+    const cpk    = r.cost_per_kg ? Number(r.cost_per_kg).toFixed(4) : '—';
+    const active = r.is_active !== 0;
+    return `<tr id="rate-row-${r.id}" style="${active ? '' : 'opacity:.45'}">
+      <td style="text-align:center;color:var(--muted);font-size:.72rem">${i+1}</td>
+      <td><span class="rate-cell" ondblclick="editRateCell(${r.id},'trucker',this)">${r.trucker||''}</span></td>
+      <td style="text-align:center"><span class="rate-cell" ondblclick="editRateCell(${r.id},'capacity_kg',this)">${r.capacity_kg||''}</span></td>
+      <td style="text-align:center"><span class="rate-cell" ondblclick="editRateCell(${r.id},'pickup_wh',this)">${r.pickup_wh||''}</span></td>
+      <td><span class="rate-cell" ondblclick="editRateCell(${r.id},'area',this)">${r.area||''}</span></td>
+      <td style="text-align:right"><span class="rate-cell" ondblclick="editRateCell(${r.id},'rate',this)">₱${rate}</span></td>
+      <td style="text-align:right;font-size:.75rem;color:var(--muted)">${cpk}</td>
+      <td style="text-align:center">
+        <span style="font-size:.72rem;padding:2px 8px;border-radius:99px;background:${active?'#d1fae5':'#fee2e2'};color:${active?'#065f46':'#991b1b'}">${active?'Active':'Off'}</span>
+      </td>
+      <td style="text-align:center;white-space:nowrap">
+        <button class="btn btn-sm btn-primary" style="font-size:.68rem;padding:2px 8px" onclick="saveRateRow(${r.id})">Save</button>
+        <button class="btn btn-sm" style="font-size:.68rem;padding:2px 8px;border:1px solid #fca5a5;color:#e53935;background:#fff" onclick="deleteRateRow(${r.id})">Del</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function editRateCell(id, field, el) {
+  const cur = el.textContent.replace('₱','').replace(/,/g,'').trim();
+  el.innerHTML = `<input type="text" value="${cur}" style="width:90%;font-size:.78rem;padding:2px 4px;border:1px solid var(--accent);border-radius:4px" onblur="this.parentElement.textContent=(this.value||'${cur}')" onkeydown="if(event.key==='Enter'){this.blur()}">`;
+  const inp = el.querySelector('input'); inp.focus(); inp.select();
+  inp.dataset.field = field; inp.dataset.rateId = id;
+}
+
+function saveRateRow(id) {
+  const row = document.getElementById('rate-row-' + id);
+  if (!row) return;
+  const inputs = row.querySelectorAll('input');
+  const data = { is_active: 1 };
+  inputs.forEach(inp => { if (inp.dataset.field) data[inp.dataset.field] = inp.value; });
+  // Read current span values too
+  const spans = row.querySelectorAll('.rate-cell');
+  const fields = ['trucker','capacity_kg','pickup_wh','area','rate'];
+  spans.forEach((s,i) => { if (fields[i] && !data[fields[i]]) data[fields[i]] = s.textContent.replace('₱','').replace(/,/g,'').trim(); });
+  const rate = parseFloat(data.rate) || 0;
+  const cap  = parseInt(data.capacity_kg) || 0;
+  data.rate        = rate;
+  data.capacity_kg = cap;
+  data.cost_per_kg = cap > 0 ? parseFloat((rate / cap).toFixed(4)) : 0;
+  fetch(`/api/rates/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) })
+    .then(r => r.json()).then(() => { showToast('Rate saved', 'success'); loadRates(); })
+    .catch(e => showToast('Save error: ' + e.message, 'error'));
+}
+
+function deleteRateRow(id) {
+  if (!confirm('Remove this rate?')) return;
+  fetch(`/api/rates/${id}`, { method: 'DELETE' })
+    .then(() => { showToast('Rate removed', 'success'); loadRates(); })
+    .catch(e => showToast('Error: ' + e.message, 'error'));
+}
+
+function addRate() {
+  const t  = document.getElementById('add-rate-trucker');
+  const ca = document.getElementById('add-rate-cap');
+  const w  = document.getElementById('add-rate-wh');
+  const a  = document.getElementById('add-rate-area');
+  const r  = document.getElementById('add-rate-rate');
+  if (!t||!t.value.trim()) { showToast('Trucker is required','error'); return; }
+  const rate = parseFloat(r.value)||0;
+  const cap  = parseInt(ca.value)||0;
+  const cpk  = cap > 0 ? parseFloat((rate/cap).toFixed(4)) : 0;
+  fetch('/api/rates/add', { method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ trucker:t.value.trim(), capacity_kg:cap, pickup_wh:(w.value||'').toUpperCase(),
+                           area:(a.value||'').toUpperCase(), rate, cost_per_kg:cpk }) })
+    .then(r2 => r2.json()).then(d => {
+      if (d.success) { showToast('Rate added','success'); loadRates(); [t,ca,a,r].forEach(el=>{if(el)el.value=''}); }
+      else showToast(d.error||'Error','error');
+    }).catch(e => showToast('Error: '+e.message,'error'));
+}
+
+function openAddRateModal() { showOverlay('add-rate-overlay'); }
+
+function importRates(inp) {
+  if (!inp.files[0]) return;
+  const fd = new FormData(); fd.append('file', inp.files[0]);
+  showToast('Importing rates...', 'info', 8000);
+  fetch('/api/rates/import', { method:'POST', body: fd })
+    .then(r => r.json()).then(d => {
+      if (d.success) { showToast(`Imported ${d.imported} rates successfully`, 'success'); loadRates(); }
+      else showToast('Import error: '+(d.error||'Unknown'), 'error');
+    }).catch(e => showToast('Import error: '+e.message,'error'));
+  inp.value = '';
 }
 /* ──────────────────────────────────────────────────────────────────── */
 
@@ -3690,7 +3823,7 @@ function loadHistory() {
   fetch('/api/history')
     .then(r=>r.json()).then(d=>{
       const grid = document.getElementById('history-grid');
-      if (!d.plans||!d.plans.length) {
+      if (!d || !d.plans||!d.plans.length) {
         grid.innerHTML='<div class="empty-state"><div class="icon">&#x1F4C2;</div><h3>No saved plans yet</h3><p>Save a route plan to see it here.</p></div>';
         return;
       }
