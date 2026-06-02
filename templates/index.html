@@ -1,0 +1,3919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PFC Logistics Routing System</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{
+  --navy:#0d2149;--navy2:#162d5e;--navy3:#1e3d7a;
+  --orange:#f39c12;--red:#e53935;--green:#43a047;--teal:#00897b;
+  --blue:#1976d2;--purple:#7b1fa2;--amber:#f9a825;
+  --bg:#f0f4f8;--card:#fff;--border:#dde3ec;--border2:#c5cfe0;
+  --text:#1e293b;--muted:#64748b;--light:#e8edf5;
+  --radius:10px;--shadow:0 2px 14px rgba(0,0,0,.09);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── HEADER ── */
+.header{background:linear-gradient(135deg,var(--navy) 0%,var(--navy3) 100%);
+  color:#fff;display:flex;align-items:center;gap:14px;
+  padding:0 20px;height:58px;position:sticky;top:0;z-index:1000;
+  box-shadow:0 3px 12px rgba(0,0,0,.35)}
+.logo-wrap{display:flex;align-items:center;gap:10px;border-right:1px solid rgba(255,255,255,.2);padding-right:14px;flex-shrink:0}
+.logo{font-weight:900;font-size:1.15rem;letter-spacing:1px}
+.logo span{color:var(--orange)}
+.logo-sub{font-size:.6rem;opacity:.5;letter-spacing:2px;margin-top:1px}
+.header-title{font-size:.85rem;opacity:.7;font-weight:500;flex-shrink:0}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.header-date{font-size:.74rem;opacity:.55;white-space:nowrap}
+.header-badge{background:rgba(255,255,255,.12);border-radius:6px;padding:3px 10px;font-size:.7rem;font-weight:600}
+.user-chip{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.12);
+  border-radius:20px;padding:4px 12px 4px 5px;border:1px solid rgba(255,255,255,.2);cursor:pointer;
+  transition:background .15s}
+.user-chip:hover{background:rgba(255,255,255,.2)}
+.user-avatar{width:26px;height:26px;border-radius:50%;background:var(--orange);
+  display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:900;color:#fff;flex-shrink:0}
+.user-name-lbl{font-size:.8rem;font-weight:700;color:#fff;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-role-lbl{font-size:.6rem;opacity:.6;color:#fff;margin-top:-1px}
+
+/* Welcome modal */
+#welcome-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;
+  display:flex;align-items:center;justify-content:center}
+.welcome-box{background:#fff;border-radius:16px;padding:36px 40px;width:360px;
+  box-shadow:0 24px 60px rgba(0,0,0,.25);text-align:center}
+.welcome-logo{font-size:2rem;margin-bottom:4px}
+.welcome-title{font-size:1.25rem;font-weight:800;color:var(--navy);margin-bottom:4px}
+.welcome-sub{font-size:.85rem;color:var(--muted);margin-bottom:24px}
+.welcome-roles{display:flex;gap:10px;margin-bottom:22px}
+.role-card{flex:1;border:2px solid var(--border);border-radius:10px;padding:12px 8px;
+  cursor:pointer;transition:all .15s;text-align:center}
+.role-card:hover,.role-card.selected{border-color:var(--blue);background:#eff6ff}
+.role-card .role-icon{font-size:1.4rem;margin-bottom:4px}
+.role-card .role-name{font-size:.78rem;font-weight:700;color:var(--navy)}
+.role-card .role-desc{font-size:.68rem;color:var(--muted);margin-top:2px}
+.welcome-name-row{display:flex;flex-direction:column;gap:8px;text-align:left;margin-bottom:20px}
+.welcome-name-row label{font-size:.78rem;font-weight:700;color:var(--navy)}
+.welcome-name-row input{border:1.5px solid var(--border2);border-radius:8px;padding:9px 14px;
+  font-size:.95rem;font-family:inherit;outline:none;transition:border-color .15s}
+.welcome-name-row input:focus{border-color:var(--blue)}
+.welcome-start-btn{width:100%;background:var(--blue);color:#fff;border:none;border-radius:10px;
+  padding:13px;font-size:1rem;font-weight:700;cursor:pointer;transition:background .15s}
+.welcome-start-btn:hover{background:#1565c0}
+.welcome-start-btn{transition:opacity .15s}
+/* COLLAB BAR */
+#collab-bar{display:none;align-items:center;gap:8px;padding:3px 14px;
+  background:#0d2748;border-bottom:1px solid rgba(255,255,255,.08);font-size:.72rem;color:#90b8d8}
+#collab-bar.active{display:flex}
+.collab-dot{width:7px;height:7px;border-radius:50%;background:#43a047;flex-shrink:0;transition:background .3s}
+.collab-dot.syncing{background:#f9a825;animation:cpulse .7s infinite alternate}
+@keyframes cpulse{from{opacity:1}to{opacity:.3}}
+#collab-users{font-weight:700;color:#fff}
+
+/* Coord editor modal */
+#coord-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;
+  display:none;align-items:center;justify-content:center}
+.coord-box{background:#fff;border-radius:14px;padding:24px 26px;width:460px;max-width:95vw;
+  box-shadow:0 20px 50px rgba(0,0,0,.22)}
+.coord-box h3{font-size:1rem;font-weight:800;color:var(--navy);margin-bottom:2px}
+.coord-box .coord-sub{font-size:.78rem;color:var(--muted);margin-bottom:14px}
+.coord-search-row{display:flex;gap:6px;margin-bottom:10px}
+.coord-search-row input{flex:1;border:1.5px solid var(--border2);border-radius:8px;
+  padding:8px 12px;font-size:.88rem;font-family:inherit;outline:none}
+.coord-search-row input:focus{border-color:var(--purple, #7c3aed)}
+.coord-search-btn{background:var(--purple,#7c3aed);color:#fff;border:none;border-radius:8px;
+  padding:8px 14px;font-size:.82rem;font-weight:700;cursor:pointer;white-space:nowrap}
+.coord-results{max-height:140px;overflow-y:auto;margin-bottom:10px;display:none}
+.coord-result-item{padding:7px 10px;font-size:.78rem;cursor:pointer;border-radius:6px;
+  border:1px solid var(--border);margin-bottom:4px;line-height:1.3;color:var(--text)}
+.coord-result-item:hover{background:#eff6ff;border-color:var(--blue)}
+.coord-result-item strong{display:block;color:var(--navy);font-size:.8rem}
+.coord-latlon-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.coord-latlon-row label{font-size:.72rem;font-weight:700;color:var(--navy);display:block;margin-bottom:3px}
+.coord-latlon-row input{width:100%;border:1.5px solid var(--border2);border-radius:7px;
+  padding:7px 10px;font-size:.88rem;font-family:inherit;outline:none}
+.coord-latlon-row input:focus{border-color:var(--purple,#7c3aed)}
+#coord-map-preview{height:160px;border-radius:8px;border:1px solid var(--border);margin-bottom:14px}
+.coord-btn-row{display:flex;gap:8px;justify-content:flex-end}
+.coord-btn-row button{border:none;border-radius:8px;padding:9px 20px;font-size:.88rem;
+  font-weight:700;cursor:pointer}
+.coord-cancel-btn{background:var(--light);color:var(--muted)}
+.coord-apply-btn{background:var(--purple,#7c3aed);color:#fff}
+.coord-apply-btn:hover{background:#6d28d9}
+/* Live badge */
+.live-badge{display:inline-flex;align-items:center;gap:5px;background:#dcfce7;
+  color:#166534;border-radius:20px;padding:3px 10px;font-size:.72rem;font-weight:700}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;
+  animation:pulse-live 1.4s infinite}
+
+/* ── NAV ── */
+.nav{background:var(--navy2);display:flex;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.08);overflow-x:auto}
+.nav-btn{background:none;border:none;color:rgba(255,255,255,.6);padding:11px 16px;cursor:pointer;
+  font-size:.8rem;font-weight:600;letter-spacing:.3px;border-bottom:3px solid transparent;
+  transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:5px;flex-shrink:0}
+.nav-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav-btn.active{color:#fff;border-bottom-color:var(--orange)}
+
+/* ── PAGES ── */
+.page{display:none;padding:18px 22px;max-width:1900px;margin:0 auto}
+.page.active{display:block}
+
+/* ── CARDS ── */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;border:1px solid var(--border)}
+.card-title{font-weight:700;font-size:.92rem;color:var(--navy);margin-bottom:12px;display:flex;align-items:center;gap:7px}
+
+/* ── KPI STRIP ── */
+.kpi-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.kpi{background:var(--card);border-radius:var(--radius);padding:12px 18px;flex:1;min-width:130px;
+  border:1px solid var(--border);box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--navy)}
+.kpi.orange::before{background:var(--orange)} .kpi.green::before{background:var(--green)}
+.kpi.red::before{background:var(--red)} .kpi.blue::before{background:var(--blue)}
+.kpi.purple::before{background:var(--purple)}
+.kpi-label{font-size:.66rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.kpi-value{font-size:1.7rem;font-weight:800;color:var(--navy);margin-top:3px;line-height:1}
+.kpi-sub{font-size:.68rem;color:var(--muted);margin-top:4px}
+.kpi-value.orange{color:var(--orange)} .kpi-value.green{color:var(--green)}
+.kpi-value.red{color:var(--red)} .kpi-value.blue{color:var(--blue)}
+
+/* ── UTIL BREAKDOWN ── */
+.util-breakdown{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.util-pill{border-radius:20px;padding:4px 12px;font-size:.73rem;font-weight:700;display:flex;align-items:center;gap:4px}
+.util-pill.red{background:#fde8e8;color:#b71c1c}
+.util-pill.amber{background:#fff8e1;color:#e65100}
+.util-pill.green{background:#e8f5e9;color:#1b5e20}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:7px;
+  border:none;cursor:pointer;font-size:.81rem;font-weight:600;transition:all .18s;white-space:nowrap}
+.btn-primary{background:var(--navy);color:#fff} .btn-primary:hover{background:var(--navy2);transform:translateY(-1px)}
+.btn-success{background:var(--green);color:#fff} .btn-success:hover{background:#388e3c}
+.btn-warning{background:var(--orange);color:#fff} .btn-warning:hover{background:#e68900}
+.btn-danger{background:var(--red);color:#fff} .btn-danger:hover{background:#c62828}
+.btn-outline{background:#fff;color:var(--navy);border:1.5px solid var(--border2)} .btn-outline:hover{background:var(--bg);border-color:var(--navy)}
+.btn-teal{background:var(--teal);color:#fff} .btn-teal:hover{background:#00796b}
+.btn-sm{padding:5px 11px;font-size:.74rem}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+
+/* ── DROP ZONE ── */
+.drop-zone{border:2px dashed var(--border2);border-radius:var(--radius);padding:48px 28px;
+  text-align:center;cursor:pointer;transition:all .2s;background:var(--card)}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--orange);background:#fff9f0}
+.drop-zone .icon{font-size:3rem;margin-bottom:12px}
+.drop-zone h3{color:var(--navy);font-size:1.1rem;margin-bottom:5px;font-weight:700}
+.drop-zone p{color:var(--muted);font-size:.82rem;line-height:1.5}
+.file-input-hidden{display:none}
+
+/* ── UPLOAD RESULT ── */
+.upload-result{display:none;margin-top:16px}
+.upload-result.show{display:block}
+.result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:10px 0}
+.result-item{background:var(--light);border-radius:8px;padding:10px 14px}
+.result-item .label{font-size:.65rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.5px}
+.result-item .value{font-size:1.18rem;font-weight:800;color:var(--navy);margin-top:2px}
+
+/* ── PLAN LAYOUT ── */
+.plan-layout{display:grid;grid-template-columns:500px 1fr;gap:14px;height:calc(100vh - 185px);min-height:500px}
+.plan-table-col{overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:#fafbfd}
+.map-col{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);position:relative}
+#map{width:100%;height:100%}
+
+/* ── TRUCK CARDS ── */
+.truck-card{margin-bottom:4px;background:var(--card);border-radius:8px;overflow:hidden;
+  border:1px solid var(--border);box-shadow:0 1px 6px rgba(0,0,0,.06);transition:box-shadow .15s}
+.truck-card.isolated{box-shadow:0 0 0 2px var(--orange),0 4px 16px rgba(243,156,18,.25)}
+.truck-card.dimmed{opacity:.4}
+.truck-card.locked{border:2px solid #f59e0b!important;background:#fffbeb}
+.truck-header{display:flex;align-items:center;gap:7px;padding:9px 12px;cursor:pointer;user-select:none;position:relative}
+.truck-color-bar{position:absolute;left:0;top:0;bottom:0;width:4px}
+.truck-id-wrap{display:flex;flex-direction:column;min-width:68px;padding-left:4px}
+.truck-id{font-weight:900;font-size:.95rem;letter-spacing:.5px;color:var(--navy)}
+.truck-type-badge{font-size:.63rem;font-weight:700;padding:1px 6px;border-radius:4px;
+  background:var(--light);color:var(--navy);display:inline-block;margin-top:1px}
+.truck-stats{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.truck-util-row{display:flex;align-items:center;gap:6px}
+.truck-util-bar-bg{flex:1;height:7px;background:#e8edf5;border-radius:4px;overflow:hidden}
+.truck-util-bar{height:100%;border-radius:4px;transition:width .4s}
+.util-pct-label{font-size:.7rem;font-weight:700;min-width:34px;text-align:right}
+.truck-weight-row{display:flex;gap:5px;flex-wrap:wrap}
+.truck-stat-chip{font-size:.65rem;background:var(--light);color:var(--muted);border-radius:4px;padding:1px 6px;font-weight:600;white-space:nowrap}
+.truck-wh-chip{font-size:.65rem;background:#e0eaff;color:var(--navy2);border-radius:4px;padding:1px 6px;font-weight:700}
+.truck-actions{display:flex;gap:3px;flex-shrink:0}
+.icon-btn{background:none;border:1px solid var(--border);border-radius:5px;cursor:pointer;
+  color:var(--muted);font-size:.78rem;padding:3px 7px;transition:all .15s}
+.icon-btn:hover{border-color:var(--orange);color:var(--orange)}
+.icon-btn.active-iso{border-color:var(--orange);color:var(--orange);background:#fff8e1}
+
+/* ── TRUCK INPUTS ── */
+.truck-inputs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:7px;padding:9px 12px;
+  background:#f6f9ff;border-top:1px solid var(--border)}
+.truck-inputs label{font-size:.63rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px}
+.truck-inputs input{width:100%;border:1px solid var(--border);border-radius:5px;padding:5px 8px;
+  font-size:.78rem;color:var(--navy);font-family:inherit;background:#fff}
+.truck-inputs input:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 2px rgba(243,156,18,.15)}
+
+/* ── STOP ROWS ── */
+.stop-rows{list-style:none;padding:0}
+.stop-row{display:grid;grid-template-columns:22px 26px 1fr 68px 44px 28px;
+  gap:4px;align-items:center;padding:6px 11px;border-top:1px solid #f0f4f8;
+  font-size:.75rem;transition:background .15s;cursor:default}
+.stop-row:hover{background:#f5f8ff}
+.drag-handle{cursor:grab;color:#c5cfe0;font-size:.95rem;text-align:center;line-height:1}
+.drag-handle:active{cursor:grabbing}
+.seq-bubble{width:21px;height:21px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:.63rem;font-weight:800;flex-shrink:0}
+.stop-main{min-width:0}
+.stop-cust{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--navy)}
+.stop-sub{font-size:.65rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vol-tag{background:var(--light);border-radius:4px;padding:1px 5px;font-weight:700;font-size:.68rem;text-align:right;white-space:nowrap}
+.wh-tag{font-size:.62rem;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reassign-btn{background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;
+  color:var(--muted);font-size:.68rem;padding:2px 4px;transition:all .15s;text-align:center}
+.reassign-btn:hover{border-color:var(--blue);color:var(--blue)}
+/* ── MERGE-PICK MODE ── */
+.stop-row.merge-source{background:#eff6ff !important;outline:2px dashed var(--blue);outline-offset:-2px}
+.stop-row.merge-target{cursor:pointer !important;position:relative}
+.stop-row.merge-target::after{content:"⊕ merge here";position:absolute;right:6px;top:50%;
+  transform:translateY(-50%);font-size:.6rem;font-weight:700;color:#22c55e;
+  background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:1px 5px;
+  pointer-events:none;opacity:0;transition:opacity .15s}
+.stop-row.merge-target:hover::after{opacity:1}
+.stop-row.merge-target:hover{background:#f0fdf4 !important;outline:2px solid #22c55e;outline-offset:-2px}
+/* ── SPLIT-SO STOP ── */
+.has-multi-so .stop-cust::after{content:" (multi-SO)";font-size:.55rem;color:#9333ea;font-weight:600;vertical-align:middle}
+/* ── MERGED STOP with sub-clients ── */
+.merged-stop{background:#f0f9ff !important}
+.merged-stop .stop-cust{color:#0369a1}
+.sub-clients-list{grid-column:1/-1;padding:3px 6px 4px 52px;display:flex;flex-direction:column;gap:2px}
+.sub-client-item{display:flex;align-items:center;gap:5px;font-size:.7rem;
+  background:#fff;border:1px solid #bae6fd;border-radius:4px;padding:2px 6px}
+.sub-client-item .sc-name{flex:1;font-weight:600;color:var(--navy);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.sub-client-item .sc-vol{font-weight:700;color:#0369a1;flex-shrink:0;white-space:nowrap}
+.sub-client-item .sc-unmerge{background:none;border:none;cursor:pointer;color:#cbd5e1;
+  font-size:.65rem;padding:0 1px;flex-shrink:0;line-height:1}
+.sub-client-item .sc-unmerge:hover{color:#e53935}
+
+/* ── MAP LEGEND ── */
+.map-legend{position:absolute;bottom:18px;right:8px;background:rgba(255,255,255,.97);
+  border-radius:10px;padding:9px 12px;max-height:280px;overflow-y:auto;z-index:900;
+  box-shadow:var(--shadow);border:1px solid var(--border);font-size:.72rem;min-width:170px}
+.map-legend h4{font-size:.7rem;color:var(--muted);font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;
+  padding:3px 5px;border-radius:5px;transition:all .15s}
+.legend-item:hover{background:var(--light)}
+.legend-item.iso-active{background:#fff8e1;border:1px solid var(--orange);font-weight:700}
+.legend-check{width:13px;height:13px;border-radius:3px;border:1.5px solid #cbd5e1;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.6rem;transition:all .12s}
+.legend-item.iso-active .legend-check{background:var(--orange);border-color:var(--orange);color:#fff}
+.legend-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;border:2px solid rgba(255,255,255,.8)}
+.legend-text{flex:1;min-width:0}
+.legend-name{font-weight:700;color:var(--navy);font-size:.71rem}
+.legend-meta{font-size:.63rem;color:var(--muted)}
+
+/* ── PERF TABLE ── */
+.perf-section{margin-top:14px}
+.perf-table{width:100%;border-collapse:collapse;font-size:.76rem}
+.perf-table th{background:var(--navy);color:#fff;padding:8px 10px;text-align:left;font-size:.67rem;
+  font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.perf-table td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.perf-table tr:hover td{background:#f8fbff}
+.util-cell-bar{height:7px;background:var(--light);border-radius:4px;overflow:hidden;margin-top:3px;min-width:55px}
+.util-cell-fill{height:100%;border-radius:4px}
+
+/* ── MONITORING ── */
+.cmd-header{background:linear-gradient(135deg,var(--navy) 0%,var(--navy3) 100%);
+  color:#fff;border-radius:var(--radius);padding:18px 24px;margin-bottom:14px;box-shadow:var(--shadow)}
+.cmd-header h2{font-size:1.15rem;font-weight:900;letter-spacing:1.5px;margin-bottom:10px}
+.cmd-kpi-row{display:flex;gap:28px;flex-wrap:wrap}
+.cmd-kpi .label{font-size:.65rem;opacity:.6;text-transform:uppercase;font-weight:700;letter-spacing:.6px}
+.cmd-kpi .val{font-size:1.8rem;font-weight:900;line-height:1.1;margin-top:2px}
+.cmd-kpi .val.red{color:#ff6b6b} .cmd-kpi .val.green{color:#69f0ae}
+.mon-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.mon-table{width:100%;border-collapse:collapse;font-size:.76rem}
+.mon-table th{background:var(--navy);color:#fff;padding:9px 10px;text-align:left;
+  font-size:.67rem;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;position:sticky;top:0;z-index:10}
+.mon-table td{padding:7px 9px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.mon-table tr.truck-sep td{background:#eef2f9;font-weight:700;color:var(--navy);font-size:.73rem;padding:5px 10px}
+.mon-table tr:not(.truck-sep):hover td{background:#f8fbff}
+select.mon-sel{border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:.73rem;
+  background:#fff;cursor:pointer;width:100%;font-family:inherit}
+input.mon-inp{border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.73rem;
+  width:100%;font-family:inherit}
+input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)}
+.status-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.66rem;font-weight:700}
+.sb-pending{background:#fff8e1;color:#e65100}
+.sb-transit{background:#e3f2fd;color:#0d47a1}
+.sb-done{background:#e8f5e9;color:#1b5e20}
+.otif-ok{color:var(--green);font-weight:700} .otif-late{color:var(--red);font-weight:700}
+
+/* ── HISTORY ── */
+.history-grid{display:flex;flex-direction:column;gap:14px}
+/* Date group card */
+.history-date-group{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);
+  box-shadow:var(--shadow);overflow:hidden}
+.hist-date-header{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px 10px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#f0f4ff,#fff)}
+.hist-date-label{font-weight:900;font-size:1rem;color:var(--navy)}
+.hist-exec-kpis{display:flex;gap:0;padding:2px 0;background:#fafbff;border-bottom:1px solid #eef0f6}
+.hist-exec-kpis .h-kpi{flex:1;text-align:center;padding:10px 8px;border-right:1px solid #eef0f6}
+.hist-exec-kpis .h-kpi:last-child{border-right:none}
+/* Plan rows inside the date group */
+.hist-plan-list{padding:8px 14px;display:flex;flex-direction:column;gap:6px}
+.hist-plan-row{display:flex;align-items:center;gap:10px;padding:8px 10px;
+  background:#f8fbff;border-radius:7px;border:1px solid #e8eef8}
+.hist-plan-row:hover{border-color:var(--navy);background:#eef4ff}
+/* Legacy KPI chips (used in exec row) */
+.h-kpi{min-width:64px}
+.h-kpi-label{font-size:.63rem;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.3px}
+.h-kpi-val{font-weight:800;color:var(--navy);font-size:.95rem;margin-top:1px}
+.h-badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:.65rem;font-weight:700}
+.hb-finalized{background:#d1fae5;color:#065f46} .hb-draft{background:#fff8e1;color:#92400e}
+/* SO breakdown inside stop cards */
+.so-breakdown{grid-column:1/-1;background:#f5f3ff;border-radius:6px;padding:6px 8px;margin-top:5px;border:1px solid #ede9fe}
+.so-item{display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:5px;cursor:grab;font-size:.73rem;background:#fff;border:1px solid #e5e7eb;margin-bottom:3px}
+.so-item:last-child{margin-bottom:0}
+.so-item:hover{background:#eff6ff;border-color:#bfdbfe}
+.so-item.so-over{background:#fee2e2;border-color:#fca5a5;font-weight:700;color:#e53935}
+.so-item .so-drag-icon{color:#c5cfe0;font-size:.95rem;cursor:grab;flex-shrink:0}
+.so-item .so-num{font-weight:700;color:#5b21b6;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.so-item .so-vol-chip{font-weight:700;color:var(--navy);flex-shrink:0;background:#f3f4f6;border-radius:4px;padding:2px 7px;font-size:.72rem}
+.so-vol-toggle{font-size:.6rem;display:block;color:#7c3aed;cursor:pointer;font-weight:700;text-align:center;line-height:1.2;margin-top:1px}
+.truck-card.so-drop-target .stop-rows{background:#f3e8ff;border-radius:6px;transition:background .15s}
+.truck-overload-warn{display:inline-flex;align-items:center;gap:3px;background:#fee2e2;color:#b91c1c;border-radius:8px;padding:1px 8px;font-size:.63rem;font-weight:700;margin-left:5px}
+
+/* ── RATES TAB ── */
+.rates-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.rates-filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rates-filter label{font-size:.74rem;font-weight:700;color:var(--muted)}
+.rates-filter select,.rates-filter input{border:1px solid var(--border);border-radius:6px;
+  padding:6px 10px;font-size:.8rem;font-family:inherit;color:var(--navy)}
+.rates-filter select:focus,.rates-filter input:focus{outline:none;border-color:var(--orange)}
+.rates-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.rates-table th{background:var(--navy);color:#fff;padding:9px 12px;text-align:left;
+  font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.rates-table td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.rates-table tr:hover td{background:#f8fbff}
+.rate-edit-inp{border:1px solid var(--border);border-radius:4px;padding:4px 7px;
+  font-size:.78rem;width:90px;font-family:inherit;text-align:right}
+.rate-edit-inp:focus{outline:none;border-color:var(--orange)}
+.inactive-row td{opacity:.45;text-decoration:line-through}
+
+/* ── ANALYTICS TAB ── */
+.analytics-controls{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.period-btn{background:var(--light);border:1.5px solid var(--border);border-radius:20px;
+  padding:5px 16px;font-size:.78rem;font-weight:700;cursor:pointer;color:var(--muted);transition:all .18s}
+.period-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.analytics-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.analytics-table th{background:var(--navy);color:#fff;padding:9px 12px;text-align:left;
+  font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.analytics-table td{padding:8px 12px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.analytics-table tr:hover td{background:#f8fbff}
+.otif-bar-wrap{width:80px;height:7px;background:var(--light);border-radius:4px;overflow:hidden;display:inline-block;vertical-align:middle;margin-left:6px}
+.otif-bar-fill{height:100%;border-radius:4px;background:var(--green)}
+.analytics-empty{text-align:center;padding:48px;color:var(--muted)}
+
+/* ── MODALS ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:var(--radius);padding:24px;max-width:460px;width:93%;
+  box-shadow:0 10px 50px rgba(0,0,0,.25);animation:modalIn .2s ease}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+@keyframes pulse-live{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}
+
+/* Shared plan notification banner */
+#shared-plan-banner{display:none;position:sticky;top:58px;z-index:900;
+  background:linear-gradient(90deg,#1e40af,#1976d2);color:#fff;
+  padding:9px 20px;align-items:center;gap:12px;font-size:.85rem;
+  box-shadow:0 3px 10px rgba(0,0,0,.2)}
+#shared-plan-banner .banner-msg{flex:1;font-weight:500}
+#shared-plan-banner .banner-msg b{font-weight:800}
+#shared-plan-banner .banner-load{background:#fff;color:#1976d2;border:none;
+  border-radius:7px;padding:5px 14px;font-weight:800;font-size:.82rem;cursor:pointer}
+#shared-plan-banner .banner-load:hover{background:#dbeafe}
+#shared-plan-banner .banner-dismiss{background:none;border:none;color:rgba(255,255,255,.7);
+  cursor:pointer;font-size:1rem;padding:0 4px;margin-left:4px}
+.modal h3{font-size:1rem;font-weight:800;color:var(--navy);margin-bottom:4px}
+.modal p.sub{font-size:.78rem;color:var(--muted);margin-bottom:14px}
+.modal label{font-size:.73rem;font-weight:700;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.modal input,.modal select{width:100%;border:1px solid var(--border);border-radius:6px;
+  padding:8px 12px;font-size:.86rem;margin-bottom:12px;font-family:inherit;color:var(--navy)}
+.modal input:focus,.modal select:focus{outline:none;border-color:var(--orange)}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;padding-top:4px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(90px);
+  background:var(--navy);color:#fff;border-radius:8px;padding:10px 22px;
+  font-size:.82rem;font-weight:600;z-index:9999;pointer-events:none;
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.success{background:var(--green)} .toast.error{background:var(--red)}
+.toast.warning{background:var(--amber);color:var(--navy)}
+
+/* ── MISC ── */
+.empty-state{text-align:center;padding:48px 24px;color:var(--muted)}
+.empty-state .icon{font-size:3rem;margin-bottom:12px}
+.empty-state h3{font-weight:800;color:var(--navy);margin-bottom:5px}
+.section-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.tag{display:inline-block;padding:2px 7px;border-radius:8px;font-size:.66rem;font-weight:700;background:var(--light);color:var(--muted)}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);
+  border-top-color:#fff;border-radius:50%;animation:spin .65s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.divider{height:1px;background:var(--border);margin:14px 0}
+@media(max-width:960px){
+  .plan-layout{grid-template-columns:1fr;height:auto}
+  .plan-table-col,.map-col{height:420px}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo-wrap">
+    <div>
+      <div class="logo">PFC <span>LOGISTICS</span></div>
+      <div class="logo-sub">PREMIER FOOD CHOICE</div>
+    </div>
+  </div>
+  <div class="header-title">Automated Routing System</div>
+  <div class="header-right">
+    <div class="user-chip" id="user-chip" title="Signed in">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <div>
+        <div class="user-name-lbl" id="user-name-lbl">Not signed in</div>
+        <div class="user-role-lbl" id="user-role-lbl">click to set name</div>
+      </div>
+    </div>
+    <div class="header-badge" id="plan-status-badge" style="display:none">● Active Plan</div>
+    <div class="header-date" id="header-date"></div>
+    <button id="logout-btn" onclick="doLogout()" style="display:none;padding:6px 16px;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:20px;cursor:pointer;font-size:.8rem;font-weight:600;white-space:nowrap">Sign Out</button>
+  </div>
+</div>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay" style="display:flex;position:fixed;inset:0;z-index:9999;background:rgba(10,25,48,0.97);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:42px 38px;width:390px;max-width:95vw;box-shadow:0 8px 48px rgba(0,0,0,.55);text-align:center">
+    <div style="font-size:2.5rem;margin-bottom:6px">&#x1F69A;</div>
+    <div style="font-size:1.4rem;font-weight:700;color:#0d2748;margin-bottom:4px">PFC Logistics System</div>
+    <div style="font-size:.85rem;color:#888;margin-bottom:28px">Sign in to access the routing system</div>
+    <div style="text-align:left;margin-bottom:14px">
+      <label style="font-size:.8rem;font-weight:600;color:#444;display:block;margin-bottom:5px">Username</label>
+      <input type="text" id="login-username" placeholder="e.g. planner1, tower1"
+        autocomplete="username"
+        style="width:100%;box-sizing:border-box;padding:11px 13px;border:1.5px solid #ddd;border-radius:8px;font-size:.95rem;outline:none"
+        onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()"/>
+    </div>
+    <div style="text-align:left;margin-bottom:22px">
+      <label style="font-size:.8rem;font-weight:600;color:#444;display:block;margin-bottom:5px">Password</label>
+      <input type="password" id="login-password" placeholder="Password"
+        autocomplete="current-password"
+        style="width:100%;box-sizing:border-box;padding:11px 13px;border:1.5px solid #ddd;border-radius:8px;font-size:.95rem;outline:none"
+        onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
+    <div id="login-error" style="display:none;color:#c62828;font-size:.83rem;margin-bottom:14px;padding:9px 13px;background:#ffebee;border-radius:7px;text-align:left"></div>
+    <button onclick="doLogin()" id="login-btn"
+      style="width:100%;padding:13px;background:#0d2748;color:#fff;border:none;border-radius:9px;font-size:1rem;font-weight:600;cursor:pointer">
+      Sign In &#x2192;
+    </button>
+  </div>
+</div>
+
+<!-- NAV -->
+<div class="nav">
+  <button class="nav-btn active" onclick="showPage('upload',this)">📤 Upload Orders</button>
+  <button class="nav-btn" id="nav-plan-btn" onclick="showPage('plan',this)">🗺️ Route Plan</button>
+  <button class="nav-btn" onclick="showPage('perf',this)">📊 Performance</button>
+  <button class="nav-btn" onclick="showPage('monitoring',this)">🚚 Monitoring</button>
+  <button class="nav-btn" onclick="showPage('history',this)">📁 History</button>
+  <button class="nav-btn" onclick="showPage('rates',this)">💰 Rate Master</button>
+  <button class="nav-btn" onclick="showPage('analytics',this)">📈 Analytics</button>
+</div>
+
+<!-- COLLAB BAR -->
+<div id="collab-bar" style="display:none;align-items:center;gap:8px;padding:3px 14px;
+  background:#0d2748;border-bottom:1px solid rgba(255,255,255,.08);font-size:.72rem;color:#90b8d8">
+  <span style="width:7px;height:7px;border-radius:50%;background:#43a047;flex-shrink:0;display:inline-block" id="collab-dot"></span>
+  <span style="opacity:.7">Live Plan —</span>
+  <span id="collab-users" style="font-weight:700;color:#fff">just you</span>
+  <span id="collab-sync-lbl" style="margin-left:6px;opacity:.7;font-size:.67rem"></span>
+</div>
+
+<!-- COORDINATE EDITOR MODAL -->
+<div id="coord-modal">
+  <div class="coord-box">
+    <h3 id="coord-modal-title">📍 Edit Stop Details</h3>
+    <div class="coord-sub" id="coord-modal-sub">Update name, address, or GPS coordinates</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div>
+        <label style="font-size:.72rem;font-weight:700;color:var(--navy);display:block;margin-bottom:3px">Customer Name</label>
+        <input type="text" id="coord-name-input" placeholder="Customer name"
+          style="width:100%;box-sizing:border-box;border:1.5px solid var(--border2);border-radius:7px;padding:8px 10px;font-size:.85rem;font-family:inherit;outline:none"/>
+      </div>
+      <div>
+        <label style="font-size:.72rem;font-weight:700;color:var(--navy);display:block;margin-bottom:3px">Delivery Address</label>
+        <input type="text" id="coord-addr-input" placeholder="Street, City, Province"
+          style="width:100%;box-sizing:border-box;border:1.5px solid var(--border2);border-radius:7px;padding:8px 10px;font-size:.85rem;font-family:inherit;outline:none"
+          onkeydown="if(event.key==='Enter'){syncAddrToSearch();searchCoordAddress();}"
+          oninput="syncAddrToSearch()"/>
+      </div>
+    </div>
+
+    <div class="coord-search-row">
+      <input type="text" id="coord-search-input" placeholder="Type address to search…"
+             onkeydown="if(event.key==='Enter')searchCoordAddress()"/>
+      <button class="coord-search-btn" onclick="searchCoordAddress()">🔍 Search</button>
+    </div>
+    <div class="coord-results" id="coord-results"></div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:.72rem;font-weight:700;color:var(--navy);display:block;margin-bottom:3px">&#x1F4CB; Paste coordinates (lat, lng)</label>
+      <input type="text" id="coord-paste-input"
+             placeholder="e.g. 14.5995, 120.9842  — paste directly from Google Maps"
+             style="width:100%;border:1.5px solid #a78bfa;border-radius:7px;padding:8px 12px;font-size:.85rem;font-family:inherit;outline:none;box-sizing:border-box;background:#faf5ff"
+             oninput="splitPastedCoords(this.value)"
+             onpaste="setTimeout(()=>splitPastedCoords(document.getElementById('coord-paste-input').value),0)"/>
+    </div>
+    <div class="coord-latlon-row">
+      <div>
+        <label>Latitude</label>
+        <input type="number" id="coord-lat-input" step="0.000001" placeholder="e.g. 14.5995"/>
+      </div>
+      <div>
+        <label>Longitude</label>
+        <input type="number" id="coord-lng-input" step="0.000001" placeholder="e.g. 120.9842"/>
+      </div>
+    </div>
+
+    <div id="coord-map-preview"></div>
+
+    <div class="coord-btn-row">
+      <button class="coord-cancel-btn" onclick="closeCoordEditor()">Cancel</button>
+      <button class="coord-apply-btn" onclick="applyCoordEdit()">✓ Apply &amp; Update Map</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ UPLOAD ══════════════ -->
+<div class="page active" id="page-upload">
+  <div class="card" style="max-width:680px;margin:0 auto">
+    <div class="card-title">📤 Upload Today's Order Details</div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">📋</div>
+      <h3>Drop your Order file here</h3>
+      <p>Excel (.xlsx) with any sheet name · or CSV<br>
+         Supports PFC's "AssignRoute…" sheet and standard "Order Details" format</p>
+      <p style="margin-top:8px;color:var(--orange);font-weight:700;font-size:.84rem">Click to browse or drag &amp; drop</p>
+    </div>
+    <input type="file" id="file-input" class="file-input-hidden" accept=".xlsx,.xls,.csv,.xlsm"/>
+
+    <div class="upload-result" id="upload-result">
+      <div class="result-grid">
+        <div class="result-item"><div class="label">Total Line Items</div><div class="value" id="res-orders">—</div></div>
+        <div class="result-item"><div class="label">Total Volume (KG)</div><div class="value" id="res-vol">—</div></div>
+        <div class="result-item"><div class="label">Unique Customers</div><div class="value" id="res-cust">—</div></div>
+        <div class="result-item"><div class="label">Ship Date(s)</div><div class="value" id="res-date" style="font-size:.8rem">—</div></div>
+      </div>
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <button class="btn btn-success" id="run-btn" onclick="runRouting()" style="font-size:.92rem;padding:10px 26px">
+          ▶ Generate Route Plan
+        </button>
+        <button onclick="clearCoordCache()" title="Wipe the address coordinate cache so all stops are re-geocoded from their shipping address on next Generate"
+          style="background:none;border:1px solid #cbd5e1;color:#64748b;border-radius:6px;padding:7px 13px;font-size:.75rem;cursor:pointer;white-space:nowrap"
+          id="clear-cache-btn">🔄 Reset Coord Cache</button>
+        <div id="routing-status" style="font-size:.78rem;color:var(--muted)"></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="max-width:680px;margin:14px auto 0">
+    <div class="card-title">🏭 Warehouse Reference</div>
+    <div id="wh-table" style="font-size:.78rem;color:var(--muted)">Loading…</div>
+  </div>
+</div>
+
+<!-- ══════════════ ROUTE PLAN ══════════════ -->
+<div id="shared-plan-banner">
+  <span class="banner-msg" id="shared-plan-msg">📋 New plan available</span>
+  <button class="banner-load" onclick="loadSharedPlan()">Load New Plan</button>
+  <button class="banner-dismiss" onclick="dismissSharedBanner()" title="Dismiss">✕</button>
+</div>
+
+<div class="page" id="page-plan">
+  <div class="kpi-strip" id="plan-kpi-strip">
+    <div class="kpi blue"><div class="kpi-label">Trucks Assigned</div><div class="kpi-value blue" id="kpi-trucks">—</div></div>
+    <div class="kpi"><div class="kpi-label">Total Drops</div><div class="kpi-value" id="kpi-drops">—</div></div>
+    <div class="kpi orange"><div class="kpi-label">Total Volume (KG)</div><div class="kpi-value orange" id="kpi-vol">—</div></div>
+    <div class="kpi green"><div class="kpi-label">Avg Utilization</div><div class="kpi-value green" id="kpi-util">—</div></div>
+    <div class="kpi"><div class="kpi-label">Total Trip Cost</div><div class="kpi-value" id="kpi-cost">—</div></div>
+  </div>
+  <div id="util-breakdown" class="util-breakdown"></div>
+  <!-- Search bar -->
+  <div style="display:flex;align-items:center;gap:8px;margin:6px 0 4px">
+    <div style="position:relative;flex:1;max-width:340px">
+      <input type="text" id="plan-search" placeholder="🔍 Search client or address…"
+        oninput="searchPlan(this.value)"
+        style="width:100%;padding:7px 36px 7px 12px;border:1.5px solid var(--border);border-radius:8px;
+               font-size:.82rem;font-family:inherit;box-sizing:border-box;color:var(--navy)">
+      <button onclick="searchPlan('');document.getElementById('plan-search').value=''"
+        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);
+               background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem"
+        title="Clear search">&#x2715;</button>
+    </div>
+    <span id="search-count" style="font-size:.74rem;color:var(--muted)"></span>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-outline btn-sm" onclick="addEmptyTruck()" style="border-color:#43a047;color:#43a047">&#x2795; Add Truck</button>
+    <button class="btn btn-primary btn-sm" onclick="savePlanToday()" id="save-plan-btn" title="Save today's route plan to History">💾 Save Plan</button>
+    <button class="btn btn-outline btn-sm" onclick="document.getElementById('merge-file-input').click()"
+      style="border-color:#0891b2;color:#0891b2" title="Import new orders and add them to this plan">
+      &#x2B; Import &amp; Add Orders</button>
+    <input type="file" id="merge-file-input" class="file-input-hidden" accept=".xlsx,.xls,.csv"
+      onchange="mergeOrders(this)">
+    <button class="btn btn-warning" onclick="goMonitoring()">🚚 Generate Monitoring</button>
+    <button class="btn btn-outline" onclick="exportCsv()">⬇ Export CSV</button>
+    <button class="btn btn-outline btn-sm" style="border-color:#16a34a;color:#16a34a" onclick="openGSheetsPanel('plan')" title="Sync route plan to Google Sheets">&#x1F4CA; Sync to Sheets</button>
+    <button class="btn btn-outline btn-sm" onclick="openVerifyAddresses()" style="border-color:#7c3aed;color:#7c3aed" title="Check if stop coordinates match their stated delivery area">🔍 Verify Addresses</button>
+    <button class="btn btn-outline btn-sm" onclick="toggleMap()" id="map-toggle-btn">⛶ Expand Map</button>
+    <button class="btn btn-outline btn-sm" id="iso-clear-btn" onclick="clearIsolation()" style="display:none">✕ Show All Trucks</button>
+  </div>
+  <!-- Unrouted stops basket -->
+  <div id="unrouted-basket" style="display:none;margin:10px 0;border:2px dashed #f59e0b;border-radius:10px;background:#fffbeb;padding:12px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span style="font-weight:700;color:#92400e;font-size:.9rem">📦 Unrouted Stops (<span id="unrouted-count">0</span>)</span>
+      <span style="font-size:.72rem;color:#b45309">Removed from trucks — drag back or use the truck dropdown</span>
+    </div>
+    <div id="unrouted-list"></div>
+  </div>
+
+  <div class="plan-layout" id="plan-layout">
+    <div class="plan-table-col" id="plan-table-col">
+      <div id="plan-table-body">
+        <div class="empty-state">
+          <div class="icon">🗺️</div><h3>No route plan yet</h3>
+          <p>Upload an order file and click Generate Route Plan</p>
+        </div>
+      </div>
+    </div>
+    <div class="map-col">
+      <div id="map"></div>
+      <div class="map-legend" id="map-legend" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding-bottom:5px;border-bottom:1px solid var(--border)"><span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Trucks</span><span id="legend-sel-count" style="font-size:.65rem;color:var(--orange);font-weight:700;display:none"></span></div>
+        <div id="legend-items"></div>
+        <div id="legend-wh-section" style="border-top:1px solid var(--border2);margin-top:6px;padding-top:2px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PERFORMANCE ══════════════ -->
+<div class="page" id="page-perf">
+  <div class="section-row">
+    <div style="font-weight:800;font-size:1.05rem;color:var(--navy)">📊 Fleet Performance Report</div>
+    <div class="btn-row" style="margin:0">
+      <button class="btn btn-teal btn-sm" onclick="loadAndShowCosts()">💰 Load Rate Costs</button>
+      <button class="btn btn-outline btn-sm" onclick="refreshPerf()">🔄 Refresh</button>
+      <button class="btn btn-outline btn-sm" onclick="exportCsv()">⬇ Export CSV</button>
+    </div>
+  </div>
+  <div class="kpi-strip" id="perf-kpi-strip" style="margin-bottom:18px"></div>
+  <div class="card">
+    <div class="card-title">Truck-by-Truck Utilization &amp; Cost Overview</div>
+    <div style="overflow-x:auto">
+      <table class="perf-table" id="perf-table">
+        <thead>
+          <tr>
+            <th>Truck ID</th><th>Type</th><th>Pickup WH</th><th>Drops</th>
+            <th>Rated Cap (KG)</th><th>Actual Load (KG)</th>
+            <th>Utilization %</th><th>Util Bar</th>
+            <th>Trucker</th><th>Ref Sheet #</th>
+            <th>Total KM</th><th>Rate (PHP)</th><th>Cost/KG</th>
+            <th>Primary Area</th><th>Cluster(s)</th>
+          </tr>
+        </thead>
+        <tbody id="perf-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MONITORING ══════════════ -->
+<div class="page" id="page-monitoring">
+  <div class="cmd-header">
+    <h2>🏢 PFC LOGISTICS COMMAND CENTER</h2>
+    <div class="cmd-kpi-row">
+      <div class="cmd-kpi"><div class="label">Total Drops</div><div class="val" id="mon-total">—</div></div>
+      <div class="cmd-kpi"><div class="label">Overall Progress</div><div class="val" id="mon-prog">—</div></div>
+      <div class="cmd-kpi"><div class="label">Live OTIF Rate</div><div class="val green" id="mon-otif">—</div></div>
+      <div class="cmd-kpi"><div class="label">Active Concerns</div><div class="val red" id="mon-concerns">—</div></div>
+    </div>
+  </div>
+  <div class="section-row">
+    <span style="font-weight:700;color:var(--navy)">Delivery Tracker — <span id="mon-date" style="font-weight:400;color:var(--muted)"></span></span>
+    <span class="live-badge" id="live-badge" style="display:none"><span class="live-dot"></span>LIVE</span>
+    <span id="mon-last-updated" style="font-size:.72rem;color:var(--muted);margin-left:6px"></span>
+    <div class="btn-row" style="margin:0">
+      <button class="btn btn-success btn-sm" onclick="saveMonitoringAll()">💾 Save &amp; Persist to DB</button>
+      <button class="btn btn-outline btn-sm" onclick="exportMonCsv()">⬇ Export CSV</button>
+      <button class="btn btn-outline btn-sm" onclick="loadMonitoring()">🔄 Refresh</button>
+      <button class="btn btn-sm" style="border:1px solid #16a34a;color:#16a34a;background:#f0fdf4" onclick="openGSheetsPanel('monitoring')" title="Sync to Google Sheets">&#x1F4CA; Sync to Sheets</button>
+      <button class="btn btn-sm" style="border:1px solid #fca5a5;color:#e53935;background:#fff" onclick="deleteMonitoringDb(document.getElementById('mon-date').dataset.isodate)">🗑 Clear DB Records</button>
+    </div>
+  </div>
+  <div class="mon-wrap">
+    <table class="mon-table" id="mon-table">
+      <thead>
+        <tr>
+          <th>Truck</th><th>Seq</th><th>Progress</th>
+          <th style="min-width:175px">Client Name</th>
+          <th style="min-width:200px">Client Address</th>
+          <th>Cluster</th><th>Sched.</th><th>Status</th><th>Actual Done</th>
+          <th>OTIF</th><th style="min-width:145px">Concerns</th><th style="min-width:130px">Remarks</th>
+        </tr>
+      </thead>
+      <tbody id="mon-tbody"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="mon-empty" style="display:none">
+    <div class="icon">🚚</div><h3>No monitoring data</h3>
+    <p>Generate a route plan then click "Generate Monitoring"</p>
+  </div>
+</div>
+
+<!-- ══════════════ HISTORY ══════════════ -->
+<div class="page" id="page-history">
+  <div class="section-row">
+    <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">📁 Saved Route Plans</span>
+    <button class="btn btn-outline btn-sm" onclick="loadHistory()">🔄 Refresh</button>
+  </div>
+  <div class="history-grid" id="history-grid">
+    <div class="empty-state">
+      <div class="icon">📂</div><h3>No saved plans yet</h3>
+      <p>Use the 💾 Save Plan button after routing to save a plan here.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ RATE MASTER ══════════════ -->
+<div class="page" id="page-rates">
+  <div class="section-row">
+    <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">💰 Rate Master</span>
+    <div class="btn-row" style="margin:0">
+      <button class="btn btn-success btn-sm" onclick="document.getElementById('rate-file-input').click()">
+        📂 Import Rate Excel
+      </button>
+      <input type="file" id="rate-file-input" class="file-input-hidden" accept=".xlsx,.xls"
+             onchange="importRates(this)"/>
+      <button class="btn btn-primary btn-sm" onclick="openAddRateModal()">+ Add Row</button>
+      <button class="btn btn-outline btn-sm" onclick="loadRates()">🔄 Refresh</button>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:12px;padding:12px 16px">
+    <div style="font-size:.78rem;color:var(--muted);line-height:1.7">
+      <b>Column order for import:</b> Trucker | Capacity_KG | Pickup_WH | Area | Rate | Cost_Per_KG &nbsp;·&nbsp;
+      <b>Pickup_WH values:</b> NAVOTAS, CARMONA, BALAGTAS (= Bulacan) &nbsp;·&nbsp;
+      Headers optional — file auto-detected.
+    </div>
+  </div>
+  <div class="rates-toolbar">
+    <div class="rates-filter">
+      <label>Trucker:</label>
+      <select id="rate-filter-trucker" onchange="loadRates()">
+        <option value="">All</option>
+      </select>
+      <label>WH:</label>
+      <select id="rate-filter-wh" onchange="loadRates()">
+        <option value="">All</option>
+        <option>NAVOTAS</option>
+        <option>CARMONA</option>
+        <option>BALAGTAS</option>
+      </select>
+    </div>
+    <span id="rate-count" style="font-size:.76rem;color:var(--muted);margin-left:auto"></span>
+  </div>
+  <div style="overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)">
+    <table class="rates-table" id="rates-table">
+      <thead>
+        <tr>
+          <th>#</th><th>Trucker</th><th>Capacity KG</th><th>Pickup WH</th><th>Area</th>
+          <th>Rate (PHP)</th><th>Cost/KG</th><th>Active</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rates-tbody">
+        <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">
+          Import a Rate Master Excel file to get started</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ ANALYTICS ══════════════ -->
+<div class="page" id="page-analytics">
+  <div class="section-row">
+    <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">📈 Performance Analytics</span>
+    <button class="btn btn-outline btn-sm" onclick="loadAnalytics()">🔄 Refresh</button>
+  </div>
+  <div class="kpi-strip" id="analytics-kpi-strip" style="margin-bottom:16px"></div>
+  <div class="analytics-controls">
+    <span style="font-size:.8rem;font-weight:700;color:var(--muted)">Period:</span>
+    <button class="period-btn active" onclick="setAnalyticsPeriod('daily',this)">Daily</button>
+    <button class="period-btn" onclick="setAnalyticsPeriod('weekly',this)">Weekly</button>
+    <button class="period-btn" onclick="setAnalyticsPeriod('monthly',this)">Monthly</button>
+    <button class="period-btn" onclick="setAnalyticsPeriod('quarterly',this)">Quarterly</button>
+    <button class="period-btn" onclick="setAnalyticsPeriod('yearly',this)">Yearly</button>
+  </div>
+  <div class="card">
+    <div class="card-title" id="analytics-title">Daily Performance Summary</div>
+    <div style="overflow-x:auto">
+      <table class="analytics-table" id="analytics-table">
+        <thead>
+          <tr>
+            <th>Date / Period</th><th>Trucks</th><th>Drops</th>
+            <th>Volume (KG)</th><th>Avg Util %</th>
+            <th>OTIF Rate</th><th>Concerns</th>
+            <th>Days</th>
+          </tr>
+        </thead>
+        <tbody id="analytics-tbody">
+          <tr><td colspan="8" class="analytics-empty">
+            No data yet. Save route plans and persist monitoring progress to see analytics.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MODALS ══════════════ -->
+<!-- Reassign -->
+<div class="overlay" id="reassign-overlay">
+  <div class="modal">
+    <h3>↔ Reassign Stop</h3>
+    <p class="sub" id="reassign-cust-label"></p>
+    <label>Move to truck</label>
+    <select id="reassign-sel"></select>
+    <label>Insert at position (sequence)</label>
+    <input type="number" id="reassign-pos" min="1" value="1"/>
+    <div class="modal-btns">
+      <button class="btn btn-outline btn-sm" onclick="closeOverlay('reassign-overlay')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="confirmReassign()">Move Stop</button>
+    </div>
+  </div>
+</div>
+<!-- Add Rate -->
+<div class="overlay" id="add-rate-overlay">
+  <div class="modal">
+    <h3>+ Add Rate Entry</h3>
+    <p class="sub">Add a single rate row manually.</p>
+    <label>Trucker</label>
+    <input type="text" id="nr-trucker" placeholder="e.g. AJDL"/>
+    <label>Capacity KG</label>
+    <input type="number" id="nr-cap" placeholder="e.g. 5000"/>
+    <label>Pickup WH</label>
+    <select id="nr-wh">
+      <option>NAVOTAS</option><option>CARMONA</option><option>BALAGTAS</option>
+    </select>
+    <label>Area</label>
+    <input type="text" id="nr-area" placeholder="e.g. PASIG"/>
+    <label>Rate (PHP)</label>
+    <input type="number" id="nr-rate" placeholder="e.g. 6000"/>
+    <label>Cost per KG</label>
+    <input type="number" id="nr-cpk" step="0.01" placeholder="e.g. 1.20"/>
+    <div class="modal-btns">
+      <button class="btn btn-outline btn-sm" onclick="closeOverlay('add-rate-overlay')">Cancel</button>
+      <button class="btn btn-success btn-sm" onclick="confirmAddRate()">Add Rate</button>
+    </div>
+  </div>
+</div>
+<!-- Google Sheets Sync Panel -->
+<div class="overlay" id="gsheets-overlay">
+  <div class="modal" style="max-width:520px;width:95vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">&#x1F4CA; Sync to Google Sheets</h3>
+      <button onclick="closeOverlay('gsheets-overlay')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#64748b">&#x2715;</button>
+    </div>
+    <!-- Google auth status banner -->
+    <div id="gsheets-auth-status" style="border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:.82rem;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span id="gsheets-auth-label">Checking connection&#x2026;</span>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button id="gsheets-connect-btn" class="btn btn-primary btn-sm" onclick="connectGoogleAccount()" style="display:none">&#x1F517; Connect Google Account</button>
+        <button id="gsheets-disconnect-btn" class="btn btn-outline btn-sm" onclick="disconnectGoogleAccount()" style="display:none;color:#e53935;border-color:#e53935">Disconnect</button>
+      </div>
+    </div>
+    <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Google Spreadsheet ID</label>
+    <input id="gsheets-id-input" type="text" placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+      style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:.82rem;margin-bottom:6px"/>
+    <p style="font-size:.72rem;color:var(--muted);margin-bottom:14px">
+      Copy from your Google Sheets URL: <code>docs.google.com/spreadsheets/d/<b>[THIS PART]</b>/edit</code>
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-success" id="gsheets-push-btn" onclick="gsheetsSync()">
+        &#x1F4CA; <span id="gsheets-push-label">Sync</span>
+      </button>
+      <button class="btn btn-outline" onclick="closeOverlay('gsheets-overlay')">Cancel</button>
+    </div>
+    <div id="gsheets-result" style="margin-top:12px;font-size:.8rem;display:none"></div>
+    <hr style="margin:16px 0;border:none;border-top:1px solid var(--border)"/>
+    <details>
+      <summary style="font-size:.8rem;font-weight:700;cursor:pointer;color:var(--navy)">&#x2753; Setup Guide &mdash; First Time Only</summary>
+      <ol style="font-size:.78rem;color:#374151;margin-top:10px;padding-left:18px;line-height:1.7">
+        <li>Go to <a href="https://console.cloud.google.com" target="_blank" style="color:var(--blue)">console.cloud.google.com</a> &rarr; create a project (e.g. "PFC Routing").</li>
+        <li>Go to <b>APIs &amp; Services &rarr; Library</b>. Enable <b>Google Sheets API</b> and <b>Google Drive API</b>.</li>
+        <li>Go to <b>APIs &amp; Services &rarr; Credentials &rarr; Create Credentials &rarr; OAuth 2.0 Client ID</b>.</li>
+        <li>Choose <b>Web Application</b>. Under <b>Authorized redirect URIs</b> add exactly: <code>http://localhost:5050/api/google/callback</code></li>
+        <li>Click <b>Download JSON</b>. Rename it to <b>google_credentials.json</b> and place it next to <code>server.py</code>.</li>
+        <li>Go to <b>OAuth consent screen</b> &rarr; add your work email as a <b>Test user</b>.</li>
+        <li>Restart the app, then click <b>Connect Google Account</b> above and sign in with your work account.</li>
+        <li>Paste your Sheet ID above and click Sync!</li>
+      </ol>
+    </details>
+  </div>
+</div>
+<!-- Address Verification -->
+<div class="overlay" id="verify-overlay" style="align-items:flex-start;padding-top:30px">
+  <div class="modal" style="max-width:820px;width:95vw;max-height:82vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h3 style="margin:0">🔍 Address Verification</h3>
+      <button onclick="closeOverlay('verify-overlay')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#64748b">✕</button>
+    </div>
+    <p class="sub" style="margin-bottom:8px">Checks each stop's GPS coordinates against OpenStreetMap to confirm the delivery area matches reality. Results are cached — re-running is instant for known stops.</p>
+    <div id="verify-status" style="padding:10px 14px;background:#f1f5f9;border-radius:7px;margin-bottom:10px;font-size:.82rem;color:#334155">
+      Click <b>Run Verification</b> to start. First run contacts OpenStreetMap (1 req/sec per uncached stop).
+    </div>
+    <div id="verify-progress" style="display:none;margin-bottom:8px">
+      <div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">
+        <div id="verify-progress-bar" style="height:100%;background:#7c3aed;border-radius:3px;width:0%;transition:width .3s"></div>
+      </div>
+      <div id="verify-progress-label" style="font-size:.75rem;color:#64748b;margin-top:3px">0 / 0 stops checked</div>
+    </div>
+    <div style="overflow-y:auto;flex:1">
+      <table id="verify-table" style="width:100%;border-collapse:collapse;font-size:.76rem;display:none">
+        <thead>
+          <tr style="background:#0d2748;color:#fff">
+            <th style="padding:7px 8px;text-align:left">Truck</th>
+            <th style="padding:7px 8px;text-align:left">#</th>
+            <th style="padding:7px 8px;text-align:left">Customer / Shipping Address</th>
+            <th style="padding:7px 8px;text-align:left">Stated Area</th>
+            <th style="padding:7px 8px;text-align:left">Coords → Geocoded</th>
+            <th style="padding:7px 8px;text-align:left">Match</th>
+            <th style="padding:7px 8px;text-align:left">Fix Coords from Address</th>
+          </tr>
+        </thead>
+        <tbody id="verify-tbody"></tbody>
+      </table>
+      <div id="verify-empty" style="text-align:center;padding:30px;color:#94a3b8;display:none">No stops with coordinates found in the current plan.</div>
+    </div>
+    <div class="modal-btns" style="margin-top:10px;border-top:1px solid #e2e8f0;padding-top:10px">
+      <button class="btn btn-outline btn-sm" onclick="closeOverlay('verify-overlay')">Close</button>
+      <button class="btn btn-sm" id="verify-run-btn" style="background:#7c3aed;color:#fff;border:none;padding:7px 18px;border-radius:6px;cursor:pointer;font-weight:600" onclick="runVerification()">▶ Run Verification</button>
+      <button class="btn btn-sm" id="verify-fix-btn" style="display:none;background:#0d2748;color:#fff;border:none;padding:7px 18px;border-radius:6px;cursor:pointer;font-weight:600" onclick="fixAllCoords()">📍 Fix All Mismatches from Address</button>
+      <button class="btn btn-success btn-sm" id="verify-apply-btn" style="display:none" onclick="applyVerifyOverrides()">✔ Apply Area Overrides</button>
+    </div>
+  </div>
+</div>
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Concerns list defined in JS as CONCERN_OPTIONS -->
+
+<script>
+// ======================================================
+//  CONSTANTS & GLOBALS
+// ======================================================
+const CONCERN_OPTIONS = [
+  'NONE',
+  'Client - Documentation Concerns','Client - Late Cancellation Request',
+  'Client - Long Waiting Time','Client - Wrong Purchase Order',
+  'Client - Product Concerns','Client - Product Quality Issue',
+  'Logistics - Damaged Packaging (Mishandling)','Logistics - Document Concerns',
+  'Logistics - Incomplete Delivery Requirements','Logistics - Late Delivery',
+  'Logistics - Reschedule Delivery','Logistics - Truck Condition Concerns',
+  'Sales - ADS Error','Sales - Document Concerns',
+  'Sales - Late Cancellation Request','Sales - Sales COORD Error',
+  'Supplier - Incomplete/No Product Label','Supplier - Quality Concerns',
+  'Warehouse - Damaged Packaging','Warehouse - Document Concerns',
+  'Warehouse - Expired Items','Warehouse - FIFO Violation',
+  'Warehouse - Late Dispatch/Departure','Warehouse - Wrong Pick',
+  'Warehouse - Wrong Stock Issuance','Others',
+];
+
+/* ── Core utility functions ─────────────────────────────────────────── */
+function closeOverlay(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+}
+
+function showOverlay(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('open');
+}
+
+function showToast(msg, type, duration) {
+  type = type || 'info';
+  duration = duration || 3500;
+  const t = document.getElementById('toast');
+  if (!t) { console.warn('Toast:', msg); return; }
+  t.innerHTML = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(t._toastTimer);
+  t._toastTimer = setTimeout(function(){ t.classList.remove('show'); }, duration);
+}
+
+function confirmAddRate() {
+  addRate();
+  closeOverlay('add-rate-overlay');
+}
+/* ──────────────────────────────────────────────────────────────────── */
+
+let currentPlan    = [];
+let leafletMap     = null;
+let mapLayers      = {};
+let whMarkers      = {};   // code → L.marker for CSW toggle
+let isolatedWH     = null; // code of isolated Cold Storage WH
+let warehouseData  = {};
+let mapExpanded    = false;
+let reassignTarget = null;
+let isolatedTrucks = new Set(); // multi-select map filter
+let currentRouter  = 'default';
+let currentRole    = 'planner';
+let analyticsPeriod = 'daily';
+let truckCosts     = {};
+let currentPlanId  = null;
+let unroutedStops  = [];   // stops removed from trucks — shown in unrouted basket
+
+const TRUCK_COLORS = [
+  '#e53935','#1976d2','#43a047','#f9a825','#8e24aa',
+  '#00897b','#e64a19','#455a64','#ad1457','#0097a7',
+  '#7cb342','#6d4c41','#5e35b1','#00838f','#fb8c00',
+  '#c0ca33','#3949ab','#00acc1','#f06292','#26a69a',
+];
+const WH_GROUP_COLORS = { NAVOTAS:'#1976d2', BULACAN:'#43a047', CARMONA:'#e53935' };
+const TRUCK_TYPES_LIST = [
+  {label:'2T',cap:2000},{label:'2.5MT',cap:2500},{label:'5MT',cap:5000},{label:'10MT',cap:10000},
+  {label:'15MT',cap:15000},{label:'20MT',cap:20000},{label:'27MT',cap:27000}
+];
+
+// ======================================================
+//  INIT
+// ======================================================
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('header-date').textContent =
+    new Date().toLocaleDateString('en-PH',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
+  const _monDateEl = document.getElementById('mon-date');
+  const _today = new Date().toISOString().split('T')[0];
+  _monDateEl.textContent = new Date().toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  _monDateEl.dataset.isodate = _today;
+
+  setupDropZone();
+  initMap();
+  loadWarehouseData();
+
+  // Check authentication via server session
+  fetch('/api/me').then(r=>r.json()).then(d=>{
+    if (d.authenticated) {
+      applyUser(d.display, d.role);
+      fetch('/api/get-plan?router=' + encodeURIComponent(currentRouter))
+        .then(r=>r.json()).then(pd=>{
+          if (pd.success && pd.trucks.length) {
+            currentPlan = pd.trucks;
+            renderPlan();
+            showToast('Previous plan restored','success');
+          }
+        });
+    } else {
+      showLoginOverlay();
+    }
+  }).catch(()=>showLoginOverlay());
+});
+
+// ======================================================
+//  USER / SESSION
+// ======================================================
+function showLoginOverlay() {
+  const ov = document.getElementById('login-overlay');
+  if (ov) ov.style.display = 'flex';
+  setTimeout(() => { const u = document.getElementById('login-username'); if (u) u.focus(); }, 80);
+}
+
+function doLogin() {
+  const username = (document.getElementById('login-username').value || '').trim();
+  const password = (document.getElementById('login-password').value || '').trim();
+  const errEl = document.getElementById('login-error');
+  const btn   = document.getElementById('login-btn');
+  errEl.style.display = 'none';
+  if (!username || !password) {
+    errEl.textContent = 'Please enter your username and password.';
+    errEl.style.display = 'block'; return;
+  }
+  btn.disabled = true; btn.textContent = 'Signing in...';
+  fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username, password})
+  }).then(r => r.json()).then(d => {
+    btn.disabled = false; btn.innerHTML = 'Sign In &#x2192;';
+    if (d.ok) {
+      document.getElementById('login-overlay').style.display = 'none';
+      document.getElementById('login-password').value = '';
+      applyUser(d.display, d.role);
+      fetch('/api/get-plan?router=' + encodeURIComponent(currentRouter))
+        .then(r => r.json()).then(pd => {
+          if (pd.success && pd.trucks.length) {
+            currentPlan = pd.trucks; renderPlan();
+            showToast('Welcome back, ' + d.display + '! Plan restored.', 'success');
+          } else { showToast('Welcome, ' + d.display + '!', 'success'); }
+        });
+    } else {
+      errEl.textContent = d.error || 'Invalid username or password.';
+      errEl.style.display = 'block';
+      document.getElementById('login-password').value = '';
+      document.getElementById('login-password').focus();
+    }
+  }).catch(() => {
+    btn.disabled = false; btn.innerHTML = 'Sign In &#x2192;';
+    errEl.textContent = 'Connection error. Please try again.';
+    errEl.style.display = 'block';
+  });
+}
+
+function doLogout() {
+  fetch('/api/logout', {method:'POST'}).then(() => {
+    currentPlan = []; currentRouter = 'default'; currentRole = 'planner';
+    document.getElementById('user-avatar').textContent   = '?';
+    document.getElementById('user-name-lbl').textContent = 'Not signed in';
+    document.getElementById('user-role-lbl').textContent = 'click to sign in';
+    const lb = document.getElementById('logout-btn'); if (lb) lb.style.display = 'none';
+    const pb = document.getElementById('nav-plan-btn'); if (pb) pb.style.display = '';
+    showLoginOverlay();
+  });
+}
+
+function applyUser(display, role) {
+  currentRole   = role;
+  currentRouter = display.replace(/\s+/g,'-').toLowerCase() || 'default';
+  _collabMyName = currentRouter;
+  startCollab(new Date().toISOString().slice(0,10));
+  const initials = display.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('user-avatar').textContent   = initials;
+  document.getElementById('user-name-lbl').textContent = display;
+  document.getElementById('user-role-lbl').textContent =
+    role === 'tower' ? '🏢 Logistics Tower' : '🗺️ Route Planner';
+  const lb = document.getElementById('logout-btn'); if (lb) lb.style.display = 'inline-block';
+  const pb = document.getElementById('nav-plan-btn');
+  if (pb) pb.style.display = role === 'tower' ? 'none' : '';
+  startSharedPlanPoller();
+  // Always reload warehouse data after login (first load may have been blocked)
+  if (typeof loadWarehouseData === 'function') loadWarehouseData();
+  if (role === 'tower') {
+    const monBtn = document.querySelector('.nav-btn[onclick*="monitoring"]');
+    if (monBtn) { monBtn.click(); }
+  }
+}
+
+function setRouter(val) {
+  currentRouter = val.trim() || 'default';
+}
+
+// ======================================================
+//  WAREHOUSE
+// ======================================================
+function loadWarehouseData() {
+  fetch('/api/warehouses').then(r=>r.json()).then(d=>{
+    // Guard: ignore error/auth responses (expect plain object with WH codes as keys)
+    if (!d || typeof d !== 'object' || Array.isArray(d) || d.error || d.login_required) return;
+    warehouseData = d;
+    renderWarehouseTable();
+    renderWarehouseMarkers();
+  }).catch(()=>{});
+}
+
+function renderWarehouseTable() {
+  const el = document.getElementById('wh-table');
+  if (!el) return;
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr style="border-bottom:1px solid var(--border)">
+      <th style="text-align:left;padding:4px 8px">Code</th>
+      <th style="text-align:left;padding:4px 8px">Name</th>
+      <th style="text-align:left;padding:4px 8px">Group</th>
+      <th style="text-align:left;padding:4px 8px">Coordinates</th>
+    </tr></thead>
+    <tbody>${Object.entries(warehouseData).map(([code,d]) =>
+      `<tr style="border-bottom:1px solid var(--border2)">
+        <td style="padding:5px 8px"><b>${code}</b></td>
+        <td style="padding:5px 8px">${d.name}</td>
+        <td style="padding:5px 8px"><span class="tag" style="background:${WH_GROUP_COLORS[d.group]||'#888'}22;color:${WH_GROUP_COLORS[d.group]||'#888'}">${d.group}</span></td>
+        <td style="padding:5px 8px;font-size:.72rem;color:var(--muted)">${d.lat}, ${d.lng}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+// ======================================================
+//  NAVIGATION
+// ======================================================
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (name==='perf')       renderPerf();
+  if (name==='rates')      loadRates();
+  if (name==='analytics')  loadAnalytics();
+  if (name==='history')    loadHistory();
+  if (name==='plan')       { setTimeout(()=>leafletMap&&leafletMap.invalidateSize(),180); }
+  // Start/stop live poller based on active tab
+  if (name==='monitoring') startLiveMonitoring();
+  else                     stopLiveMonitoring();
+}
+
+// ======================================================
+//  FILE UPLOAD
+// ======================================================
+function setupDropZone() {
+  const dz = document.getElementById('drop-zone');
+  if (!dz) return;
+  dz.addEventListener('dragover', e=>{e.preventDefault();dz.classList.add('drag-over');});
+  dz.addEventListener('dragleave', ()=>dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); dz.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0]; if(f) handleFile(f);
+  });
+  // Handle file selected via browse dialog
+  const fi = document.getElementById('file-input');
+  if (fi) fi.addEventListener('change', e=>{ const f=e.target.files[0]; if(f) handleFile(f); });
+}
+
+function handleFile(file) {
+  const dz = document.getElementById('drop-zone');
+  dz.querySelector('h3').textContent = 'Uploading…';
+  const fd = new FormData(); fd.append('file', file);
+  fetch('/api/upload?router='+encodeURIComponent(currentRouter), {method:'POST', body:fd})
+    .then(r=>r.json()).then(d=>{
+      if (d.error) {
+        showToast(d.error,'error');
+        dz.querySelector('h3').textContent = 'Drop your Order file here';
+        return;
+      }
+      dz.querySelector('h3').textContent = '✅ File ready: '+d.filename;
+      // Populate result cards
+      const ro = document.getElementById('res-orders'); if (ro) ro.textContent = (d.total_orders||0).toLocaleString();
+      const rv = document.getElementById('res-vol');    if (rv) rv.textContent = (d.total_volume||0).toLocaleString()+' KG';
+      const rc = document.getElementById('res-cust');   if (rc) rc.textContent = (d.unique_customers||0).toLocaleString();
+      const rd = document.getElementById('res-date');   if (rd) rd.textContent = (Array.isArray(d.ship_dates)&&d.ship_dates.length) ? d.ship_dates.join(', ') : (d.plan_date||'—');
+      // Show result panel and enable routing button
+      const ur = document.getElementById('upload-result'); if (ur) ur.classList.add('show');
+      const rb = document.getElementById('run-btn'); if (rb) rb.disabled = false;
+      showToast('File uploaded: '+d.filename,'success');
+    })
+    .catch(e=>{
+      showToast('Upload failed: '+e.message,'error');
+      dz.querySelector('h3').textContent = 'Drop your Order file here';
+    });
+}
+
+// ======================================================
+//  ROUTING
+// ======================================================
+function clearCoordCache() {
+  const btn = document.getElementById('clear-cache-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Clearing…';
+  fetch('/api/clear-coord-cache', {method:'POST'})
+    .then(r => r.json())
+    .then(d => {
+      btn.disabled = false;
+      btn.textContent = '🔄 Reset Coord Cache';
+      showToast(d.message || 'Coordinate cache cleared — re-generate to re-geocode', 'success');
+    })
+    .catch(e => {
+      btn.disabled = false;
+      btn.textContent = '🔄 Reset Coord Cache';
+      showToast('Error: ' + e.message, 'error');
+    });
+}
+
+function runRouting() {
+  const btn = document.getElementById('run-btn');
+  const st  = document.getElementById('routing-status');
+  btn.disabled = true;
+  btn.innerHTML = '&#x23F3; Generating...';
+  st.textContent = 'Resolving delivery addresses & building route plan… (first run may take ~1 min while addresses are geocoded; instant on re-run)';
+  st.style.color = 'var(--orange)';
+  fetch('/api/run-routing?router='+encodeURIComponent(currentRouter), {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      btn.disabled = false;
+      btn.innerHTML = '&#x25B6; Generate Route Plan';
+      if (d.error) { showToast(d.error,'error'); st.textContent='Error: '+d.error; st.style.color='#e53935'; return; }
+      currentPlan = d.trucks;
+      truckCosts  = {};
+      st.textContent = d.truck_count+' trucks assigned, '+d.total_drops+' drops, avg util '+d.avg_utilization+'%';
+      st.style.color = 'var(--green)';
+
+      const bd = d.util_breakdown||{};
+      const bdEl = document.getElementById('util-breakdown');
+      if (bdEl) bdEl.innerHTML =
+        `<span style="color:#e53935">&#x25CF; &lt;60%: ${bd.under_60||0}</span> &nbsp;
+         <span style="color:#f9a825">&#x25CF; 60-80%: ${bd.range_60_80||0}</span> &nbsp;
+         <span style="color:#43a047">&#x25CF; &#x2265;80%: ${bd.above_80||0}</span>`;
+
+      startCollab(new Date().toISOString().slice(0,10));
+      showToast('Route plan ready: '+d.truck_count+' trucks assigned','success');
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+      document.getElementById('page-plan').classList.add('active');
+      document.querySelectorAll('.nav-btn')[1].classList.add('active');
+      renderPlan();
+      setTimeout(()=>leafletMap&&leafletMap.invalidateSize(),250);
+    })
+    .catch(e=>{ btn.disabled=false; btn.innerHTML='&#x25B6; Generate Route Plan'; showToast('Error: '+e.message,'error'); });
+}
+
+// Global lock — prevents auto-verify and manual verify from running simultaneously
+window._verifyLock = false;
+
+/* ── Auto coordinate verification & fix (runs silently after plan generation) ─────── */
+function autoVerifyAndFix() {
+  if (window._verifyLock) return;   // manual verify already running
+  // Collect stops that have both coordinates and a shipping address
+  const stops = [];
+  currentPlan.forEach(truck => {
+    truck.stops.forEach(stop => {
+      if (stop.lat && stop.lng && stop.shipping_address) {
+        stops.push({
+          lat: stop.lat, lng: stop.lng,
+          area: stop.match_area || '',
+          customer_name: stop.customer_name || '',
+          truck_id: truck.truck_id,
+          seq: stop.seq,
+          shipping_address: stop.shipping_address
+        });
+      }
+    });
+  });
+
+  if (!stops.length) return;
+
+  window._verifyLock = true;
+  const st = document.getElementById('routing-status');
+  const appendStatus = txt => { if (st) st.textContent = (st.textContent||'') + txt; };
+  const stripChecking = () => { if (st) st.textContent = (st.textContent||'').replace(' · Checking coordinates…',''); };
+  const releaseLock = () => { window._verifyLock = false; };
+
+  appendStatus(' · Checking coordinates…');
+
+  // Step 1 — reverse-geocode to find mismatches
+  fetch('/api/verify-addresses', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({stops})
+  })
+  .then(r => r.json())
+  .then(verifyData => {
+    const mismatches = (verifyData.results || []).filter(r =>
+      r.match === false && r.shipping_address
+    );
+
+    if (!mismatches.length) {
+      stripChecking();
+      releaseLock();
+      return;
+    }
+
+    // Step 2 — forward-geocode shipping addresses to get correct lat/lng
+    return fetch('/api/fix-coordinates', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({stops: mismatches.map(r => ({
+        truck_id: r.truck_id, seq: r.seq,
+        shipping_address: r.shipping_address,
+        customer_name: r.customer_name || ''
+      }))})
+    })
+    .then(r => r.json())
+    .then(fixData => {
+      let fixed = 0;
+      (fixData.results || []).forEach(res => {
+        if (!res.new_lat || !res.new_lng) return;
+        const ti = currentPlan.findIndex(t => t.truck_id === res.truck_id);
+        if (ti < 0) return;
+        const si = currentPlan[ti].stops.findIndex(s => s.seq === res.seq);
+        if (si < 0) return;
+        currentPlan[ti].stops[si].lat = res.new_lat;
+        currentPlan[ti].stops[si].lng = res.new_lng;
+        fixed++;
+      });
+      stripChecking();
+      if (fixed) {
+        autosave();
+        renderMap();
+        appendStatus(` · ${fixed} coord${fixed!==1?'s':''} auto-fixed`);
+        showToast(`Auto-corrected ${fixed} stop coordinate${fixed!==1?'s':''} from shipping address`, 'success');
+      }
+      releaseLock();
+    });
+  })
+  .catch(e => {
+    stripChecking();
+    releaseLock();
+    console.warn('Auto-verify coords:', e.message);
+  });
+}
+
+// ======================================================
+//  RENDER PLAN
+// ======================================================
+function renderPlan() {
+  const body = document.getElementById('plan-table-body');
+  if (!currentPlan.length) {
+    body.innerHTML = `<div class="empty-state"><div class="icon">&#x1F5FA;</div><h3>No route plan yet</h3><p>Upload orders and click Generate Route Plan</p></div>`;
+    updatePlanKPIs(); renderMap(); return;
+  }
+  updatePlanKPIs();
+
+  let html = '';
+  currentPlan.forEach((truck, ti) => {
+    const color    = TRUCK_COLORS[ti % TRUCK_COLORS.length];
+    const utilPct  = Math.round(truck.util_pct * 100);
+    const barColor = utilPct>=80?'#43a047':utilPct>=60?'#f9a825':'#e53935';
+    const whTags   = (truck.all_whs||[truck.pickup_wh]).map(w=>`<span class="truck-wh-chip">${w}</span>`).join(' ');
+    const isIso    = isolatedTrucks.has(truck.truck_id);
+    const isDim    = isolatedTrucks.size > 0 && !isIso;
+    const isLocked = !!truck.locked;
+    const hasRate  = truck.truck_rate && parseFloat(truck.truck_rate) > 0;
+    const rateBadge = hasRate
+      ? `<span style="font-size:.68rem;font-weight:700;color:#0f766e;background:#ccfbf1;border-radius:10px;padding:2px 7px;margin-left:4px">&#x20B1;${Number(truck.truck_rate).toLocaleString()}</span>`
+      : '';
+    // Always recompute CPK from actual load unless manually overridden
+    const _cpkCap = truck.rated_cap || truck.truck_cap || 0;
+    const computedCpk = (hasRate && _cpkCap > 0 && !truck._cpk_manual)
+      ? parseFloat((truck.truck_rate / _cpkCap).toFixed(4))
+      : (truck.truck_cpk || 0);
+    if (!truck._cpk_manual && hasRate && _cpkCap > 0) truck.truck_cpk = computedCpk;
+    const cpkBadge = hasRate && computedCpk
+      ? `<span style="font-size:.66rem;color:var(--muted);margin-left:2px">&#x20B1;${Number(computedCpk).toFixed(2)}/kg</span>`
+      : '';
+
+    html += `
+    <div class="truck-card${isIso?' isolated':''}${isDim?' dimmed':''}${isLocked?' locked':''}" id="tc-${ti}">
+      <div class="truck-header" onclick="toggleTruck(${ti})">
+        <div class="truck-color-bar" style="background:${color}"></div>
+        <div class="truck-id-wrap">
+          <div class="truck-id">${truck.truck_id}</div>
+          <span class="truck-type-badge">${truck.truck_type}</span>
+        </div>
+        <div class="truck-stats">
+          <div class="truck-util-row">
+            <div class="truck-util-bar-bg"><div class="truck-util-bar" style="width:${Math.min(utilPct,100)}%;background:${barColor}"></div></div>
+            <div class="util-pct-label" style="color:${barColor}">${utilPct}%</div>
+            ${truck.acc_weight>(truck.rated_cap||truck.truck_cap||99999)?'<span class="truck-overload-warn">&#x26A0; Overloaded</span>':''}
+          </div>
+          <div class="truck-weight-row">
+            <span class="truck-stat-chip">${truck.acc_weight.toLocaleString()} / ${(truck.rated_cap||truck.truck_cap||0).toLocaleString()} KG</span>
+            <span class="truck-stat-chip">${truck.stops.length} drops</span>
+            ${truck.total_km?`<span class="truck-stat-chip">&#x1F6E3; ${truck.total_km.toFixed(1)} km</span>`:''}
+            ${whTags}${rateBadge}${cpkBadge}
+          </div>
+        </div>
+        <div class="truck-actions" onclick="event.stopPropagation()">
+          <button class="icon-btn${isIso?' active-iso':''}" title="${isIso?'Hide from map':'Show on map (multi-select)'}" onclick="toggleIsolation('${truck.truck_id}')">&#x1F441;</button>
+          <button class="icon-btn" title="Merge into another truck" onclick="mergeTruck(${ti})" style="font-size:.75rem">&#x22D2;</button>
+          <button class="icon-btn" title="Download PDF Route Sheet" onclick="downloadTruckPDF('${truck.truck_id}')" style="font-size:.8rem;color:#16a34a;border-color:#bbf7d0">&#x1F4C4;</button>
+          <button class="icon-btn" title="${isLocked?'Unlock truck (allow batch routing to modify)':'Lock truck (protect from batch routing)'}" onclick="toggleTruckLock(${ti})" style="${isLocked?'color:#f59e0b;border-color:#fde68a;font-weight:700':''}">${isLocked?'&#x1F512;':'&#x1F513;'}</button>
+          <button class="icon-btn" title="Expand/Collapse" onclick="toggleTruck(${ti})">&#x25BE;</button>
+          <button class="icon-btn" title="Delete truck" style="color:#e53935;border-color:#fecaca" onclick="deleteTruck(${ti})">&#x1F5D1;</button>
+        </div>
+      </div>
+      <div class="truck-inputs" id="ti-${ti}">
+        <div>
+          <label>Trucker / Driver</label>
+          <input type="text" placeholder="e.g. AJDL" value="${truck.trucker_code||''}"
+            oninput="currentPlan[${ti}].trucker_code=this.value"
+            onblur="fetchTruckRate(${ti});autosave()"/>
+        </div>
+        <div>
+          <label>Ref Sheet #</label>
+          <input type="text" placeholder="Route ref #" value="${truck.ref_number||''}"
+            oninput="currentPlan[${ti}].ref_number=this.value;autosave()"/>
+        </div>
+        <div>
+          <label>Truck Type</label>
+          <select style="width:100%;border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:.78rem;color:var(--navy);background:#fff"
+            onchange="changeTruckType(${ti},this.value)">
+            ${TRUCK_TYPES_LIST.map(t=>`<option value="${t.label}"${truck.truck_type===t.label?' selected':''}>${t.label} (${t.cap.toLocaleString()} KG)</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label>Rated Cap (KG)</label>
+          <input type="number" min="1" value="${truck.rated_cap||truck.truck_cap||''}"
+            oninput="updateRatedCap(${ti},this.value)"/>
+        </div>
+        <div>
+          <label>&#x1F4CD; Billed Area (last mile)</label>
+          <input type="text" class="area-inp" placeholder="Auto: farthest stop from WH" value="${truck.rate_area||''}"
+            oninput="onAreaChange(${ti},this.value)"/>
+        </div>
+        <div>
+          <label>&#x20B1; Trip Rate (PHP)</label>
+          <input type="number" class="rate-inp" placeholder="${truck.trucker_code?'Auto':'Enter trucker first'}" value="${truck.truck_rate||''}"
+            oninput="currentPlan[${ti}].truck_rate=parseFloat(this.value)||0;currentPlan[${ti}]._rate_manual=true;if(!currentPlan[${ti}]._cpk_manual){var _rc=currentPlan[${ti}].rated_cap||currentPlan[${ti}].truck_cap||0;currentPlan[${ti}].truck_cpk=_rc>0?parseFloat((currentPlan[${ti}].truck_rate/_rc).toFixed(4)):0;var _ci=document.querySelector('#tc-${ti} .cpk-inp');if(_ci)_ci.value=currentPlan[${ti}].truck_cpk||'';}autosave()"/>
+        </div>
+        <div>
+          <label>Cost / KG</label>
+          <input type="number" class="cpk-inp" step="0.01" placeholder="Auto" value="${computedCpk||''}"
+            oninput="currentPlan[${ti}].truck_cpk=parseFloat(this.value)||0;currentPlan[${ti}]._cpk_manual=true;autosave()"/>
+        </div>
+      </div>
+      <ul class="stop-rows" id="stops-${ti}"
+          ondragover="event.preventDefault();document.getElementById('tc-'+${ti}).classList.add('so-drop-target')"
+          ondragleave="document.getElementById('tc-'+${ti}).classList.remove('so-drop-target')"
+          ondrop="onSoDrop(event,${ti})">
+        ${truck.stops.map((stop,si)=>{
+          const seqStyle=`background:${color}22;color:${color}`;
+          const feeTag=stop.add_drop_fee?`<span style="font-size:.6rem;color:#e53935;margin-left:2px">+&#x20B1;${stop.add_drop_fee}</span>`:'';
+          const xferBadge = stop.is_stock_transfer
+            ? `<span style="font-size:.58rem;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;margin-left:3px;vertical-align:middle;font-weight:700">XFER</span>`
+            : '';
+          const isMerged = stop.sub_clients && stop.sub_clients.length > 1;
+          const subClientsHtml = isMerged
+            ? `<div class="sub-clients-list">${stop.sub_clients.map((sc,sci)=>
+                `<div class="sub-client-item">
+                   <span class="sc-name" title="${sc.customer_name}">${sc.customer_name}</span>
+                   <span class="sc-vol">${sc.vol.toLocaleString(undefined,{maximumFractionDigits:0})} kg</span>
+                   <button class="sc-unmerge" title="Remove from group" onclick="event.stopPropagation();unmergeSubClient(${ti},${si},${sci})">✕</button>
+                 </div>`).join('')}</div>`
+            : '';
+          // Detect multiple unique SO numbers across rows
+          const stopRows = stop.rows || [];
+          const uniqueSOs = [...new Set(stopRows.map(r=>r._pfc_doc_num||'').filter(Boolean))];
+          const hasMultiSO = uniqueSOs.length > 1;
+          const splitBtn = hasMultiSO
+            ? `<button class="reassign-btn" style="color:#9333ea;border-color:#e9d5ff" onclick="event.stopPropagation();splitStopBySO(${ti},${si})" title="Split into separate stops by Sales Order">&#x2702;</button>`
+            : '';
+          return `<li class="stop-row${isMerged?' merged-stop':''}${hasMultiSO?' has-multi-so':''}" data-ti="${ti}" data-si="${si}"
+                     onmouseenter="hoverMarker('${truck.truck_id}',${stop.seq})"
+                     onmouseleave="leafletMap&&leafletMap.closePopup()"
+                     onclick="handleStopClick(${ti},${si},event)">
+            <span class="drag-handle" style="display:flex;flex-direction:column;align-items:center;line-height:1;gap:1px">
+              <span style="font-size:.5rem;cursor:pointer;color:#94a3b8;padding:1px 3px" onclick="event.stopPropagation();moveStop(${ti},${si},-1)" title="Move up">▲</span>
+              <span style="font-size:.8rem;cursor:grab;color:#c5cfe0">⠿</span>
+              <span style="font-size:.5rem;cursor:pointer;color:#94a3b8;padding:1px 3px" onclick="event.stopPropagation();moveStop(${ti},${si},+1)" title="Move down">▼</span>
+            </span>
+            <div class="seq-bubble" style="${seqStyle}">${stop.seq}</div>
+            <div class="stop-main">
+              <div class="stop-cust" title="${stop.customer_name}">${isMerged?'📦 ':''}${stop.customer_name}${xferBadge}</div>
+              <div class="stop-sub">${stop.match_area||stop.area||''} &middot; <b>${stop.cluster_id}</b>${feeTag}</div>
+            </div>
+            <div class="vol-tag" onclick="event.stopPropagation();toggleSoBreakdown(${ti},${si})" style="cursor:pointer" title="Click to show SO orders">
+              ${stop.vol.toLocaleString(undefined,{maximumFractionDigits:0})} kg
+              ${stopRows.length>0?`<span class="so-vol-toggle">${uniqueSOs.length||1} SO &#x25BE;</span>`:''}
+            </div>
+            <div class="wh-tag">${stop.wh||''}</div>
+            <button class="reassign-btn" onclick="event.stopPropagation();openReassign(${ti},${si})" title="Move to another truck">&#x21D4;</button>
+            <button class="reassign-btn" style="color:#0891b2;border-color:#bae6fd" onclick="event.stopPropagation();startMergePick(${ti},${si})" title="Pick this stop to merge into another drop">&#x22D9;</button>
+            ${splitBtn}
+            <button class="reassign-btn" style="color:#7c3aed;border-color:#ddd6fe" onclick="event.stopPropagation();openCoordEditor(${ti},${si})" title="Edit name, address & GPS coordinates">&#x1F4CD;</button>
+            <button class="reassign-btn" style="color:#d97706;border-color:#fde68a" onclick="event.stopPropagation();unrouteStop(${ti},${si})" title="Remove from truck → Unrouted basket">&#x2718;</button>
+            ${subClientsHtml}
+            ${(()=>{
+              if(!stopRows.length)return '';
+              const truckCap=truck.rated_cap||truck.truck_cap||0;
+              const soGroups={};
+              stopRows.forEach(r=>{
+                const k=r._pfc_doc_num||'(no SO)';
+                if(!soGroups[k])soGroups[k]=[];
+                soGroups[k].push(r);
+              });
+              const soItems=Object.entries(soGroups).map(([docNum,rows])=>{
+                const v=Math.round(rows.reduce((a,r)=>a+(parseFloat(r._pfc_vol)||0),0)*10)/10;
+                const over=truckCap>0&&v>truckCap;
+                const safeDoc=docNum.replace(/'/g,"\\'");
+                return `<div class="so-item${over?' so-over':''}" draggable="true"
+                  ondragstart="onSoDragStart(event,${ti},${si},'${safeDoc}')"
+                  title="Drag to move this SO to another truck">
+                  <span class="so-drag-icon">&#x2630;</span>
+                  <span class="so-num">${docNum}</span>
+                  <span class="so-vol-chip">${v.toLocaleString()} kg</span>
+                  ${over?'<span style="font-size:.6rem">&#x26A0;</span>':''}
+                </div>`;
+              }).join('');
+              return `<div class="so-breakdown" id="sob-${ti}-${si}" style="display:none">${soItems}</div>`;
+            })()}
+          </li>`;
+        }).join('')}
+      </ul>
+    </div>`;
+  });
+
+  body.innerHTML = html;
+
+  // Drag-to-resequence
+  currentPlan.forEach((_,ti) => {
+    const el = document.getElementById('stops-'+ti);
+    if (el && typeof Sortable !== 'undefined') {
+      Sortable.create(el, {handle:'.drag-handle',animation:120,onEnd:()=>resequenceTruck(ti)});
+    }
+  });
+
+  renderMap();
+  renderLegend();
+  renderUnrouted();
+}
+
+// ======================================================
+//  TRUCK MANAGEMENT
+// ======================================================
+function toggleTruck(ti) {
+  const inp  = document.getElementById('ti-'+ti);
+  const rows = document.getElementById('stops-'+ti);
+  if (!inp||!rows) return;
+  const hidden = rows.style.display==='none';
+  rows.style.display = inp.style.display = hidden?'':'none';
+}
+
+function deleteTruck(ti) {
+  const t = currentPlan[ti];
+  if (!confirm(`Delete ${t.truck_id}?\n${t.stops.length} stop(s) will be removed from the plan.`)) return;
+  currentPlan.splice(ti,1);
+  isolatedTrucks.delete(t.truck_id);
+  renumberTrucks();
+  autosave();
+  renderPlan();
+  showToast(t.truck_id+' removed','success');
+}
+
+function toggleTruckLock(ti) {
+  const t = currentPlan[ti];
+  t.locked = !t.locked;
+  autosave();
+  renderPlan();
+  showToast(t.truck_id + (t.locked ? ' locked 🔒 — batch routing will not modify this truck' : ' unlocked 🔓'), t.locked ? 'info' : 'success');
+}
+
+function downloadTruckPDF(truckId) {
+  showToast('📷 Capturing map for ' + truckId + '…', 'success');
+
+  // Step 1: Isolate this truck on map so only its route shows
+  const prevIso = new Set(isolatedTrucks);
+  isolatedTrucks.clear(); isolatedTrucks.add(truckId);
+  applyIsolation();
+
+  // Step 2: Fit the map to this truck's stops
+  const ti = currentPlan.findIndex(t => t.truck_id === truckId);
+  if (ti >= 0 && leafletMap) {
+    const truck = currentPlan[ti];
+    const pts = truck.stops
+      .filter(s => s.lat && s.lng)
+      .map(s => [s.lat, s.lng]);
+    if (pts.length) {
+      try { leafletMap.fitBounds(pts, {padding: [30, 30], animate: false}); } catch(e) {}
+    }
+  }
+
+  // Step 3: Wait for tiles to load, then capture
+  const _doCapture = () => {
+    const mapEl = document.getElementById('map');
+    if (!mapEl || typeof html2canvas === 'undefined') {
+      // html2canvas not available — fall back to server-side staticmap
+      _fallbackDownload(truckId);
+      return;
+    }
+    html2canvas(mapEl, {
+      useCORS: true,
+      allowTaint: true,
+      scale: 1.5,
+      logging: false,
+      backgroundColor: '#e8f0fe',
+    }).then(canvas => {
+      const mapImageB64 = canvas.toDataURL('image/png');
+      // Restore map state
+      isolatedTrucks.clear(); prevIso.forEach(id=>isolatedTrucks.add(id));
+      applyIsolation();
+      // Step 4: POST to server with map image
+      showToast('📄 Generating PDF for ' + truckId + '…', 'success');
+      fetch('/api/download-truck-pdf', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          truck_id: truckId,
+          router: currentRouter,
+          map_image_b64: mapImageB64
+        })
+      }).then(r => {
+        if (!r.ok) throw new Error('PDF error ' + r.status);
+        return r.blob();
+      }).then(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = truckId + '_route_sheet.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast('✅ Route sheet downloaded!', 'success');
+      }).catch(e => {
+        showToast('PDF error: ' + e.message, 'error');
+      });
+    }).catch(() => {
+      isolatedTrucks.clear(); prevIso.forEach(id=>isolatedTrucks.add(id));
+      applyIsolation();
+      _fallbackDownload(truckId);
+    });
+  };
+
+  // Give Leaflet 800ms to re-render tiles after isolation
+  setTimeout(_doCapture, 800);
+}
+
+function _fallbackDownload(truckId) {
+  const url = `/api/download-truck-pdf?truck_id=${encodeURIComponent(truckId)}&router=${encodeURIComponent(currentRouter)}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = truckId + '_route_sheet.pdf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('📄 Downloading route sheet for ' + truckId + '…', 'success');
+}
+
+// ── Batch routing: Import & Add Orders ──────────────────────────────────────
+function mergeOrders(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';   // allow re-upload of same file
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  showToast('⏳ Importing new orders — please wait…', 'success');
+
+  fetch(`/api/merge-orders?router=${encodeURIComponent(currentRouter)}`, {
+    method: 'POST', body: fd
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.error) { showToast('Import error: ' + d.error, 'error'); return; }
+    currentPlan = d.trucks || [];
+    autosave();
+    renderPlan();
+    renderMap();
+    showToast(d.message || `Added ${d.added} stop(s)`, 'success');
+  })
+  .catch(e => showToast('Import error: ' + e.message, 'error'));
+}
+
+// ── Plan search ──────────────────────────────────────────────────────────────
+let _lastSearch = '';
+function searchPlan(q) {
+  _lastSearch = q.trim().toLowerCase();
+  const cards = document.querySelectorAll('.truck-card');
+  let hits = 0;
+  cards.forEach(card => {
+    if (!_lastSearch) {
+      card.style.display = '';
+      card.style.outline = '';
+    } else {
+      const text = card.textContent.toLowerCase();
+      const match = text.includes(_lastSearch);
+      card.style.display = match ? '' : 'none';
+      card.style.outline = match ? '2px solid var(--orange)' : '';
+      if (match) hits++;
+    }
+  });
+  const cntEl = document.getElementById('search-count');
+  if (cntEl) cntEl.textContent = _lastSearch ? `${hits} truck(s) matched` : '';
+}
+
+// ── Stop-level merge: pick-and-click mode ───────────────────────────────────
+let mergeSrc = null;
+
+// Real-time Collaboration
+let _collabId = null;
+let _collabVersion = 0;
+let _collabMyName  = '';
+let _collabInterval = null;
+let _collabHbInterval = null;
+
+function startMergePick(ti, si) {
+  // Toggle off if same stop clicked twice
+  if (mergeSrc && mergeSrc.ti === ti && mergeSrc.si === si) { cancelMergePick(); return; }
+  cancelMergePick();
+  mergeSrc = {ti, si};
+  const srcEl = document.querySelector(`li.stop-row[data-ti="${ti}"][data-si="${si}"]`);
+  if (srcEl) srcEl.classList.add('merge-source');
+  document.querySelectorAll('li.stop-row').forEach(el => {
+    const eti = +el.dataset.ti, esi = +el.dataset.si;
+    if (eti === ti && esi === si) return;
+    el.classList.add('merge-target');
+  });
+  showToast('📦 Click any stop to merge into it · Esc to cancel', 'info');
+}
+
+function cancelMergePick() {
+  mergeSrc = null;
+  document.querySelectorAll('li.stop-row').forEach(el =>
+    el.classList.remove('merge-source', 'merge-target'));
+}
+
+function handleStopClick(ti, si, event) {
+  if (!mergeSrc) return;
+  if (mergeSrc.ti === ti && mergeSrc.si === si) { cancelMergePick(); return; }
+  event.stopPropagation();
+  executeMergeStop(mergeSrc.ti, mergeSrc.si, ti, si);
+  cancelMergePick();
+}
+
+function executeMergeStop(srcTi, srcSi, dstTi, dstSi) {
+  const srcStop = currentPlan[srcTi].stops[srcSi];
+  const dstStop = currentPlan[dstTi].stops[dstSi];
+
+  // Build sub_clients arrays from both sides
+  const srcClients = (srcStop.sub_clients && srcStop.sub_clients.length)
+    ? srcStop.sub_clients
+    : [{ customer_name: srcStop.customer_name, vol: srcStop.vol, rows: srcStop.rows || [] }];
+  const dstClients = (dstStop.sub_clients && dstStop.sub_clients.length)
+    ? dstStop.sub_clients
+    : [{ customer_name: dstStop.customer_name, vol: dstStop.vol, rows: dstStop.rows || [] }];
+
+  dstStop.sub_clients  = [...dstClients, ...srcClients];
+  dstStop.vol          = round2(dstStop.sub_clients.reduce((a, c) => a + c.vol, 0));
+  dstStop.rows         = dstStop.sub_clients.flatMap(c => c.rows || []);
+  const names          = dstStop.sub_clients.map(c => c.customer_name);
+  dstStop.all_customers = names;
+  dstStop.customer_name = names[0] + (names.length > 1 ? ` +${names.length - 1} more` : '');
+
+  // Remove source stop from its truck
+  currentPlan[srcTi].stops.splice(srcSi, 1);
+  currentPlan[srcTi].stops.forEach((s, i) => s.seq = i + 1);
+  if (srcTi !== dstTi) currentPlan[dstTi].stops.forEach((s, i) => s.seq = i + 1);
+
+  // Recalc weights
+  const touched = srcTi === dstTi ? [srcTi] : [srcTi, dstTi];
+  touched.forEach(ti => {
+    const t = currentPlan[ti];
+    t.acc_weight = round2(t.stops.reduce((a, s) => a + s.vol, 0));
+    t.util_pct   = round2(t.acc_weight / t.truck_cap);
+  });
+
+  // Remove truck if now empty
+  if (currentPlan[srcTi].stops.length === 0) {
+    currentPlan.splice(srcTi, 1);
+    renumberTrucks();
+  }
+
+  autosave(); renderPlan();
+  showToast(`Merged · ${names.length} clients at this drop`, 'success');
+}
+
+function unmergeSubClient(ti, si, sci) {
+  const stop = currentPlan[ti].stops[si];
+  if (!stop.sub_clients || stop.sub_clients.length < 2) return;
+  const removed = stop.sub_clients.splice(sci, 1)[0];
+
+  // Rebuild merged stop
+  stop.vol          = round2(stop.sub_clients.reduce((a, c) => a + c.vol, 0));
+  stop.rows         = stop.sub_clients.flatMap(c => c.rows || []);
+  const names       = stop.sub_clients.map(c => c.customer_name);
+  stop.all_customers = names;
+  stop.customer_name = names[0] + (names.length > 1 ? ` +${names.length - 1} more` : '');
+  if (stop.sub_clients.length === 1) delete stop.sub_clients;
+
+  // Add removed client as a new stop at end of same truck
+  const truck  = currentPlan[ti];
+  const newSeq = truck.stops.length + 1;
+  truck.stops.push({
+    seq: newSeq, customer_name: removed.customer_name,
+    vol: removed.vol, rows: removed.rows || [],
+    cluster_id: stop.cluster_id, area: stop.area,
+    match_area: stop.match_area, wh: stop.wh,
+    lat: stop.lat, lng: stop.lng, add_drop_fee: 0
+  });
+  truck.acc_weight = round2(truck.stops.reduce((a, s) => a + s.vol, 0));
+  truck.util_pct   = round2(truck.acc_weight / truck.truck_cap);
+
+  autosave(); renderPlan();
+  showToast(`${removed.customer_name} removed from group`, 'success');
+}
+
+// ── SPLIT STOP BY SO ──────────────────────────────────────────
+function splitStopBySO(ti, si) {
+  const truck = currentPlan[ti];
+  const stop  = truck.stops[si];
+  const rows  = stop.rows || [];
+
+  // Group rows by _pfc_doc_num
+  const groups = {};
+  rows.forEach(r => {
+    const key = r._pfc_doc_num || '(no SO)';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+
+  const soKeys = Object.keys(groups);
+  if (soKeys.length < 2) {
+    showToast('This stop only has one Sales Order — nothing to split', 'info');
+    return;
+  }
+
+  // Remove the original stop from truck
+  truck.stops.splice(si, 1);
+
+  // Insert one new stop per SO at the same position (in order)
+  soKeys.forEach((soKey, idx) => {
+    const soRows = groups[soKey];
+    const soVol  = round2(soRows.reduce((a, r) => a + (parseFloat(r._pfc_vol) || 0), 0));
+    // Use customer_name from first row if possible, fall back to stop's name
+    const cust   = stop.customer_name.replace(/ \+\d+ more$/, '');
+    truck.stops.splice(si + idx, 0, {
+      seq:               stop.seq + idx,
+      customer_name:     cust,
+      vol:               soVol,
+      rows:              soRows,
+      cluster_id:        stop.cluster_id,
+      area:              stop.area,
+      match_area:        stop.match_area,
+      wh:                stop.wh,
+      lat:               stop.lat,
+      lng:               stop.lng,
+      shipping_address:  stop.shipping_address || '',
+      is_stock_transfer: stop.is_stock_transfer || false,
+      doc_number:        soKey === '(no SO)' ? '' : soKey,
+      all_customers:     [cust],
+      add_drop_fee:      0,
+    });
+  });
+
+  // Re-sequence all stops in the truck
+  truck.stops.forEach((s, i) => { s.seq = i + 1; });
+  truck.acc_weight = round2(truck.stops.reduce((a, s) => a + s.vol, 0));
+  truck.util_pct   = round2(truck.acc_weight / truck.truck_cap);
+
+  autosave(); renderPlan();
+  showToast(`Split into ${soKeys.length} stops by SO`, 'success');
+}
+
+function round2(v) { return Math.round(v * 1000) / 1000; }
+
+// SO drag-and-drop
+let _soDragData = null;
+
+function toggleSoBreakdown(ti, si) {
+  const el = document.getElementById('sob-'+ti+'-'+si);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function onSoDragStart(event, ti, si, docNum) {
+  _soDragData = {srcTi: ti, srcSi: si, docNum: docNum};
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', JSON.stringify(_soDragData));
+  const card = document.getElementById('tc-'+ti);
+  if (card) card.style.opacity = '0.6';
+}
+
+function onSoDrop(event, dstTi) {
+  event.preventDefault();
+  document.getElementById('tc-'+dstTi).classList.remove('so-drop-target');
+  let data = _soDragData;
+  if (!data) {
+    try { data = JSON.parse(event.dataTransfer.getData('text/plain')); } catch(e) { return; }
+  }
+  _soDragData = null;
+  currentPlan.forEach((_,i) => { const c=document.getElementById('tc-'+i); if(c) c.style.opacity=''; });
+  if (data.srcTi === dstTi) { showToast('Already on this truck','info'); return; }
+  moveSoToTruck(data.srcTi, data.srcSi, data.docNum, dstTi);
+}
+
+function moveSoToTruck(srcTi, srcSi, docNum, dstTi) {
+  const srcTruck = currentPlan[srcTi];
+  const srcStop  = srcTruck && srcTruck.stops[srcSi];
+  const dstTruck = currentPlan[dstTi];
+  if (!srcStop || !dstTruck) return;
+  const movedRows = (srcStop.rows||[]).filter(r=>(r._pfc_doc_num||'(no SO)')===docNum);
+  if (!movedRows.length) { showToast('SO not found in stop','error'); return; }
+  const movedVol = round2(movedRows.reduce((a,r)=>a+(parseFloat(r._pfc_vol)||0),0));
+  // Remove rows from source stop
+  srcStop.rows = (srcStop.rows||[]).filter(r=>(r._pfc_doc_num||'(no SO)')!==docNum);
+  srcStop.vol  = round2(srcStop.rows.reduce((a,r)=>a+(parseFloat(r._pfc_vol)||0),0));
+  // Remove source stop if empty
+  if (!srcStop.rows.length) srcTruck.stops.splice(srcSi, 1);
+  srcTruck.stops.forEach((s,i)=>{s.seq=i+1;});
+  srcTruck.acc_weight = round2(srcTruck.stops.reduce((a,s)=>a+s.vol,0));
+  srcTruck.util_pct   = round2(srcTruck.truck_cap>0 ? srcTruck.acc_weight/srcTruck.truck_cap : 0);
+  // Add to destination truck as new stop
+  dstTruck.stops.push({
+    seq: dstTruck.stops.length+1,
+    customer_name: srcStop.customer_name,
+    vol: movedVol, rows: movedRows,
+    cluster_id: srcStop.cluster_id||'',
+    area: srcStop.area||'', match_area: srcStop.match_area||'',
+    wh: srcStop.wh||'', lat: srcStop.lat||0, lng: srcStop.lng||0,
+    shipping_address: srcStop.shipping_address||'',
+    is_stock_transfer: srcStop.is_stock_transfer||false,
+    doc_number: docNum==='(no SO)'?'':docNum,
+    all_customers: [srcStop.customer_name], add_drop_fee: 0,
+  });
+  dstTruck.acc_weight = round2(dstTruck.stops.reduce((a,s)=>a+s.vol,0));
+  dstTruck.util_pct   = round2(dstTruck.truck_cap>0 ? dstTruck.acc_weight/dstTruck.truck_cap : 0);
+  autosave(); renderPlan();
+  showToast('SO moved to '+dstTruck.truck_id+' ('+movedVol.toLocaleString()+' kg)', 'success');
+}
+
+function addEmptyTruck() {
+  const maxNum = currentPlan.reduce((m,t)=>{
+    const n=parseInt((t.truck_id||'0').replace(/\D/g,''));
+    return n>m?n:m;
+  }, currentPlan.length);
+  const newId = 'TRK-'+String(maxNum+1).padStart(3,'0');
+  currentPlan.push({
+    truck_id:newId, truck_type:'5MT', truck_cap:5000, rated_cap:5000,
+    acc_weight:0, util_pct:0, pickup_wh:'FCSC', all_whs:['FCSC'],
+    wh_group:'NAVOTAS', trucker_code:'', ref_number:'',
+    total_km:0, stops:[],
+  });
+  autosave(); renderPlan();
+  setTimeout(()=>{
+    const el=document.getElementById('tc-'+(currentPlan.length-1));
+    if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  },100);
+  showToast('Empty truck added — drag stops in','success');
+}
+
+// ── Renumber trucks TRK-001, TRK-002... after any delete/merge ─────────────
+function renumberTrucks() {
+  currentPlan.forEach((t, i) => {
+    t.truck_id = 'TRK-' + String(i + 1).padStart(3, '0');
+  });
+}
+
+// ── Save today's plan to History ────────────────────────────────────────────
+function savePlanToday() {
+  if (!currentPlan.length) { showToast('No plan to save — generate a route first', 'error'); return; }
+  const btn = document.getElementById('save-plan-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
+  const today = new Date().toISOString().slice(0, 10);
+  fetch('/api/save-plan?router=' + encodeURIComponent(currentRouter), {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ date: today, created_by: currentRouter })
+  }).then(r => r.json()).then(d => {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
+    if (d.error) { showToast('Save failed: ' + d.error, 'error'); return; }
+    if (d.drive_url) {
+      showToast(
+        'Plan saved ✔ — <a href="' + d.drive_url + '" target="_blank" ' +
+        'style="color:#fff;text-decoration:underline;font-weight:600;">Open in Drive ↗</a>',
+        'success', 6000
+      );
+    } else {
+      showToast('Plan saved → ' + (d.plan_name || 'History'), 'success');
+    }
+  }).catch(e => {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
+    showToast('Save error: ' + e.message, 'error');
+  });
+}
+
+// ── Unrouted basket ──────────────────────────────────────────────────────────
+function unrouteStop(ti, si) {
+  const truck = currentPlan[ti];
+  if (!truck) return;
+  const [stop] = truck.stops.splice(si, 1);
+  stop._from_truck = truck.truck_id;
+  unroutedStops.push(stop);
+  // Update truck weight & util
+  truck.acc_weight = truck.stops.reduce((s, x) => s + (x.vol || 0), 0);
+  const cap = truck.rated_cap || truck.truck_cap || 1;
+  truck.util_pct = truck.acc_weight / cap;
+  autosave();
+  renderPlan();
+  renderUnrouted();
+  showToast(stop.customer_name + ' moved to Unrouted basket', 'success');
+}
+
+function renderUnrouted() {
+  const basket = document.getElementById('unrouted-basket');
+  const listEl  = document.getElementById('unrouted-list');
+  const countEl = document.getElementById('unrouted-count');
+  if (!basket || !listEl || !countEl) return;
+  countEl.textContent = unroutedStops.length;
+  if (!unroutedStops.length) { basket.style.display = 'none'; return; }
+  basket.style.display = 'block';
+  const truckOptions = currentPlan.map((t, ti) =>
+    `<option value="${ti}">${t.truck_id} (${t.truck_type} · ${t.acc_weight.toLocaleString()} kg)</option>`
+  ).join('');
+  listEl.innerHTML = unroutedStops.map((stop, idx) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border:1px solid #fde68a;border-radius:7px;margin-bottom:5px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${stop.customer_name}">
+          ${stop.is_stock_transfer ? '<span style="font-size:.58rem;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;margin-right:3px;font-weight:700">XFER</span>' : ''}
+          ${stop.customer_name}
+        </div>
+        <div style="font-size:.72rem;color:#92400e">${stop.match_area||stop.area||'—'} · ${stop.wh||''} · ${(stop.vol||0).toLocaleString()} kg
+          ${stop._from_truck ? `<span style="color:#b45309"> (from ${stop._from_truck})</span>` : ''}
+        </div>
+      </div>
+      <select id="ur-sel-${idx}" style="font-size:.75rem;border:1px solid #fde68a;border-radius:5px;padding:3px 6px;color:var(--navy)">
+        <option value="">— pick truck —</option>
+        ${truckOptions}
+      </select>
+      <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:.75rem;cursor:pointer"
+        onclick="addUnroutedToTruck(${idx}, parseInt(document.getElementById('ur-sel-${idx}').value))">
+        ➕ Add
+      </button>
+      <button style="background:none;border:none;color:#9ca3af;font-size:1rem;cursor:pointer;padding:2px 4px" title="Discard"
+        onclick="discardUnrouted(${idx})">✕</button>
+    </div>`).join('');
+}
+
+function addUnroutedToTruck(stopIdx, ti) {
+  if (isNaN(ti) || ti < 0 || ti >= currentPlan.length) {
+    showToast('Select a truck first', 'error'); return;
+  }
+  const [stop] = unroutedStops.splice(stopIdx, 1);
+  delete stop._from_truck;
+  const truck = currentPlan[ti];
+  stop.seq = truck.stops.length + 1;
+  truck.stops.push(stop);
+  truck.acc_weight = truck.stops.reduce((s, x) => s + (x.vol || 0), 0);
+  const cap = truck.rated_cap || truck.truck_cap || 1;
+  truck.util_pct = truck.acc_weight / cap;
+  autosave();
+  renderPlan();
+  renderUnrouted();
+  showToast(stop.customer_name + ' added to ' + truck.truck_id, 'success');
+}
+
+function discardUnrouted(stopIdx) {
+  const stop = unroutedStops.splice(stopIdx, 1)[0];
+  renderUnrouted();
+  showToast((stop ? stop.customer_name : 'Stop') + ' discarded', 'success');
+}
+
+// ── Merge trucks ─────────────────────────────────────────────────────────────
+function mergeTruck(ti) {
+  if (currentPlan.length < 2) { showToast('Need at least 2 trucks to merge', 'error'); return; }
+  const src = currentPlan[ti];
+  const opts = currentPlan.map((t, i) => i === ti ? null :
+    `<option value="${i}">${t.truck_id} (${t.truck_type} · ${t.acc_weight.toLocaleString()} kg · ${t.stops.length} drops)</option>`
+  ).filter(Boolean).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'merge-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:28px 30px;min-width:340px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,.22)">
+      <h3 style="margin:0 0 6px;color:var(--navy);font-size:1.05rem">⊲ Merge ${src.truck_id}</h3>
+      <p style="margin:0 0 16px;font-size:.82rem;color:var(--muted)">
+        ${src.stops.length} stops · ${src.acc_weight.toLocaleString()} kg will move into the selected truck.
+        ${src.truck_id} will be removed and trucks renumbered.
+      </p>
+      <label style="font-size:.8rem;font-weight:600;color:var(--navy)">Merge into:</label>
+      <select id="merge-target-sel" style="width:100%;margin:6px 0 18px;border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:.83rem;color:var(--navy)">
+        <option value="">— select destination truck —</option>
+        ${opts}
+      </select>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('merge-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="doMerge(${ti}, parseInt(document.getElementById('merge-target-sel').value))">⊲ Merge</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function doMerge(srcTi, dstTi) {
+  document.getElementById('merge-overlay')?.remove();
+  if (isNaN(dstTi) || dstTi < 0 || dstTi >= currentPlan.length || dstTi === srcTi) {
+    showToast('Select a valid destination truck', 'error'); return;
+  }
+  const src = currentPlan[srcTi];
+  const dst = currentPlan[dstTi];
+  const combinedKg = src.acc_weight + dst.acc_weight;
+
+  // Auto-upgrade truck type if needed
+  const sorted = [...TRUCK_TYPES_LIST].sort((a, b) => a.cap - b.cap);
+  const fitsType = sorted.find(t => t.cap >= combinedKg);
+  if (!fitsType) {
+    showToast(`Combined load ${combinedKg.toLocaleString()} kg exceeds largest truck type — cannot merge`, 'error');
+    return;
+  }
+  if (fitsType.cap > (dst.truck_cap || 0)) {
+    dst.truck_type = fitsType.label;
+    dst.truck_cap  = fitsType.cap;
+    if (!dst._rated_cap_manual) dst.rated_cap = fitsType.cap;
+    showToast(`Truck type upgraded to ${fitsType.label} to fit combined load`, 'success');
+  }
+
+  // Move stops from src → dst, re-sequence
+  src.stops.forEach(s => dst.stops.push({...s}));
+  dst.stops.forEach((s, i) => { s.seq = i + 1; });
+  dst.acc_weight = dst.stops.reduce((a, s) => a + (s.vol || 0), 0);
+  const cap = dst.rated_cap || dst.truck_cap || 1;
+  dst.util_pct = dst.acc_weight / cap;
+  dst.all_whs  = [...new Set([...(dst.all_whs || [dst.pickup_wh]), ...(src.all_whs || [src.pickup_wh])])];
+
+  // Remove source truck and renumber
+  currentPlan.splice(srcTi, 1);
+  isolatedTrucks.clear();
+  renumberTrucks();
+  autosave();
+  renderPlan();
+  showToast(`Merged into ${dst.truck_id} · ${combinedKg.toLocaleString()} kg · ${dst.stops.length} stops`, 'success');
+}
+
+function changeTruckType(ti, newLabel) {
+  const t = TRUCK_TYPES_LIST.find(x=>x.label===newLabel);
+  if (!t) return;
+  currentPlan[ti].truck_type = newLabel;
+  currentPlan[ti].truck_cap  = t.cap;
+  if (!currentPlan[ti]._rated_cap_manual) currentPlan[ti].rated_cap = t.cap;
+  // Recalculate utilization against the new capacity
+  const newCap = currentPlan[ti].rated_cap || t.cap;
+  currentPlan[ti].util_pct = newCap > 0
+    ? Math.round((currentPlan[ti].acc_weight || 0) / newCap * 10000) / 10000
+    : 0;
+  autosave(); renderPlan();
+}
+
+// ======================================================
+//  RATE AUTO-FETCH
+// ======================================================
+
+/** Haversine distance in km (JS version for client-side use) */
+function haversineKm(lat1,lon1,lat2,lon2){
+  const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+/** Return the match_area of the stop that is farthest from the pickup WH.
+ *  This is the true "last mile" billing area. */
+function getFarthestArea(truck) {
+  if (!truck.stops || !truck.stops.length) return '';
+  const wh = warehouseData[truck.pickup_wh] || {};
+  const whLat = wh.lat || 14.55, whLng = wh.lng || 121.00;
+  let bestArea='', bestDist=-1;
+  truck.stops.forEach(s=>{
+    if (!s.lat || !s.lng || !s.match_area) return;
+    const d = haversineKm(whLat, whLng, s.lat, s.lng);
+    if (d > bestDist) { bestDist=d; bestArea=s.match_area; }
+  });
+  return bestArea;
+}
+
+/** Fetch rate for a specific area (used by fetchTruckRate and onAreaChange) */
+function fetchRateForArea(ti, areaOverride) {
+  const truck = currentPlan[ti];
+  const code  = (truck.trucker_code||'').trim();
+  if (!code) return;
+  // Use override area, else compute farthest stop from WH
+  const billingArea = areaOverride || (!truck._area_manual ? getFarthestArea(truck) : truck.rate_area) || '';
+  const areas = billingArea ? [billingArea] : [...new Set(truck.stops.map(s=>s.match_area).filter(Boolean))];
+
+  fetch('/api/truck-rate?trucker='+encodeURIComponent(code)+
+        '&cap='+(truck.truck_cap||0)+
+        '&wh_group='+encodeURIComponent(truck.wh_group||'')+
+        '&areas='+encodeURIComponent(areas.join(',')))
+  .then(r=>r.json()).then(d=>{
+    if (d.rate != null) {
+      if (!truck._rate_manual) { truck.truck_rate = d.rate; }
+      if (!truck._area_manual) { truck.rate_area  = billingArea || d.best_area || ''; }
+      // CPK = rate ÷ rated capacity
+      if (!truck._cpk_manual) {
+        const _rc = truck.rated_cap || truck.truck_cap || 0;
+        truck.truck_cpk = (_rc > 0) ? parseFloat((d.rate / _rc).toFixed(4)) : 0;
+      }
+      autosave();
+      // Update DOM inputs without full re-render
+      const card = document.getElementById('tc-'+ti);
+      if (card) {
+        const ri=card.querySelector('.rate-inp');
+        const ai=card.querySelector('.area-inp');
+        const ci=card.querySelector('.cpk-inp');
+        if (ri&&!truck._rate_manual) ri.value=d.rate||'';
+        if (ai&&!truck._area_manual) ai.value=truck.rate_area||'';
+        if (ci&&!truck._cpk_manual)  ci.value=truck.truck_cpk||'';
+      }
+      updatePlanKPIs();
+      showToast('Rate loaded: '+code+' — ₱'+(d.rate?Number(d.rate).toLocaleString():'N/A')+' ('+truck.rate_area+')','success');
+    } else {
+      showToast('No rate found for ' + code + ' (cap:' + (truck.truck_cap||0) + 'kg, WH:' + (truck.wh_group||'?') + ', area:' + (billingArea||'any') + ') — check Rate Master', 'info');
+    }
+  });
+}
+
+function fetchTruckRate(ti) { fetchRateForArea(ti, null); }
+
+/** Called when user manually changes the area field — re-fetches rate for that area */
+function onAreaChange(ti, areaVal) {
+  currentPlan[ti].rate_area = areaVal;
+  currentPlan[ti]._area_manual = true;
+  autosave();
+  if (areaVal.trim().length >= 2) fetchRateForArea(ti, areaVal.trim());
+}
+
+function updatePlanKPIs() {
+  const t = currentPlan;
+  document.getElementById('kpi-trucks').textContent = t.length||'—';
+  document.getElementById('kpi-drops').textContent  = t.reduce((a,x)=>a+x.stops.length,0)||'—';
+  const vol = t.reduce((a,x)=>a+x.acc_weight,0);
+  document.getElementById('kpi-vol').textContent  = vol?vol.toLocaleString(undefined,{maximumFractionDigits:0}):'—';
+  const au = t.length?Math.round(t.reduce((a,x)=>a+x.util_pct,0)/t.length*100):0;
+  document.getElementById('kpi-util').textContent = t.length?au+'%':'—';
+  const totalCost = t.reduce((a,x)=>a+(parseFloat(String(x.truck_rate||'').replace(/[^\d.]/g,''))||0),0);
+  const costEl = document.getElementById('kpi-cost');
+  if (costEl) costEl.innerHTML = totalCost>0?'₱'+Math.round(totalCost).toLocaleString():'—';
+}
+
+// ======================================================
+//  MAP ISOLATION
+// ======================================================
+function toggleIsolation(truckId) {
+  if (isolatedTrucks.has(truckId)) {
+    isolatedTrucks.delete(truckId);
+    if (isolatedTrucks.size === 0) { clearIsolation(); return; }
+  } else {
+    isolatedTrucks.add(truckId);
+  }
+  applyIsolation();
+  renderLegend();
+  // Scroll + flash the matching truck card in the plan panel
+  const ti = currentPlan.findIndex(t => t.truck_id === truckId);
+  if (ti >= 0) {
+    const card = document.getElementById('tc-'+ti);
+    if (card) {
+      card.scrollIntoView({behavior:'smooth', block:'start'});
+      card.style.outline = '2.5px solid var(--orange)';
+      card.style.outlineOffset = '2px';
+      setTimeout(()=>{ card.style.outline=''; card.style.outlineOffset=''; }, 1800);
+    }
+  }
+}
+function clearIsolation() { isolatedTrucks.clear(); isolatedWH=null; applyIsolation(); renderLegend(); }
+
+function applyIsolation() {
+  const btn=document.getElementById('iso-clear-btn');
+  if(btn) btn.style.display=isolatedTrucks.size>0?'':'none';
+  currentPlan.forEach((truck,ti)=>{
+    const lg=mapLayers[truck.truck_id];
+    if(lg){ if(isolatedTrucks.size===0||isolatedTrucks.has(truck.truck_id)) leafletMap.addLayer(lg); else leafletMap.removeLayer(lg); }
+    const card=document.getElementById('tc-'+ti);
+    if(card){ card.classList.toggle('isolated',isolatedTrucks.has(truck.truck_id)); card.classList.toggle('dimmed',isolatedTrucks.size>0&&!isolatedTrucks.has(truck.truck_id)); }
+  });
+  document.querySelectorAll('.legend-item').forEach(item=>{
+    const active=isolatedTrucks.has(item.dataset.truckId);
+    item.classList.toggle('iso-active',active);
+    const chk=item.querySelector('.legend-check');
+    if(chk) chk.innerHTML=active?'&#x2713;':'';
+  });
+  const selCount=document.getElementById('legend-sel-count');
+  if(selCount){ if(isolatedTrucks.size>0){selCount.textContent=isolatedTrucks.size+' selected';selCount.style.display='';}else{selCount.style.display='none';} }
+  if(isolatedTrucks.size>0){
+    const allBB=[];
+    isolatedTrucks.forEach(id=>{ const lg=mapLayers[id]; if(lg) lg.eachLayer(l=>{if(l.getLatLng)allBB.push(l.getLatLng());}); });
+    if(allBB.length) leafletMap.fitBounds(L.latLngBounds(allBB).pad(.18));
+  } else {
+    const allLL=[];
+    currentPlan.forEach(t=>t.stops.forEach(s=>{if(s.lat&&s.lng)allLL.push([s.lat,s.lng]);}));
+    if(allLL.length) leafletMap.fitBounds(L.latLngBounds(allLL).pad(.1));
+  }
+}
+
+// ======================================================
+//  DRAG RESEQUENCE
+// ======================================================
+function resequenceTruck(ti) {
+  const el=document.getElementById('stops-'+ti);
+  if(!el) return;
+  const lis=el.querySelectorAll('li.stop-row');
+  const newOrder=[];
+  lis.forEach(li=>{const si=parseInt(li.dataset.si);newOrder.push(currentPlan[ti].stops[si]);});
+  newOrder.forEach((s,i)=>s.seq=i+1);
+  currentPlan[ti].stops=newOrder;
+  lis.forEach((li,i)=>{li.dataset.si=i;li.querySelector('.seq-bubble').textContent=i+1;});
+  autosave(); renderMap();
+}
+
+// ======================================================
+//  LIVE MONITORING POLLER
+// ======================================================
+let _liveInterval = null;
+let _lastMonitoringHash = '';
+
+function startLiveMonitoring() {
+  document.getElementById('live-badge').style.display = 'inline-flex';
+  if (!monData.length) loadMonitoring(); // only load from server if no data present
+  if (_liveInterval) clearInterval(_liveInterval);
+  _liveInterval = setInterval(_pollMonitoring, 15000); // every 15 s
+}
+
+function stopLiveMonitoring() {
+  document.getElementById('live-badge').style.display = 'none';
+  if (_liveInterval) { clearInterval(_liveInterval); _liveInterval = null; }
+}
+
+function _pollMonitoring() {
+  // Silently fetch monitoring data and update only if changed
+  const dateEl = document.getElementById('mon-date');
+  const isoDate = dateEl ? dateEl.dataset.isodate : '';
+  if (!isoDate) return;
+  fetch(`/api/monitoring?router=${encodeURIComponent(currentRouter)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.monitoring) return;
+      const hash = JSON.stringify(data.monitoring.map(r => r.status + r.otif_status + (r.concerns||'')));
+      if (hash !== _lastMonitoringHash) {
+        _lastMonitoringHash = hash;
+        // Silently refresh the monitoring display
+        _renderMonitoringRecords(data.monitoring);
+        _updateMonKPIs(data.monitoring);
+        const ts = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit'});
+        const el = document.getElementById('mon-last-updated');
+        if (el) el.textContent = `Updated ${ts}`;
+      }
+    })
+    .catch(() => {}); // fail silently
+}
+
+function _updateMonKPIs(records) {
+  const total   = records.length;
+  const done    = records.filter(r => r.status === 'DONE').length;
+  const otif    = records.filter(r => (r.otif_status||'').includes('OTIF')).length;
+  const concern = records.filter(r => r.concerns && r.concerns !== 'None').length;
+  const pct     = total ? Math.round(100*done/total) : 0;
+  const otifPct = total ? Math.round(100*otif/total) : 0;
+  const el = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+  el('mon-total',    total);
+  el('mon-prog',     `${done}/${total} (${pct}%)`);
+  el('mon-otif',     `${otifPct}%`);
+  el('mon-concerns', concern);
+}
+
+function _renderMonitoringRecords(records) {
+  // Only update individual row statuses without full re-render to avoid losing focus
+  records.forEach((rec, idx) => {
+    const row = document.querySelector(`[data-mon-idx="${idx}"]`);
+    if (!row) return; // full re-render if structure changed
+    const statusBadge = row.querySelector('.mon-status-badge');
+    if (statusBadge) {
+      statusBadge.textContent = rec.status;
+      statusBadge.className = 'mon-status-badge ' + (rec.status==='DONE' ? 'done' : 'pending');
+    }
+  });
+  // If row count changed (new records added), do a full reload
+  const existingRows = document.querySelectorAll('[data-mon-idx]').length;
+  if (existingRows !== records.length) loadMonitoring();
+}
+
+// ======================================================
+//  SHARED PLAN LIVE POLLER
+// ======================================================
+let _sharedPlanInterval = null;
+let _knownLatestPlanId  = null;   // plan_id we are currently showing
+let _knownLatestPlanAt  = null;   // created_at timestamp of the shown plan
+let _pendingSharedPlanId = null;  // newer plan_id waiting to be loaded
+let _pendingDismissAt    = null;  // created_at of the pending plan (for dismiss)
+
+function startSharedPlanPoller() {
+  if (_sharedPlanInterval) return;
+  _pollSharedPlan(); // immediate check
+  _sharedPlanInterval = setInterval(_pollSharedPlan, 20000); // every 20 s
+}
+
+function stopSharedPlanPoller() {
+  if (_sharedPlanInterval) { clearInterval(_sharedPlanInterval); _sharedPlanInterval = null; }
+}
+
+function _pollSharedPlan() {
+  fetch('/api/latest-plan-meta')
+    .then(r => r.json())
+    .then(meta => {
+      if (!meta.plan_id) return; // no saved plan yet
+      // First run — register current plan id + timestamp
+      if (_knownLatestPlanId === null) {
+        _knownLatestPlanId = meta.plan_id;
+        _knownLatestPlanAt = meta.created_at || null;
+        return;
+      }
+      // New plan: higher ID (INSERT) or same ID but newer timestamp (UPDATE same-day)
+      const planIdChanged = meta.plan_id > _knownLatestPlanId;
+      const planUpdated   = meta.plan_id === _knownLatestPlanId &&
+                            meta.created_at && meta.created_at !== _knownLatestPlanAt;
+      if (planIdChanged || planUpdated) {
+        _pendingSharedPlanId = meta.plan_id;
+        _pendingDismissAt    = meta.created_at || null;
+        const role = currentRole || 'planner';
+        const by   = meta.created_by || 'another user';
+        const tc   = meta.truck_count || '?';
+        const dr   = meta.total_drops || '?';
+        const msg  = `📋 New plan saved by <b>${by}</b> — ${tc} trucks, ${dr} drops`;
+        document.getElementById('shared-plan-msg').innerHTML = msg;
+        document.getElementById('shared-plan-banner').style.display = 'flex';
+        // Logistics Tower users: auto-load without asking
+        if (role === 'tower') {
+          loadSharedPlan();
+        }
+      }
+    })
+    .catch(() => {}); // fail silently — server may be restarting
+}
+
+function loadSharedPlan() {
+  if (!_pendingSharedPlanId) return;
+  const id = _pendingSharedPlanId;
+  fetch(`/api/history/${id}?router=${encodeURIComponent(currentRouter)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.trucks && data.trucks.length) {
+        currentPlan = data.trucks;
+        _knownLatestPlanId  = id;
+        _knownLatestPlanAt  = data.created_at || _knownLatestPlanAt;
+        _pendingSharedPlanId = null;
+        startCollab(data.plan_date || new Date().toISOString().slice(0,10));
+        renderPlan();
+        dismissSharedBanner();
+        showToast(`Plan loaded — saved by ${data.created_by || 'team'}`, 'success');
+        // Switch to plan tab if on another tab
+        const planBtn = document.querySelector('.nav-btn[onclick*="plan"]');
+        if (planBtn && !document.getElementById('page-plan').classList.contains('active')) {
+          planBtn.click();
+        }
+      }
+    })
+    .catch(() => showToast('Could not load shared plan', 'error'));
+}
+
+function dismissSharedBanner() {
+  document.getElementById('shared-plan-banner').style.display = 'none';
+  // Dismiss means "ignore this version" — update known id + timestamp so we don't re-show
+  if (_pendingSharedPlanId) {
+    _knownLatestPlanId  = _pendingSharedPlanId;
+    _knownLatestPlanAt  = _pendingDismissAt || _knownLatestPlanAt;
+    _pendingSharedPlanId = null;
+    _pendingDismissAt    = null;
+  }
+}
+
+// ======================================================
+//  COORDINATE EDITOR
+// ======================================================
+let _coordTi = null, _coordSi = null, _coordPreviewMap = null, _coordMarker = null;
+
+function openCoordEditor(ti, si) {
+  _coordTi = ti; _coordSi = si;
+  const stop = currentPlan[ti].stops[si];
+  document.getElementById('coord-modal-title').textContent =
+    '📍 Fix Coordinates — ' + (stop.customer_name || 'Stop');
+  document.getElementById('coord-modal-sub').textContent =
+    stop.shipping_address || 'Enter address or drag the pin on the map';
+  document.getElementById('coord-name-input').value  = stop.customer_name || '';
+  document.getElementById('coord-addr-input').value  = stop.shipping_address || '';
+  document.getElementById('coord-search-input').value = stop.shipping_address || stop.customer_name || '';
+  document.getElementById('coord-paste-input').value = '';
+  document.getElementById('coord-results').style.display = 'none';
+  document.getElementById('coord-results').innerHTML = '';
+  const lat = stop.lat || 14.5995;
+  const lng = stop.lng || 120.9842;
+  document.getElementById('coord-lat-input').value = lat;
+  document.getElementById('coord-lng-input').value = lng;
+  document.getElementById('coord-modal').style.display = 'flex';
+
+  // Init mini Leaflet map
+  setTimeout(() => {
+    if (_coordPreviewMap) { _coordPreviewMap.remove(); _coordPreviewMap = null; }
+    _coordPreviewMap = L.map('coord-map-preview', {zoomControl:true}).setView([lat, lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {attribution:'© OSM', maxZoom:19}).addTo(_coordPreviewMap);
+    _coordMarker = L.marker([lat, lng], {draggable:true}).addTo(_coordPreviewMap);
+    _coordMarker.on('dragend', function(e) {
+      const p = e.target.getLatLng();
+      document.getElementById('coord-lat-input').value = p.lat.toFixed(6);
+      document.getElementById('coord-lng-input').value = p.lng.toFixed(6);
+    });
+    // Click on map moves marker
+    _coordPreviewMap.on('click', function(e) {
+      _coordMarker.setLatLng(e.latlng);
+      document.getElementById('coord-lat-input').value = e.latlng.lat.toFixed(6);
+      document.getElementById('coord-lng-input').value = e.latlng.lng.toFixed(6);
+    });
+  }, 80);
+}
+
+function closeCoordEditor() {
+  document.getElementById('coord-modal').style.display = 'none';
+  if (_coordPreviewMap) { _coordPreviewMap.remove(); _coordPreviewMap = null; }
+}
+
+function splitPastedCoords(val) {
+  // Accepts any of these formats pasted from Google Maps / other tools:
+  //   "14.5995, 120.9842"   "14.5995,120.9842"   "14.5995 120.9842"
+  //   "14° 35' N, 120° 59' E"  (DMS — stripped of symbols and parsed)
+  if (!val || !val.trim()) return;
+  // Strip degree/minute/second symbols, cardinal letters, parentheses
+  const cleaned = val.replace(/[°'"NSEW]/gi, ' ').replace(/[()]/g, '').trim();
+  // Split on comma, semicolon, or whitespace runs
+  const parts = cleaned.split(/[,;\s]+/).map(p => p.trim()).filter(p => p && !isNaN(p));
+  if (parts.length >= 2) {
+    const lat = parseFloat(parts[0]);
+    const lng = parseFloat(parts[1]);
+    if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+      document.getElementById('coord-lat-input').value = lat.toFixed(6);
+      document.getElementById('coord-lng-input').value = lng.toFixed(6);
+      // Flash the fields green to confirm
+      ['coord-lat-input','coord-lng-input'].forEach(id => {
+        const el = document.getElementById(id);
+        el.style.borderColor = '#16a34a';
+        el.style.background  = '#f0fdf4';
+        setTimeout(() => { el.style.borderColor = ''; el.style.background = ''; }, 1500);
+      });
+      // Trigger map preview update if already open
+      if (_coordPreviewMap) {
+        _coordPreviewMap.setView([lat, lng], 15);
+        if (_coordPreviewMarker) _coordPreviewMarker.setLatLng([lat, lng]);
+      }
+    }
+  }
+}
+
+function searchCoordAddress() {
+  const q = document.getElementById('coord-search-input').value.trim();
+  if (!q) return;
+  const btn = document.querySelector('.coord-search-btn');
+  btn.textContent = '…'; btn.disabled = true;
+  fetch('/api/geocode-search?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(data => {
+      btn.textContent = '🔍 Search'; btn.disabled = false;
+      const box = document.getElementById('coord-results');
+      box.innerHTML = '';
+      if (!data.results || !data.results.length) {
+        box.innerHTML = '<div style="padding:8px;font-size:.8rem;color:#888">No results found. Try a more specific address.</div>';
+        box.style.display = 'block'; return;
+      }
+      data.results.forEach(r => {
+        const el = document.createElement('div');
+        el.className = 'coord-result-item';
+        const short = r.display.split(',').slice(0,3).join(', ');
+        el.innerHTML = `<strong>${short}</strong>${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`;
+        el.onclick = () => {
+          document.getElementById('coord-lat-input').value = r.lat.toFixed(6);
+          document.getElementById('coord-lng-input').value = r.lng.toFixed(6);
+          // Also fill the delivery address field with the resolved address
+          const addrFld = document.getElementById('coord-addr-input');
+          if (addrFld && r.display) addrFld.value = r.display;
+          if (_coordPreviewMap && _coordMarker) {
+            const ll = L.latLng(r.lat, r.lng);
+            _coordMarker.setLatLng(ll);
+            _coordPreviewMap.setView(ll, 16);
+          }
+          box.style.display = 'none';
+        };
+        box.appendChild(el);
+      });
+      box.style.display = 'block';
+    })
+    .catch(() => { btn.textContent = '🔍 Search'; btn.disabled = false; });
+}
+
+function syncAddrToSearch() {
+  const addr = document.getElementById('coord-addr-input').value.trim();
+  if (addr) document.getElementById('coord-search-input').value = addr;
+}
+
+function applyCoordEdit() {
+  const lat = parseFloat(document.getElementById('coord-lat-input').value);
+  const lng = parseFloat(document.getElementById('coord-lng-input').value);
+  if (isNaN(lat) || isNaN(lng)) { showToast('Enter valid coordinates','error'); return; }
+  const newName = (document.getElementById('coord-name-input').value || '').trim();
+  const newAddr = (document.getElementById('coord-addr-input').value || '').trim();
+
+  // Update in-memory plan immediately
+  const stop = currentPlan[_coordTi].stops[_coordSi];
+  stop.lat = lat;
+  stop.lng = lng;
+  if (newName) stop.customer_name    = newName;
+  if (newAddr) stop.shipping_address = newAddr;
+
+  // Persist to server (updates temp plan + address cache)
+  fetch('/api/update-stop-coord', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      router: currentRouter,
+      truck_index: _coordTi,
+      stop_index:  _coordSi,
+      lat, lng,
+      customer_name:    newName || null,
+      shipping_address: newAddr || null
+    })
+  }).then(() => {
+    refreshMapForTruck(_coordTi);
+    renderPlan();
+    const changed = [];
+    if (newName) changed.push('name');
+    if (newAddr) changed.push('address');
+    changed.push('coordinates');
+    showToast('Stop updated: ' + changed.join(', '), 'success');
+    closeCoordEditor();
+  }).catch(() => {
+    renderPlan();
+    closeCoordEditor();
+  });
+}
+
+function refreshMapForTruck(ti) {
+  // Remove and re-add markers for the affected truck only
+  if (!map || !currentPlan[ti]) return;
+  const truck = currentPlan[ti];
+  const tid = truck.truck_id;
+  // Remove existing markers for this truck
+  if (window._truckMarkers && window._truckMarkers[tid]) {
+    window._truckMarkers[tid].forEach(m => map.removeLayer(m));
+  }
+  window._truckMarkers = window._truckMarkers || {};
+  window._truckMarkers[tid] = [];
+  // Re-add from updated stops
+  truck.stops.forEach((stop, si) => {
+    if (!stop.lat || !stop.lng) return;
+    const m = L.circleMarker([stop.lat, stop.lng], {
+      radius:7, color:truck._color||'#1976d2', fillColor:truck._color||'#1976d2',
+      fillOpacity:0.85, weight:2
+    }).addTo(map);
+    m.bindPopup(`<b>${stop.customer_name||''}</b><br>${stop.shipping_address||''}<br>
+      <small>${stop.lat.toFixed(5)}, ${stop.lng.toFixed(5)}</small>`);
+    window._truckMarkers[tid].push(m);
+  });
+}
+
+// ======================================================
+//  REASSIGN
+// ======================================================
+function openReassign(ti, si) {
+  reassignTarget={ti,si};
+  const stop=currentPlan[ti].stops[si];
+  const srcTruck=currentPlan[ti];
+  const srcWh=(srcTruck.pickup_wh||srcTruck.wh||'').toUpperCase().trim();
+  document.getElementById('reassign-cust-label').textContent=
+    stop.customer_name+' — currently on '+srcTruck.truck_id+(srcWh?' ('+srcWh+')':'');
+  const sel=document.getElementById('reassign-sel');
+  sel.innerHTML=currentPlan.map((t,i)=>{
+    const tWh=(t.pickup_wh||t.wh||'').toUpperCase().trim();
+    const diffWh=srcWh&&tWh&&tWh!==srcWh;
+    const label=t.truck_id+' ('+t.truck_type+' · '+t.stops.length+' drops)'+(tWh?' — '+tWh:'')+(diffWh?' [different WH — blocked]':'');
+    const selAttr=i===ti?' selected':'';
+    const disAttr=diffWh?' disabled style="color:#bbb;background:#f5f5f5"':'';
+    return `<option value="${i}"${selAttr}${disAttr}>${label}</option>`;
+  }).join('');
+  document.getElementById('reassign-pos').value=1;
+  document.getElementById('reassign-overlay').classList.add('open');
+}
+
+function confirmReassign() {
+  const {ti,si}=reassignTarget;
+  const newTi=parseInt(document.getElementById('reassign-sel').value);
+  const pos=Math.max(1,parseInt(document.getElementById('reassign-pos').value)||1);
+  // Hard block: different pickup warehouse
+  const srcWh=(currentPlan[ti].pickup_wh||currentPlan[ti].wh||'').toUpperCase().trim();
+  const dstWh=(currentPlan[newTi].pickup_wh||currentPlan[newTi].wh||'').toUpperCase().trim();
+  if(srcWh&&dstWh&&srcWh!==dstWh){
+    showToast('Cannot move stop — '+currentPlan[newTi].truck_id+' picks up from '+dstWh+', not '+srcWh,'error');
+    return;
+  }
+  if(newTi!==ti){
+    const stop=currentPlan[ti].stops.splice(si,1)[0];
+    currentPlan[ti].stops.forEach((s,i)=>s.seq=i+1);
+    const at=Math.min(pos-1,currentPlan[newTi].stops.length);
+    currentPlan[newTi].stops.splice(at,0,stop);
+    currentPlan[newTi].stops.forEach((s,i)=>s.seq=i+1);
+    const rc1=currentPlan[ti].rated_cap||currentPlan[ti].truck_cap||1;
+    const rc2=currentPlan[newTi].rated_cap||currentPlan[newTi].truck_cap||1;
+    currentPlan[ti].acc_weight    = round2(currentPlan[ti].stops.reduce((a,s)=>a+s.vol,0));
+    currentPlan[ti].util_pct      = round2(currentPlan[ti].acc_weight/rc1);
+    currentPlan[newTi].acc_weight = round2(currentPlan[newTi].stops.reduce((a,s)=>a+s.vol,0));
+    currentPlan[newTi].util_pct   = round2(currentPlan[newTi].acc_weight/rc2);
+    showToast('Stop moved to '+currentPlan[newTi].truck_id,'success');
+  }
+  closeOverlay('reassign-overlay');
+  autosave(); renderPlan();
+}
+
+function round2(v){return Math.round(v*1000)/1000;}
+
+function updateRatedCap(ti,val){
+  const cap=parseFloat(val);
+  if(!cap||cap<=0) return;
+  currentPlan[ti].rated_cap=cap;
+  currentPlan[ti]._rated_cap_manual=true;
+  currentPlan[ti].util_pct=round2((currentPlan[ti].acc_weight||0)/cap);
+  // Recalculate CPK dynamically when rated cap changes
+  if (!currentPlan[ti]._cpk_manual) {
+    const _rate = parseFloat(currentPlan[ti].truck_rate) || 0;
+    currentPlan[ti].truck_cpk = (_rate > 0 && cap > 0) ? parseFloat((_rate / cap).toFixed(4)) : 0;
+  }
+  autosave();
+  const card=document.getElementById('tc-'+ti);
+  if(card){
+    const util=Math.round(currentPlan[ti].util_pct*100);
+    const bc=util>=80?'#43a047':util>=60?'#f9a825':'#e53935';
+    const bar=card.querySelector('.truck-util-bar');
+    const lbl=card.querySelector('.util-pct-label');
+    if(bar){bar.style.width=Math.min(util,100)+'%';bar.style.background=bc;}
+    if(lbl){lbl.textContent=util+'%';lbl.style.color=bc;}
+    const ci=card.querySelector('.cpk-inp');
+    if(ci&&!currentPlan[ti]._cpk_manual) ci.value=currentPlan[ti].truck_cpk||'';
+  }
+}
+
+// ======================================================
+//  SAVE / EXPORT
+// ======================================================
+let _autosaveTimer = null;
+function autosave() {
+  clearTimeout(_autosaveTimer);
+  _autosaveTimer = setTimeout(()=>{
+    fetch('/api/update-plan?router='+encodeURIComponent(currentRouter),
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trucks:currentPlan})})
+    .then(r=>r.json()).then(d=>{if(d.trucks){currentPlan=d.trucks; updatePlanKPIs();}});
+    collabPush();
+  }, 400);
+}
+
+// savePlanToday() is defined in TRUCK MANAGEMENT section below
+
+// ======================================================
+//  REAL-TIME COLLABORATION
+// ======================================================
+function startCollab(collabId) {
+  _collabId     = collabId || new Date().toISOString().slice(0,10);
+  _collabMyName = currentRouter || 'user';
+  _collabVersion = 0;
+  stopCollab();
+  _collabInterval   = setInterval(pollCollab, 4000);
+  _collabHbInterval = setInterval(collabHeartbeat, 8000);
+  collabHeartbeat();
+  const bar = document.getElementById('collab-bar');
+  if (bar) bar.style.display = 'flex';
+}
+function stopCollab() {
+  if (_collabInterval)   { clearInterval(_collabInterval);   _collabInterval = null; }
+  if (_collabHbInterval) { clearInterval(_collabHbInterval); _collabHbInterval = null; }
+}
+function collabPush() {
+  if (!_collabId || !currentPlan.length) return;
+  _setSyncLabel('Syncing…');
+  fetch('/api/collab/push', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({collab_id:_collabId, trucks:currentPlan, by:_collabMyName})
+  }).then(r=>r.json()).then(d=>{
+    if (d.version) _collabVersion = d.version;
+    _setSyncLabel('Synced ✓');
+    setTimeout(()=>_setSyncLabel(''), 2000);
+  }).catch(()=>{});
+}
+function pollCollab() {
+  if (!_collabId) return;
+  const url = '/api/collab/poll?collab_id='+encodeURIComponent(_collabId)+'&since='+_collabVersion;
+  fetch(url).then(r=>r.json()).then(d=>{
+    if (!d.updated) return;
+    if (d.by === _collabMyName) { _collabVersion = d.version; return; }
+    _collabVersion = d.version;
+    currentPlan = d.trucks;
+    renderPlan();
+    showToast('🔄 Plan updated by ' + d.by, 'info');
+    _setSyncLabel('Updated by ' + d.by);
+    setTimeout(()=>_setSyncLabel(''), 3500);
+  }).catch(()=>{});
+}
+function collabHeartbeat() {
+  if (!_collabId) return;
+  fetch('/api/collab/heartbeat', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({collab_id:_collabId, by:_collabMyName})
+  }).then(r=>r.json()).then(d=>{
+    const others = (d.users||[]).filter(u=>u!==_collabMyName);
+    const lbl = document.getElementById('collab-users');
+    if (lbl) lbl.textContent = others.length ? 'you + '+others.join(', ') : 'just you';
+  }).catch(()=>{});
+}
+function _setSyncLabel(txt) {
+  const el  = document.getElementById('collab-sync-lbl');
+  const dot = document.getElementById('collab-dot');
+  if (el)  el.textContent = txt;
+  if (dot) dot.classList.toggle('syncing', !!txt && txt !== 'Synced ✓');
+}
+
+// ======================================================
+//  ADDRESS VERIFICATION
+// ======================================================
+let _verifyOverrides = {}; // {truck_id+'|'+seq → newArea}
+
+function openVerifyAddresses() {
+  if (!currentPlan.length) { showToast('Generate a route plan first','error'); return; }
+  _verifyOverrides = {};
+  document.getElementById('verify-table').style.display = 'none';
+  document.getElementById('verify-tbody').innerHTML = '';
+  document.getElementById('verify-empty').style.display = 'none';
+  document.getElementById('verify-progress').style.display = 'none';
+  document.getElementById('verify-apply-btn').style.display = 'none';
+  document.getElementById('verify-run-btn').disabled = false;
+  document.getElementById('verify-run-btn').textContent = '▶ Run Verification';
+  document.getElementById('verify-status').innerHTML =
+    'Click <b>Run Verification</b> to start. First run contacts OpenStreetMap (1 req/sec per uncached stop).';
+  showOverlay('verify-overlay');
+}
+
+function runVerification() {
+  // Block if background auto-verify is still running
+  if (window._verifyLock) {
+    showToast('Coordinate check still running in background — please wait a moment then try again','info');
+    return;
+  }
+  window._verifyLock = true;
+
+  // Collect all stops with coordinates
+  const stops = [];
+  currentPlan.forEach(truck => {
+    truck.stops.forEach(stop => {
+      if (stop.lat && stop.lng) {
+        stops.push({
+          lat: stop.lat, lng: stop.lng,
+          area: stop.match_area || '',
+          customer_name: stop.customer_name || '',
+          truck_id: truck.truck_id,
+          seq: stop.seq,
+          shipping_address: stop.shipping_address || ''
+        });
+      }
+    });
+  });
+
+  if (!stops.length) {
+    window._verifyLock = false;
+    document.getElementById('verify-empty').style.display = '';
+    return;
+  }
+
+  const btn = document.getElementById('verify-run-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Verifying…';
+
+  // Show progress
+  const prog = document.getElementById('verify-progress');
+  const bar  = document.getElementById('verify-progress-bar');
+  const lbl  = document.getElementById('verify-progress-label');
+  prog.style.display = '';
+  bar.style.width = '0%';
+  lbl.textContent = '0 / '+stops.length+' stops — contacting OpenStreetMap…';
+
+  document.getElementById('verify-status').innerHTML =
+    `⏳ Verifying <b>${stops.length}</b> stops. Cached results are instant; new stops take ~1 second each. Please wait…`;
+
+  fetch('/api/verify-addresses', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({stops})
+  })
+  .then(r => r.json())
+  .then(data => {
+    bar.style.width = '100%';
+    lbl.textContent = stops.length+' / '+stops.length+' done';
+    renderVerifyResults(data.results, data.mismatches, data.total);
+    btn.disabled = false;
+    btn.textContent = '↻ Re-run';
+    window._verifyLock = false;
+  })
+  .catch(e => {
+    document.getElementById('verify-status').innerHTML =
+      '<span style="color:#e53935">❌ Error: '+e.message+'</span>';
+    btn.disabled = false;
+    btn.textContent = '▶ Run Verification';
+    window._verifyLock = false;
+  });
+}
+
+// Store last verify results for fixAllCoords()
+window._verifyResultsCache = [];
+
+function renderVerifyResults(results, mismatches, total) {
+  window._verifyResultsCache = results;   // cache for fixAllCoords
+
+  const ok = total - mismatches;
+  const noCoords = results.filter(r => r.note === 'no coordinates').length;
+  document.getElementById('verify-status').innerHTML =
+    `<b style="color:${mismatches>0?'#e53935':'#16a34a'}">${mismatches} mismatch${mismatches!==1?'es':''}</b> found &nbsp;·&nbsp; `+
+    `<span style="color:#16a34a">✅ ${ok} matched</span>`+
+    (noCoords ? ` &nbsp;·&nbsp; <span style="color:#94a3b8">⚠ ${noCoords} missing coords</span>` : '');
+
+  const tbody = document.getElementById('verify-tbody');
+  tbody.innerHTML = '';
+
+  // Sort: mismatches first, then matched, then no-coords
+  const sorted = [...results].sort((a,b) => {
+    const rank = r => r.match===false ? 0 : r.match===true ? 1 : 2;
+    return rank(a) - rank(b);
+  });
+
+  sorted.forEach(r => {
+    const key = r.truck_id+'|'+r.seq;
+    const isMismatch = r.match === false;
+    const isOk       = r.match === true;
+    const bg = isMismatch ? '#fff5f5' : isOk ? '#f0fdf4' : '#f8fafc';
+    const icon = isMismatch ? '<span style="color:#e53935">⚠ Mismatch</span>'
+               : isOk       ? '<span style="color:#16a34a">✅ OK</span>'
+               : '<span style="color:#94a3b8">— no coords</span>';
+
+    const geoDisplay = r.geocoded_city
+      ? r.geocoded_city + (r.geocoded_province ? ', '+r.geocoded_province : '')
+      : (r.note || '—');
+
+    // Customer name + shipping address (small)
+    const addrLine = r.shipping_address
+      ? `<br><span style="color:#64748b;font-size:.72rem" title="${r.shipping_address}">${r.shipping_address.length>40?r.shipping_address.slice(0,38)+'…':r.shipping_address}</span>`
+      : '';
+
+    const mapLink = (r.lat&&r.lng)
+      ? `<a href="https://www.google.com/maps?q=${r.lat},${r.lng}" target="_blank"
+           style="font-size:.7rem;color:#1976d2;text-decoration:none" title="Open in Google Maps">📍</a>`
+      : '';
+
+    // Last column: Fix Coords button for mismatches, area override for matches, dash otherwise
+    let actionHtml;
+    if (isMismatch) {
+      const safeAddr = (r.shipping_address||'').replace(/'/g,"\\'");
+      const safeName = (r.customer_name||'').replace(/'/g,"\\'");
+      const fixId = 'fx-'+r.truck_id.replace(/[^a-z0-9]/gi,'_')+'_'+r.seq;
+      actionHtml = r.shipping_address
+        ? `<button id="${fixId}" onclick="fixOneStop('${r.truck_id}',${r.seq},'${safeAddr}','${safeName}','${fixId}')"
+             style="background:#1976d2;color:#fff;border:none;padding:3px 10px;border-radius:5px;font-size:.73rem;cursor:pointer;font-weight:600">
+             📍 Fix</button>`
+        : `<span style="color:#94a3b8;font-size:.72rem">no address</span>`;
+    } else if (isOk) {
+      const overrideId = 'vo-'+r.truck_id.replace(/[^a-z0-9]/gi,'_')+'_'+r.seq;
+      actionHtml = `<input id="${overrideId}" type="text" placeholder="${r.geocoded_city||'type area'}"
+           style="width:90px;border:1px solid #cbd5e1;border-radius:4px;padding:2px 5px;font-size:.73rem"
+           oninput="_verifyOverrides['${key}']=this.value.trim()||'';
+                    document.getElementById('verify-apply-btn').style.display='';"/>`;
+    } else {
+      actionHtml = '—';
+    }
+
+    tbody.innerHTML += `<tr style="background:${bg};border-bottom:1px solid #e2e8f0">
+      <td style="padding:6px 8px;font-weight:700;color:#0d2748">${r.truck_id}</td>
+      <td style="padding:6px 8px">${r.seq}</td>
+      <td style="padding:6px 8px;max-width:190px;overflow:hidden;text-overflow:ellipsis" title="${r.customer_name||''}">
+        ${r.customer_name||'—'} ${mapLink}${addrLine}</td>
+      <td style="padding:6px 8px;font-weight:600">${r.area||'—'}
+        ${r.stated_clean&&r.stated_clean!==r.area?'<br><span style="color:#94a3b8;font-size:.7rem">→ '+r.stated_clean+'</span>':''}</td>
+      <td style="padding:6px 8px;color:#334155">${geoDisplay}</td>
+      <td style="padding:6px 8px">${icon}</td>
+      <td style="padding:6px 8px">${actionHtml}</td>
+    </tr>`;
+  });
+
+  document.getElementById('verify-table').style.display = '';
+  if (mismatches > 0) {
+    document.getElementById('verify-fix-btn').style.display = '';
+  }
+}
+
+function applyVerifyOverrides() {
+  let count = 0;
+  Object.entries(_verifyOverrides).forEach(([key, newArea]) => {
+    if (!newArea) return;
+    const [truckId, seqStr] = key.split('|');
+    const seq = parseInt(seqStr);
+    const ti = currentPlan.findIndex(t => t.truck_id === truckId);
+    if (ti < 0) return;
+    const si = currentPlan[ti].stops.findIndex(s => s.seq === seq);
+    if (si < 0) return;
+    currentPlan[ti].stops[si].match_area = newArea.toUpperCase();
+    count++;
+  });
+  if (count) {
+    autosave();
+    showToast(count+' area override(s) applied to plan','success');
+    closeOverlay('verify-overlay');
+    renderPlan();
+  } else {
+    showToast('No overrides entered — type an area in the Override column first','info');
+  }
+}
+
+/* ── Coordinate fixing from shipping address ──────────────────────────── */
+
+function fixOneStop(truckId, seq, shippingAddress, customerName, btnId) {
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+
+  fetch('/api/fix-coordinates', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({stops: [{truck_id: truckId, seq, shipping_address: shippingAddress, customer_name: customerName}]})
+  })
+  .then(r => r.json())
+  .then(data => {
+    const res = data.results && data.results[0];
+    if (!res || !res.new_lat || !res.new_lng) {
+      if (btn) { btn.disabled = false; btn.textContent = '📍 Fix'; }
+      showToast('Could not find coordinates for: '+shippingAddress,'info');
+      return;
+    }
+    // Apply to currentPlan
+    const ti = currentPlan.findIndex(t => t.truck_id === truckId);
+    if (ti >= 0) {
+      const si = currentPlan[ti].stops.findIndex(s => s.seq === seq);
+      if (si >= 0) {
+        currentPlan[ti].stops[si].lat = res.new_lat;
+        currentPlan[ti].stops[si].lng = res.new_lng;
+      }
+    }
+    autosave();
+    renderMap();
+    if (btn) {
+      btn.textContent = '✅ Fixed';
+      btn.style.background = '#16a34a';
+      btn.disabled = true;
+    }
+    showToast('Coordinates updated for '+customerName,'success');
+  })
+  .catch(e => {
+    if (btn) { btn.disabled = false; btn.textContent = '📍 Fix'; }
+    showToast('Fix error: '+e.message,'info');
+  });
+}
+
+function fixAllCoords() {
+  // Collect all mismatch stops that have a shipping address
+  const mismatches = (window._verifyResultsCache || []).filter(r =>
+    r.match === false && r.shipping_address
+  );
+
+  if (!mismatches.length) {
+    showToast('No mismatch stops with a shipping address to fix','info');
+    return;
+  }
+
+  const fixBtn = document.getElementById('verify-fix-btn');
+  if (fixBtn) { fixBtn.disabled = true; fixBtn.textContent = '⏳ Fixing…'; }
+
+  const payload = mismatches.map(r => ({
+    truck_id: r.truck_id,
+    seq:      r.seq,
+    shipping_address: r.shipping_address,
+    customer_name:    r.customer_name || ''
+  }));
+
+  fetch('/api/fix-coordinates', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({stops: payload})
+  })
+  .then(r => r.json())
+  .then(data => {
+    let fixed = 0;
+    (data.results || []).forEach(res => {
+      if (!res.new_lat || !res.new_lng) return;
+      const ti = currentPlan.findIndex(t => t.truck_id === res.truck_id);
+      if (ti < 0) return;
+      const si = currentPlan[ti].stops.findIndex(s => s.seq === res.seq);
+      if (si < 0) return;
+      currentPlan[ti].stops[si].lat = res.new_lat;
+      currentPlan[ti].stops[si].lng = res.new_lng;
+      fixed++;
+
+      // Update that row's Fix button to show ✅
+      const fixId = 'fx-'+res.truck_id.replace(/[^a-z0-9]/gi,'_')+'_'+res.seq;
+      const btn = document.getElementById(fixId);
+      if (btn) { btn.textContent='✅ Fixed'; btn.style.background='#16a34a'; btn.disabled=true; }
+    });
+
+    if (fixed) {
+      autosave();
+      renderMap();
+    }
+
+    if (fixBtn) {
+      fixBtn.disabled = false;
+      fixBtn.textContent = '📍 Fix All Mismatches from Address';
+    }
+    showToast(fixed+' stop'+(fixed!==1?'s':'')+' had coordinates corrected from shipping address','success');
+  })
+  .catch(e => {
+    if (fixBtn) { fixBtn.disabled = false; fixBtn.textContent = '📍 Fix All Mismatches from Address'; }
+    showToast('Fix error: '+e.message,'info');
+  });
+}
+
+function exportCsv(){window.location.href='/api/export-csv?router='+encodeURIComponent(currentRouter);}
+function exportMonCsv(){
+  saveMonitoringTemp().then(()=>window.location.href='/api/export-monitoring-csv?router='+encodeURIComponent(currentRouter));
+}
+
+// ======================================================
+//  LEAFLET MAP
+// ======================================================
+function initMap(){
+  leafletMap=L.map('map').setView([14.55,121.00],11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap contributors',maxZoom:19}).addTo(leafletMap);
+}
+
+function buildWhPopupContent(code, d) {
+  const trucks = currentPlan.filter(t => t.pickup_wh === code || (t.all_whs||[]).includes(code));
+  if (!trucks.length) {
+    return `<div style="font-family:Segoe UI,sans-serif;min-width:200px">
+      <div style="background:${WH_GROUP_COLORS[d.group]||'#1e3a5f'};color:#fff;padding:7px 10px;margin:-10px -10px 10px;border-radius:4px 4px 0 0;font-weight:800">${code} — ${d.name}</div>
+      <span style="color:#64748b;font-size:.8rem">No trucks assigned to this warehouse today.</span>
+    </div>`;
+  }
+  const rows = trucks.map((t,i)=>{
+    const color = TRUCK_COLORS[currentPlan.indexOf(t) % TRUCK_COLORS.length];
+    const stops = t.stops.map(s=>`<div style="padding:2px 0;border-bottom:1px solid #f1f5f9;font-size:.72rem">
+      <b>${s.seq}.</b> ${s.customer_name} <span style="color:#94a3b8">${s.vol.toLocaleString()} kg</span>
+    </div>`).join('');
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <div style="background:${color};color:#fff;border-radius:4px;padding:2px 7px;font-weight:800;font-size:.78rem">${t.truck_id}</div>
+        <span style="font-size:.75rem;color:#475569">${t.truck_type} · ${t.acc_weight.toLocaleString()} kg · ${t.stops.length} drops</span>
+      </div>
+      <div style="max-height:120px;overflow-y:auto">${stops}</div>
+    </div>`;
+  }).join('<hr style="margin:8px 0;border:none;border-top:1px solid #e2e8f0">');
+  return `<div style="font-family:Segoe UI,sans-serif;min-width:250px;max-width:310px">
+    <div style="background:${WH_GROUP_COLORS[d.group]||'#1e3a5f'};color:#fff;padding:7px 10px;margin:-10px -10px 10px;border-radius:4px 4px 0 0;font-weight:800">
+      ${code} — ${d.name} <span style="font-weight:400;font-size:.78rem">(${trucks.length} truck${trucks.length>1?'s':''})</span>
+    </div>
+    ${rows}
+  </div>`;
+}
+
+
+function moveStop(ti, si, dir) {
+  const stops = currentPlan[ti].stops;
+  const ni = si + dir;
+  if (ni < 0 || ni >= stops.length) return;
+  [stops[si], stops[ni]] = [stops[ni], stops[si]];
+  stops.forEach((s,i) => s.seq = i+1);
+  autosave();
+  renderPlan();
+}
+
+function renderWarehouseMarkers(){
+  Object.values(whMarkers).forEach(m => { try { leafletMap.removeLayer(m); } catch(e){} });
+  whMarkers = {};
+  Object.entries(warehouseData).forEach(([code,d])=>{
+    if(!d.lat||!d.lng) return;
+    const color=WH_GROUP_COLORS[d.group]||'#888';
+    const icon=L.divIcon({
+      html:`<div style="width:26px;height:26px;background:${color};border:3px solid #fff;border-radius:50%;box-shadow:0 2px 7px rgba(0,0,0,.38);display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="color:#fff;font-size:.55rem;font-weight:800;line-height:1">${code.slice(0,2)}</span></div>`,
+      className:'', iconSize:[26,26], iconAnchor:[13,13]
+    });
+    const m = L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
+    m._whCode = code;
+    m.bindPopup(()=>buildWhPopupContent(code,d),{maxWidth:360});
+    m.on('click', ()=>isolateWarehouse(code));
+    whMarkers[code] = m;
+  });
+}
+
+function isolateWarehouse(code) {
+  if (isolatedWH === code) {
+    isolatedWH = null;
+    currentPlan.forEach((_,ti) => {
+      const card = document.getElementById('tc-'+ti); if (!card) return;
+      card.classList.remove('isolated','dimmed');
+    });
+    renderLegend();
+    showToast('Showing all warehouses','info');
+    return;
+  }
+  isolatedWH = code;
+  const myTrucks = currentPlan.filter(t =>
+    t.pickup_wh === code || (t.all_whs||[]).includes(code)
+  );
+  const firstTi = currentPlan.findIndex(t =>
+    t.pickup_wh === code || (t.all_whs||[]).includes(code)
+  );
+  currentPlan.forEach((t,ti) => {
+    const card = document.getElementById('tc-'+ti); if (!card) return;
+    const mine = t.pickup_wh === code || (t.all_whs||[]).includes(code);
+    card.classList.toggle('isolated', mine);
+    card.classList.toggle('dimmed', !mine);
+  });
+  if (firstTi >= 0) {
+    const card = document.getElementById('tc-'+firstTi);
+    if (card) card.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  renderLegend();
+  showToast(code+': '+myTrucks.length+' truck(s) isolated','success');
+}
+
+// ======================================================
+//  MAP RENDERING
+// ======================================================
+function renderMap() {
+  if (!leafletMap) return;
+  Object.values(mapLayers).forEach(lg => { try { leafletMap.removeLayer(lg); } catch(e){} });
+  mapLayers = {};
+  if (!currentPlan.length) { renderWarehouseMarkers(); return; }
+
+  currentPlan.forEach((truck, ti) => {
+    const color = TRUCK_COLORS[ti % TRUCK_COLORS.length];
+    const lg = L.layerGroup().addTo(leafletMap);
+    mapLayers[truck.truck_id] = lg;
+    const coords = [];
+
+    truck.stops.forEach((stop, si) => {
+      if (!stop.lat || !stop.lng) return;
+      const sameCount = truck.stops.filter((s,j) => j<si && s.lat===stop.lat && s.lng===stop.lng).length;
+      const r = sameCount * 0.00035;
+      const angle = (sameCount * 137.5) * Math.PI / 180;
+      const jLat = stop.lat + r * Math.cos(angle);
+      const jLng = stop.lng + r * Math.sin(angle);
+      coords.push([jLat, jLng]);
+
+      const icon = L.divIcon({
+        html: `<div style="background:${color};color:#fff;border:2.5px solid #fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;box-shadow:0 2px 5px rgba(0,0,0,.3);cursor:pointer">${stop.seq}</div>`,
+        className:'', iconSize:[22,22], iconAnchor:[11,11]
+      });
+      const isXfer = stop.is_stock_transfer
+        ? '<span style="font-size:.65rem;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;font-weight:700;margin-left:4px">XFER</span>' : '';
+      const m = L.marker([jLat,jLng],{icon}).addTo(lg);
+      m._truckId = truck.truck_id; m._seq = stop.seq;
+      const mapsLink = (stop.lat && stop.lng)
+        ? `<a href="https://maps.google.com/?q=${stop.lat},${stop.lng}" target="_blank"
+             style="font-size:.72rem;color:#1976d2;text-decoration:none">📍 Open in Maps</a>` : '';
+      m.bindPopup(`<div style="font-family:Segoe UI,sans-serif;min-width:210px">
+        <div style="background:${color};color:#fff;padding:5px 8px;margin:-10px -10px 8px;border-radius:4px 4px 0 0;font-weight:700;font-size:.82rem">
+          ${truck.truck_id} &middot; Stop #${stop.seq}${isXfer}
+        </div>
+        <b style="font-size:.88rem">${stop.customer_name}</b><br>
+        <span style="font-size:.76rem;color:#475569">${stop.shipping_address||stop.match_area||''}</span><br>
+        <div style="margin-top:5px;font-size:.76rem">
+          <span style="background:#f1f5f9;border-radius:4px;padding:2px 5px;margin-right:2px">${(stop.vol||0).toLocaleString()} kg</span>
+          <span style="background:#f1f5f9;border-radius:4px;padding:2px 5px;margin-right:2px">${stop.wh||''}</span>
+          <span style="background:#f1f5f9;border-radius:4px;padding:2px 5px">${stop.match_area||stop.area||''}</span>
+        </div>
+        <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+          ${mapsLink}
+          <button onclick="highlightTruckFromMap('${truck.truck_id}')"
+            style="font-size:.72rem;border:1px solid ${color};color:${color};background:#fff;
+                   border-radius:4px;padding:2px 8px;cursor:pointer;font-family:inherit">
+            &#x2192; Show in Plan
+          </button>
+        </div>
+      </div>`,{maxWidth:300});
+      m.on('click', () => setTimeout(() => highlightTruckFromMap('${truck.truck_id}'), 50));
+    });
+
+    if (coords.length > 1)
+      L.polyline(coords,{color,weight:2.5,opacity:0.6,dashArray:'5,4'}).addTo(lg);
+  });
+
+  renderWarehouseMarkers();
+  applyIsolation();
+}
+
+function hoverMarker(truckId,seq){
+  const lg=mapLayers[truckId]; if(!lg) return;
+  lg.eachLayer(l=>{if(l._truckId===truckId&&l._seq===seq)l.openPopup();});
+}
+
+function highlightTruckFromMap(truckId) {
+  // Close any open popups
+  if (window.planMap) window.planMap.closePopup();
+
+  // Find the truck card and scroll to it
+  const allCards = document.querySelectorAll('.truck-card');
+  let targetCard = null;
+  allCards.forEach(card => {
+    const idEl = card.querySelector('.truck-id');
+    if (idEl && idEl.textContent.trim() === truckId) targetCard = card;
+  });
+  if (!targetCard) return;
+
+  // Scroll left panel to the card
+  const panel = document.getElementById('plan-panel') || document.getElementById('plan-cards');
+  if (panel) panel.scrollTo({ top: targetCard.offsetTop - 10, behavior: 'smooth' });
+  else targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Flash highlight
+  targetCard.style.transition = 'outline 0.1s';
+  targetCard.style.outline = '3px solid var(--orange)';
+  targetCard.style.boxShadow = '0 0 0 4px rgba(249,115,22,.25)';
+  setTimeout(() => {
+    targetCard.style.outline = '';
+    targetCard.style.boxShadow = '';
+  }, 2200);
+
+  // Also expand the truck card if collapsed
+  const body = targetCard.querySelector('.truck-body');
+  if (body && body.style.display === 'none') {
+    const ti = [...document.querySelectorAll('.truck-card')].indexOf(targetCard);
+    toggleTruck(ti);
+  }
+}
+
+function toggleMap(){
+  mapExpanded=!mapExpanded;
+  document.getElementById('plan-layout').style.gridTemplateColumns=mapExpanded?'300px 1fr':'';
+  document.getElementById('map-toggle-btn').textContent=mapExpanded?'&#x2B05; Reset Map':'&#x26F6; Expand Map';
+  setTimeout(()=>leafletMap&&leafletMap.invalidateSize(),180);
+}
+
+// ======================================================
+//  PERFORMANCE TAB
+// ======================================================
+function refreshPerf(){
+  fetch('/api/get-plan?router='+encodeURIComponent(currentRouter))
+    .then(r=>r.json()).then(d=>{
+      if(d.success&&d.trucks.length){ currentPlan=d.trucks; }
+      renderPerf();
+      updatePlanKPIs();
+    }).catch(e=>showToast('Refresh failed: '+e.message,'error'));
+}
+
+function renderPerf(){
+  if(!currentPlan.length){
+    document.getElementById('perf-tbody').innerHTML='<tr><td colspan="15" style="text-align:center;padding:40px;color:var(--muted)">No plan loaded</td></tr>';
+    return;
+  }
+  const totalVol=currentPlan.reduce((a,t)=>a+t.acc_weight,0);
+  const totalCap=currentPlan.reduce((a,t)=>a+(t.rated_cap||t.truck_cap||0),0);
+  const avgUtil=currentPlan.reduce((a,t)=>a+t.util_pct,0)/currentPlan.length*100;
+  const above80=currentPlan.filter(t=>t.util_pct>=.8).length;
+  const totalKm=currentPlan.reduce((a,t)=>a+(t.total_km||0),0);
+  const totalCost=currentPlan.reduce((a,t)=>a+(parseFloat(t.truck_rate)||0),0);
+
+  document.getElementById('perf-kpi-strip').innerHTML=`
+    <div class="kpi blue"><div class="kpi-label">Total Trucks</div><div class="kpi-value blue">${currentPlan.length}</div></div>
+    <div class="kpi orange"><div class="kpi-label">Total Load (KG)</div><div class="kpi-value orange">${totalVol.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+    <div class="kpi"><div class="kpi-label">Total Rated Cap</div><div class="kpi-value">${totalCap.toLocaleString()}</div></div>
+    <div class="kpi green"><div class="kpi-label">Fleet Avg Util</div><div class="kpi-value green">${avgUtil.toFixed(1)}%</div></div>
+    <div class="kpi"><div class="kpi-label">Trucks &ge;80%</div><div class="kpi-value">${above80}/${currentPlan.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Fleet Total KM</div><div class="kpi-value">&#x1F6E3; ${totalKm.toFixed(1)}</div></div>
+    ${totalCost>0?`<div class="kpi"><div class="kpi-label">Total Trip Cost</div><div class="kpi-value">&#x20B1;${Math.round(totalCost).toLocaleString()}</div></div>`:''}`;
+
+  document.getElementById('perf-tbody').innerHTML=currentPlan.map((truck,ti)=>{
+    const color=TRUCK_COLORS[ti%TRUCK_COLORS.length];
+    const util=Math.round(truck.util_pct*100);
+    const bc=util>=80?'#43a047':util>=60?'#f9a825':'#e53935';
+    const clusters=[...new Set(truck.stops.map(s=>s.cluster_id))].join(', ');
+    const whList=(truck.all_whs||[truck.pickup_wh]).join(', ');
+    const rateStr=truck.truck_rate!=null&&parseFloat(truck.truck_rate)>0?'&#x20B1;'+Number(truck.truck_rate).toLocaleString():'<span style="color:var(--muted)">--</span>';
+    const cpkStr=truck.truck_cpk!=null&&parseFloat(truck.truck_cpk)>0?Number(truck.truck_cpk).toFixed(2):'<span style="color:var(--muted)">--</span>';
+    return `<tr>
+      <td><span style="display:flex;align-items:center;gap:5px"><span style="background:${color};width:9px;height:9px;border-radius:50%;display:inline-block"></span><b>${truck.truck_id}</b></span></td>
+      <td><b style="color:var(--navy)">${truck.truck_type}</b></td>
+      <td><span class="truck-wh-chip">${whList}</span></td>
+      <td style="text-align:center;font-weight:700">${truck.stops.length}</td>
+      <td style="text-align:right">${(truck.rated_cap||truck.truck_cap||0).toLocaleString()}</td>
+      <td style="text-align:right;font-weight:700;color:var(--navy)">${truck.acc_weight.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td style="text-align:right;font-weight:800;color:${bc}">${util}%</td>
+      <td><div class="util-cell-bar"><div class="util-cell-fill" style="width:${Math.min(util,100)}%;background:${bc}"></div></div></td>
+      <td>${truck.trucker_code||'<span style="color:var(--muted)">--</span>'}</td>
+      <td>${truck.ref_number||'<span style="color:var(--muted)">--</span>'}</td>
+      <td style="text-align:right">${truck.total_km?truck.total_km.toFixed(1)+' km':'--'}</td>
+      <td style="text-align:right;font-weight:700">${rateStr}</td>
+      <td style="text-align:right">${cpkStr}</td>
+      <td style="font-size:.71rem;color:var(--muted)">${truck.rate_area||'--'}</td>
+      <td style="font-size:.7rem;color:var(--muted)">${clusters}</td>
+    </tr>`;
+  }).join('');
+}
+
+function loadAndShowCosts(){
+  fetch('/api/plan-cost?router='+encodeURIComponent(currentRouter))
+    .then(r=>r.json()).then(d=>{
+      (d.costs||[]).forEach(c=>{
+        const ti=currentPlan.findIndex(t=>t.truck_id===c.truck_id);
+        if(ti>=0){
+          if(!currentPlan[ti]._rate_manual) currentPlan[ti].truck_rate=c.rate;
+          if(!currentPlan[ti]._area_manual) currentPlan[ti].rate_area=c.primary_area;
+          if(!currentPlan[ti]._cpk_manual){
+            const _rc2=currentPlan[ti].rated_cap||currentPlan[ti].truck_cap||0;
+            const rate=parseFloat(c.rate)||0;
+            currentPlan[ti].truck_cpk=_rc2>0?round2(rate/_rc2):0;
+          }
+        }
+      });
+      autosave(); renderPerf();
+      showToast('Rates loaded for '+(d.costs||[]).length+' truck(s)','success');
+    }).catch(e=>showToast('Cost load failed: '+e.message,'error'));
+}
+
+// ======================================================
+//  MAP LEGEND
+// ======================================================
+function renderLegend(){
+  if(!currentPlan.length){document.getElementById('map-legend').style.display='none';return;}
+  document.getElementById('map-legend').style.display='';
+  document.getElementById('legend-items').innerHTML=currentPlan.map((t,ti)=>{
+    const color=TRUCK_COLORS[ti%TRUCK_COLORS.length];
+    const isIso=isolatedTrucks.has(t.truck_id);
+    return `<div class="legend-item${isIso?' iso-active':''}" data-truck-id="${t.truck_id}"
+      onclick="toggleIsolation('${t.truck_id}')"
+      title="Click to add/remove from map filter"
+      style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;
+             background:${isIso?color+'18':'transparent'};border:1px solid ${isIso?color:'transparent'}">
+      <span class="legend-check">${isIso?'&#x2713;':''}</span>
+      <span style="background:${color};width:9px;height:9px;border-radius:50%;flex-shrink:0"></span>
+      <span style="font-size:.72rem;font-weight:${isIso?700:500};color:${isIso?color:'#334155'};flex:1">${t.truck_id}</span>
+      <span style="font-size:.63rem;color:#94a3b8">${t.stops.length}d</span>
+    </div>`;
+  }).join('');
+  // Update selected count badge
+  const selCount=document.getElementById('legend-sel-count');
+  if(selCount){ if(isolatedTrucks.size>0){selCount.textContent=isolatedTrucks.size+' selected';selCount.style.display='';}else{selCount.style.display='none';} }
+}
+
+// ======================================================
+//  MONITORING
+// ======================================================
+let monData = [];
+
+function goMonitoring() {
+  if (!currentPlan.length) { showToast('Generate a route plan first','error'); return; }
+  // Build monData FIRST so startLiveMonitoring skips the immediate loadMonitoring()
+  const today = new Date().toISOString().slice(0,10);
+  const dateEl = document.getElementById('mon-date');
+  if(dateEl){ dateEl.textContent=today; dateEl.dataset.isodate=today; }
+  monData = [];
+  currentPlan.forEach(truck => {
+    truck.stops.forEach(stop => {
+      monData.push({
+        truck_id:         truck.truck_id,
+        truck_type:       truck.truck_type,
+        seq:              stop.seq,
+        customer_name:    stop.customer_name,
+        cluster_id:       stop.cluster_id||'',
+        area:             stop.match_area||stop.area||'',
+        wh:               stop.wh||'',
+        vol:              stop.vol||0,
+        plan_date:        today,
+        sched_time:       '',
+        status:           'PENDING',
+        actual_time:      '',
+        otif_status:      '',
+        concerns:         '',
+        remarks:          '',
+        is_stock_transfer:stop.is_stock_transfer||false,
+        doc_number:       stop.doc_number||'',
+        shipping_address: stop.shipping_address||'',
+      });
+    });
+  });
+  // monData is now populated - navigate (startLiveMonitoring will skip loadMonitoring)
+  showPage('monitoring', null);
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    if(b.textContent.includes('Monitoring')) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  renderMonitoring();
+  saveMonitoringTemp();
+}
+
+function renderMonitoring() {
+  const tbody = document.getElementById('mon-tbody');
+  const empty = document.getElementById('mon-empty');
+  if (!monData.length) {
+    if(tbody) tbody.innerHTML='<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--muted)">No monitoring data. Generate a route plan then click "Generate Monitoring".</td></tr>';
+    if(empty) empty.style.display='none';
+    return;
+  }
+  if(empty) empty.style.display='none';
+
+  const done     = monData.filter(r=>r.status==='DONE').length;
+  const otif     = monData.filter(r=>r.otif_status&&r.otif_status.includes('OTIF')).length;
+  const concerns = monData.filter(r=>r.concerns&&r.concerns.trim()).length;
+  const el = id => document.getElementById(id);
+  if(el('mon-total'))    el('mon-total').textContent    = monData.length;
+  if(el('mon-prog'))     el('mon-prog').textContent     = done+'/'+monData.length;
+  if(el('mon-otif'))     el('mon-otif').textContent     = monData.length?Math.round(otif/monData.length*100)+'%':'--';
+  if(el('mon-concerns')) el('mon-concerns').textContent = concerns||'0';
+
+  const STATUS_OPTS   = ['PENDING','IN-TRANSIT','DONE','FAILED','RESCHEDULED'];
+  const OTIF_OPTS     = ['','OTIF','NOT OTIF - Late','NOT OTIF - Short','NOT OTIF - Refused'];
+  const CONCERNS_OPTS = ['','Refused Delivery','Closed','Wrong Address','No One To Receive','Delayed Traffic','Vehicle Breakdown','Other'];
+
+  if(tbody) tbody.innerHTML = monData.map((r,i) => {
+    const truckIdx = currentPlan.findIndex(t=>t.truck_id===r.truck_id);
+    const truckColor = TRUCK_COLORS[(truckIdx>=0?truckIdx:0) % TRUCK_COLORS.length] || '#888888';
+    const doneFrac = monData.filter(x=>x.truck_id===r.truck_id&&x.status==='DONE').length;
+    const totalFrac= monData.filter(x=>x.truck_id===r.truck_id).length;
+    const statusClass = r.status==='DONE'?'done':r.status==='IN-TRANSIT'?'transit':'pending';
+    const schedVal = r.receiving_time||r.sched_time||'06:00 PM';
+    const concernOpts = CONCERN_OPTIONS.map(o=>`<option value="${o}"${(r.concerns||'NONE')===o?'selected':''}>${o}</option>`).join('');
+    const statusOpts = STATUS_OPTS.map(o=>`<option value="${o}"${r.status===o?'selected':''}>${o}</option>`).join('');
+    const otifOpts   = OTIF_OPTS.map(o=>`<option value="${o}"${r.otif_status===o?'selected':''}>${o}</option>`).join('');
+    const xferBadge  = r.is_stock_transfer?'<span style="font-size:.58rem;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;font-weight:700">XFER</span>':'';
+    return `<tr data-mon-idx="${i}" style="border-left:3px solid ${truckColor}">
+      <td><span style="background:${truckColor};color:#fff;border-radius:4px;padding:2px 7px;font-weight:700;font-size:.7rem">${r.truck_id}</span></td>
+      <td style="text-align:center;font-weight:700">${r.seq}</td>
+      <td style="text-align:center;font-size:.68rem;color:var(--muted)">${doneFrac}/${totalFrac}</td>
+      <td style="font-weight:600;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.customer_name}">${r.customer_name}${xferBadge}</td>
+      <td style="font-size:.68rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${r.shipping_address||''}">${r.shipping_address||'—'}</td>
+      <td style="font-size:.7rem">${r.cluster_id||''}</td>
+      <td><input type="text" value="${schedVal}" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;font-family:inherit"
+           onchange="monData[${i}].receiving_time=this.value;monData[${i}].sched_time=this.value;saveMonitoringTemp()"></td>
+      <td><select class="mon-status-badge ${statusClass}" onchange="monData[${i}].status=this.value;renderMonitoring();saveMonitoringTemp()"
+           style="border:none;border-radius:4px;padding:2px 5px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">${statusOpts}</select></td>
+      <td><input type="time" value="${r.actual_time||''}" style="width:82px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;font-family:inherit"
+           onchange="monData[${i}].actual_time=this.value;saveMonitoringTemp()"></td>
+      <td><select onchange="monData[${i}].otif_status=this.value;renderMonitoring();saveMonitoringTemp()"
+           style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%">
+        ${otifOpts}
+      </select></td>
+      <td><select onchange="monData[${i}].concerns=this.value;renderMonitoring();saveMonitoringTemp()"
+           style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%">
+        ${concernOpts}
+      </select></td>
+      <td><input type="text" value="${r.remarks||''}" placeholder="Notes…"
+           style="width:100%;border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-size:.72rem;font-family:inherit;box-sizing:border-box"
+           onchange="monData[${i}].remarks=this.value;saveMonitoringTemp()"/></td>
+    </tr>`;
+  }).join('');
+}
+
+function saveMonitoringTemp() {
+  if (!monData.length) return Promise.resolve({});
+  return fetch('/api/update-monitoring?router='+encodeURIComponent(currentRouter), {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({monitoring: monData})
+  }).then(r=>r.json()).catch(()=>({}));
+}
+
+function saveMonitoringAll() {
+  if (!monData.length) { showToast('No monitoring data to save','error'); return; }
+  saveMonitoringTemp().then(() => {
+    const today = document.getElementById('mon-date')?.dataset?.isodate || new Date().toISOString().slice(0,10);
+    return fetch('/api/save-monitoring-db?router='+encodeURIComponent(currentRouter), {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({plan_date: today, monitoring: monData})
+    });
+  }).then(r=>r.json()).then(d=>{
+    showToast(d.message||'Monitoring saved to database','success');
+  }).catch(e=>showToast('Save error: '+e.message,'error'));
+}
+
+function loadMonitoring() {
+  fetch('/api/monitoring?router='+encodeURIComponent(currentRouter))
+    .then(r=>r.json()).then(d=>{
+      if (d.monitoring && d.monitoring.length) {
+        monData = d.monitoring;
+        if (d.plan_date) {
+          const el = document.getElementById('mon-date');
+          if (el) { el.textContent = d.plan_date; el.dataset.isodate = d.plan_date; }
+        }
+        renderMonitoring();
+      } else {
+        const tbody = document.getElementById('mon-tbody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--muted)">No monitoring records found for today.</td></tr>';
+      }
+    }).catch(e=>showToast('Load error: '+e.message,'error'));
+}
+
+function deleteMonitoringDb(planDate) {
+  if (!planDate) { showToast('No date specified','error'); return; }
+  if (!confirm('Delete all monitoring records for '+planDate+'?')) return;
+  fetch('/api/monitoring-db?plan_date='+encodeURIComponent(planDate), {method:'DELETE'})
+    .then(r=>r.json()).then(d=>{
+      showToast(d.message||'Records deleted','success');
+      monData = []; renderMonitoring();
+    }).catch(e=>showToast('Delete error: '+e.message,'error'));
+}
+
+// ======================================================
+//  HISTORY
+// ======================================================
+function loadHistory() {
+  fetch('/api/history')
+    .then(r=>r.json()).then(d=>{
+      const grid = document.getElementById('history-grid');
+      if (!d.plans||!d.plans.length) {
+        grid.innerHTML='<div class="empty-state"><div class="icon">&#x1F4C2;</div><h3>No saved plans yet</h3><p>Save a route plan to see it here.</p></div>';
+        return;
+      }
+
+      // Group plans by date
+      const byDate = {};
+      d.plans.forEach(p => {
+        const dt = p.date || 'Unknown Date';
+        if (!byDate[dt]) byDate[dt] = [];
+        byDate[dt].push(p);
+      });
+
+      grid.innerHTML = Object.entries(byDate).map(([date, plans]) => {
+        // Date label — format nicely if it's ISO
+        let dateLabel = date;
+        try {
+          const d2 = new Date(date + 'T00:00:00');
+          dateLabel = d2.toLocaleDateString('en-PH', {weekday:'short', year:'numeric', month:'short', day:'numeric'});
+        } catch(e) {}
+
+        const rows = plans.map(p => {
+          const s = p.summary || {};
+          const time = p.created_at ? p.created_at.slice(11,16) : '--';
+          const trucks = s.truck_count || '--';
+          const drops  = s.total_drops || '--';
+          const vol    = s.total_volume ? Number(s.total_volume).toLocaleString(undefined,{maximumFractionDigits:0})+' kg' : '--';
+          const util   = s.avg_utilization ? s.avg_utilization+'%' : '--';
+          const by     = (p.created_by||'').replace(/-/g,' ') || '--';
+          const name   = p.name || 'Route Plan';
+
+          return `<div class="hist-plan-row">
+            <div style="min-width:42px;text-align:center;font-size:.72rem;font-weight:700;color:var(--muted)">${time}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:.82rem;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+              <div style="font-size:.7rem;color:var(--muted)">by ${by}</div>
+            </div>
+            <div class="h-kpi" style="text-align:center"><div class="h-kpi-label">Trucks</div><div class="h-kpi-val">${trucks}</div></div>
+            <div class="h-kpi" style="text-align:center"><div class="h-kpi-label">Drops</div><div class="h-kpi-val">${drops}</div></div>
+            <div class="h-kpi" style="text-align:center;min-width:90px"><div class="h-kpi-label">Volume</div><div class="h-kpi-val" style="font-size:.8rem">${vol}</div></div>
+            <div class="h-kpi" style="text-align:center"><div class="h-kpi-label">Util</div><div class="h-kpi-val" style="color:${parseFloat(util)>=80?'#16a34a':'var(--navy)'}">${util}</div></div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="btn btn-sm btn-primary" style="font-size:.72rem;padding:4px 12px"
+                onclick="loadHistoryPlan(${p.id})">&#x25B6; Load</button>
+              <button class="btn btn-sm" style="border:1px solid #fca5a5;color:#e53935;background:#fff;font-size:.72rem;padding:4px 10px"
+                onclick="deleteHistoryPlan(${p.id})">&#x1F5D1;</button>
+            </div>
+          </div>`;
+        }).join('');
+
+        return `<div class="history-date-group">
+          <div class="hist-date-header">
+            <div class="hist-date-label">&#x1F4C5; ${dateLabel}</div>
+            <div style="font-size:.75rem;color:var(--muted)">${plans.length} plan${plans.length>1?'s':''}</div>
+          </div>
+          <div class="hist-plan-list">${rows}</div>
+        </div>`;
+      }).join('');
+    }).catch(e=>showToast('History load error: '+e.message,'error'));
+}
+
+function deleteHistoryPlan(id) {
+  if (!confirm('Delete this saved plan?')) return;
+  fetch('/api/history/'+id, {method:'DELETE'})
+    .then(r=>r.json()).then(d=>{ showToast(d.message||'Plan deleted','success'); loadHistory(); })
+    .catch(e=>showToast('Delete error: '+e.message,'error'));
+}
+
+function loadHistoryPlan(id) {
+  fetch('/api/history/'+id+'?router='+encodeURIComponent(currentRouter))
+    .then(r=>r.json()).then(d=>{
+      if (d.error) { showToast(d.error,'error'); return; }
+      currentPlan = d.trucks || [];
+      renderPlan();
+      showPage('plan', null);
+      document.querySelectorAll('.nav-btn').forEach(b=>{
+        if(b.textContent.includes('Route Plan')) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+      showToast('Plan loaded: '+( d.name||d.date||'saved plan'),'success');
+    })
+    .catch(e=>showToast('Load error: '+e.message,'error'));
+}
+
+// ======================================================
+//  ANALYTICS
+// ======================================================
+function loadAnalytics() {
+  fetch('/api/analytics?period='+encodeURIComponent(analyticsPeriod||'daily'))
+    .then(r=>r.json()).then(rows=>{
+      const tbody = document.getElementById('analytics-tbody');
+      if (!tbody) return;
+      if (!rows.length) {
+        tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">No data yet. Save route plans and persist monitoring to see analytics.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r=>{
+        const s = r.summary||{};
+        const rate = r.otif_rate||0;
+        const rateColor = rate>=95?'#43a047':rate>=80?'#f9a825':'#e53935';
+        return `<tr>
+          <td style="font-weight:700">${r.date}</td>
+          <td>${s.truck_count||'--'}</td>
+          <td>${s.total_drops||'--'}</td>
+          <td>${s.total_volume?Number(s.total_volume).toLocaleString()+' kg':'--'}</td>
+          <td>${s.avg_utilization?s.avg_utilization+'%':'--'}</td>
+          <td style="text-align:center">${r.total_stops||0}</td>
+          <td style="text-align:center">${r.otif_count||0} / ${r.total_stops||0}</td>
+          <td style="font-weight:700;color:${rateColor}">${rate}%</td>
+        </tr>`;
+      }).join('');
+    }).catch(e=>showToast('Analytics error: '+e.message,'error'));
+}
+
+// ======================================================
+//  GOOGLE SHEETS SYNC
+// ======================================================
+let _gsheetsMode = 'plan';
+
+function _refreshGSheetsAuthStatus() {
+  fetch('/api/google/status').then(r => r.json()).then(d => {
+    const banner        = document.getElementById('gsheets-auth-status');
+    const label         = document.getElementById('gsheets-auth-label');
+    const connectBtn    = document.getElementById('gsheets-connect-btn');
+    const disconnectBtn = document.getElementById('gsheets-disconnect-btn');
+    const pushBtn       = document.getElementById('gsheets-push-btn');
+    if (!banner) return;
+    if (d.authorized) {
+      banner.style.background = '#f0fdf4';
+      banner.style.border = '1px solid #86efac';
+      label.innerHTML = '&#x2705; Google Account connected';
+      if (connectBtn)    connectBtn.style.display    = 'none';
+      if (disconnectBtn) disconnectBtn.style.display = 'inline-flex';
+      if (pushBtn)       pushBtn.disabled = false;
+    } else {
+      banner.style.background = '#fef3c7';
+      banner.style.border = '1px solid #f59e0b';
+      label.innerHTML = d.creds_file_ok
+        ? '&#x26A0;&#xFE0F; Not connected. Click to sign in with your Google account.'
+        : '&#x26A0;&#xFE0F; google_credentials.json not found. See Setup Guide below.';
+      if (connectBtn)    connectBtn.style.display    = d.creds_file_ok ? 'inline-flex' : 'none';
+      if (disconnectBtn) disconnectBtn.style.display = 'none';
+      if (pushBtn)       pushBtn.disabled = !d.authorized;
+    }
+  }).catch(() => {});
+}
+
+function openGSheetsPanel(mode) {
+  _gsheetsMode = mode || 'plan';
+  const lbl = document.getElementById('gsheets-push-label');
+  if (lbl) lbl.textContent = mode === 'monitoring' ? 'Sync Monitoring' : 'Sync Route Plan';
+  const res = document.getElementById('gsheets-result');
+  if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+  fetch('/api/gsheets/config')
+    .then(r => r.json()).then(d => {
+      const inp = document.getElementById('gsheets-id-input');
+      if (inp && d.sheet_id) inp.value = d.sheet_id;
+    }).catch(() => {});
+  _refreshGSheetsAuthStatus();
+  showOverlay('gsheets-overlay');
+}
+
+function connectGoogleAccount() {
+  // Open OAuth flow in popup, poll until connected then refresh status
+  const popup = window.open('/api/google/auth', 'google_auth',
+    'width=600,height=700,scrollbars=yes,resizable=yes');
+  const poll = setInterval(function() {
+    if (popup && popup.closed) {
+      clearInterval(poll);
+      _refreshGSheetsAuthStatus();
+    }
+  }, 1000);
+}
+
+function disconnectGoogleAccount() {
+  if (!confirm('Disconnect Google account? You can reconnect anytime.')) return;
+  fetch('/api/google/disconnect', {method:'POST'})
+    .then(() => _refreshGSheetsAuthStatus()).catch(() => {});
+}
+
+function gsheetsSync() {
+  const sheetId = (document.getElementById('gsheets-id-input')?.value || '').trim();
+  if (!sheetId) { showToast('Enter your Google Sheet ID first', 'error'); return; }
+  const btn = document.getElementById('gsheets-push-btn');
+  const res = document.getElementById('gsheets-result');
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
+  if (res) res.style.display = 'none';
+
+  fetch('/api/gsheets/config', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({sheet_id: sheetId})
+  }).catch(() => {});
+
+  const today = new Date().toISOString().slice(0, 10);
+  const endpoint = _gsheetsMode === 'monitoring'
+    ? '/api/gsheets/push-monitoring'
+    : '/api/gsheets/push-plan';
+  const body = _gsheetsMode === 'monitoring'
+    ? {sheet_id: sheetId, router: currentRouter, records: monData}
+    : {sheet_id: sheetId, router: currentRouter, plan_date: today};
+
+  fetch(endpoint, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  }).then(r => r.json()).then(d => {
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#x1F4CA; <span id="gsheets-push-label">Sync</span>'; }
+    if (d.error) {
+      if (res) { res.style.display = 'block'; res.innerHTML = '<span style="color:#e53935">&#x26A0; ' + d.error + '</span>'; }
+      showToast('Sync failed: ' + d.error, 'error');
+    } else {
+      if (res) {
+        res.style.display = 'block';
+        res.innerHTML = '<span style="color:#16a34a">&#x2713; Synced ' + (d.rows_written || 0) +
+          ' rows. <a href="' + d.sheet_url + '" target="_blank" style="color:var(--blue)">Open Sheet &#x2197;</a></span>';
+      }
+      showToast('Synced to Google Sheets!', 'success');
+    }
+  }).catch(e => {
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#x1F4CA; <span id="gsheets-push-label">Sync</span>'; }
+    showToast('Network error: ' + e.message, 'error');
+  });
+}
+
+// =====
+</script>
+</body>
+</html>

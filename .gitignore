@@ -1,0 +1,35 @@
+# Windows launcher (not needed on server)
+PFC Launcher.pyw
+cloudflared.exe
+cloudflared.log
+*.bat
+*.pyw
+__pycache__/
+*.pyc
+
+# Local databases (managed by persistent disk on Render)
+*.db
+
+# Uploaded order files (managed by persistent disk on Render)
+uploads/
+
+# Local config / secrets
+.env
+gsheets_config.json
+*.json.bak
+
+# Build / dependency artifacts
+.deps_ok
+.firewall_ok
+install_log.txt
+test_write.txt
+venv/
+*.zip
+
+# Old deploy scripts (replaced by Render)
+deploy_setup.sh
+deploy_upload.sh
+
+# Docs / non-app files
+*.pdf
+*.docx
