@@ -497,6 +497,8 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
   <button class="nav-btn" onclick="showPage('history',this)">📁 Route History</button>
   <button class="nav-btn" onclick="showPage('mon-history',this)">🗂️ Mon. History</button>
   <button class="nav-btn" onclick="showPage('rates',this)">💰 Rate Master</button>
+  <button class="nav-btn" onclick="showPage('cold-chain',this)">🌡️ Cold Chain</button>
+  <button class="nav-btn" onclick="showPage('pod',this)">📋 POD</button>
   <button class="nav-btn" onclick="showPage('analytics',this)">📈 Analytics</button>
 </div>
 
@@ -792,7 +794,12 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
           <th style="min-width:175px">Client Name</th>
           <th style="min-width:200px">Client Address</th>
           <th>Cluster</th><th>Sched.</th><th>Status</th><th>Actual Done</th>
-          <th>OTIF</th><th style="min-width:145px">Concerns</th><th style="min-width:130px">Remarks</th>
+          <th>OTIF</th><th style="min-width:145px">Concerns</th>
+          <th style="min-width:120px;background:#064e3b;color:#d1fae5">🌡️ Cold Chain</th>
+          <th style="min-width:180px;background:#064e3b;color:#d1fae5">Issue Details</th>
+          <th style="min-width:120px;background:#1e1b4b;color:#e0e7ff">👷 Crew</th>
+          <th style="min-width:180px;background:#1e1b4b;color:#e0e7ff">Crew Details</th>
+          <th style="min-width:130px">Remarks</th>
         </tr>
       </thead>
       <tbody id="mon-tbody"></tbody>
@@ -884,6 +891,78 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
       <tbody id="rates-tbody">
         <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">
           Import a Rate Master Excel file to get started</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ COLD CHAIN ══════════════ -->
+<div class="page" id="page-cold-chain">
+  <div class="section-row">
+    <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">🌡️ Cold Chain Compliance</span>
+    <div class="btn-row" style="margin:0">
+      <select id="cc-date-filter" onchange="loadColdChain(this.value)"
+        style="padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit">
+        <option value="">Select date…</option>
+      </select>
+      <button class="btn btn-success btn-sm" onclick="saveColdChain()">💾 Save</button>
+      <button class="btn btn-outline btn-sm" onclick="loadColdChainDates()">🔄 Refresh</button>
+    </div>
+  </div>
+
+  <!-- KPI summary strip -->
+  <div class="kpi-strip" style="margin:10px 0">
+    <div class="kpi green"><div class="kpi-label">Compliance Rate</div><div class="kpi-value green" id="cc-kpi-rate">—</div></div>
+    <div class="kpi blue"><div class="kpi-label">Total Deliveries</div><div class="kpi-value blue" id="cc-kpi-total">—</div></div>
+    <div class="kpi"><div class="kpi-label">No Issues</div><div class="kpi-value" id="cc-kpi-ok">—</div></div>
+    <div class="kpi orange"><div class="kpi-label">With Issues</div><div class="kpi-value orange" id="cc-kpi-issues">—</div></div>
+  </div>
+
+  <!-- Historical compliance summary -->
+  <div id="cc-summary-wrap" style="margin-bottom:12px"></div>
+
+  <!-- Per-truck compliance table for selected date -->
+  <div id="cc-table-wrap">
+    <div class="empty-state"><div class="icon">🌡️</div><h3>Select a date to view cold chain records</h3></div>
+  </div>
+</div>
+
+<!-- ══════════════ POD RETURN COMPLIANCE ══════════════ -->
+<div class="page" id="page-pod">
+  <div class="section-row">
+    <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">📋 POD Return Compliance</span>
+    <div class="btn-row" style="margin:0">
+      <button class="btn btn-success btn-sm" onclick="addPodRow()">➕ Add DO</button>
+      <button class="btn btn-outline btn-sm" onclick="savePod()">💾 Save All</button>
+      <button class="btn btn-outline btn-sm" onclick="loadPod()">🔄 Refresh</button>
+    </div>
+  </div>
+
+  <!-- KPI strip -->
+  <div class="kpi-strip" style="margin:10px 0">
+    <div class="kpi green"><div class="kpi-label">Compliance Rate</div><div class="kpi-value green" id="pod-kpi-rate">—</div></div>
+    <div class="kpi blue"><div class="kpi-label">Total DOs</div><div class="kpi-value blue" id="pod-kpi-total">—</div></div>
+    <div class="kpi"><div class="kpi-label">On-Time (≤T+2)</div><div class="kpi-value" id="pod-kpi-ontime">—</div></div>
+    <div class="kpi orange"><div class="kpi-label">Late / Pending</div><div class="kpi-value orange" id="pod-kpi-late">—</div></div>
+  </div>
+
+  <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
+    <table style="width:100%;border-collapse:collapse;font-size:.78rem" id="pod-table">
+      <thead>
+        <tr style="background:var(--navy);color:#fff">
+          <th style="padding:8px 10px;text-align:left;min-width:120px">DO Number</th>
+          <th style="padding:8px 10px;text-align:left;min-width:180px">Client Name</th>
+          <th style="padding:8px 10px;text-align:left">Truck</th>
+          <th style="padding:8px 10px;text-align:left">Delivery Date</th>
+          <th style="padding:8px 10px;text-align:left">POD Return Date</th>
+          <th style="padding:8px 10px;text-align:center">Days Aging</th>
+          <th style="padding:8px 10px;text-align:center">Status</th>
+          <th style="padding:8px 10px;text-align:left;min-width:130px">Remarks</th>
+          <th style="padding:8px 10px;text-align:center">Action</th>
+        </tr>
+      </thead>
+      <tbody id="pod-tbody">
+        <tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted)">No POD records yet. Click ➕ Add DO to start.</td></tr>
       </tbody>
     </table>
   </div>
@@ -3979,6 +4058,28 @@ function renderMonitoring() {
            style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%">
         ${concernOpts}
       </select></td>
+      <td style="background:#f0fdf4">
+        <select onchange="monData[${i}].food_safety_issue=this.value;saveMonitoringTemp()"
+          style="border:1px solid #86efac;border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%;background:#fff">
+          ${['NONE','Temperature Issue','Packaging Issue','Product Damage','Contamination Risk','Other'].map(o=>`<option value="${o}"${(r.food_safety_issue||'NONE')===o?' selected':''}>${o}</option>`).join('')}
+        </select>
+      </td>
+      <td style="background:#f0fdf4">
+        <input type="text" value="${r.food_safety_detail||''}" placeholder="Details…"
+          style="width:100%;border:1px solid #86efac;border-radius:4px;padding:2px 5px;font-size:.72rem;font-family:inherit;box-sizing:border-box"
+          onchange="monData[${i}].food_safety_detail=this.value;saveMonitoringTemp()"/>
+      </td>
+      <td style="background:#f5f3ff">
+        <select onchange="monData[${i}].crew_issue=this.value;saveMonitoringTemp()"
+          style="border:1px solid #a5b4fc;border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%;background:#fff">
+          ${['NONE','SOP Violation','No Uniform','Behavior Issue','Absent/Late','Incomplete Docs','Other'].map(o=>`<option value="${o}"${(r.crew_issue||'NONE')===o?' selected':''}>${o}</option>`).join('')}
+        </select>
+      </td>
+      <td style="background:#f5f3ff">
+        <input type="text" value="${r.crew_detail||''}" placeholder="Details…"
+          style="width:100%;border:1px solid #a5b4fc;border-radius:4px;padding:2px 5px;font-size:.72rem;font-family:inherit;box-sizing:border-box"
+          onchange="monData[${i}].crew_detail=this.value;saveMonitoringTemp()"/>
+      </td>
       <td><input type="text" value="${r.remarks||''}" placeholder="Notes…"
            style="width:100%;border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-size:.72rem;font-family:inherit;box-sizing:border-box"
            onchange="monData[${i}].remarks=this.value;saveMonitoringTemp()"/></td>
@@ -4637,6 +4738,247 @@ function gsheetsSync() {
 }
 
 // =====
+</script>
+</body>
+</html>
+      });
+      showToast('Plan loaded from history','success');
+    }).catch(e=>showToast('Load error: '+e.message,'error'));
+}
+
+// ======================================================
+//  COLD CHAIN COMPLIANCE
+// ======================================================
+let ccData = [];  // cold chain records for current date
+
+function loadColdChainDates() {
+  fetch('/api/cold-chain')
+    .then(r=>r.json()).then(d=>{
+      const sel = document.getElementById('cc-date-filter');
+      if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">Select date…</option>' +
+        (d.dates||[]).map(dt=>`<option value="${dt}"${dt===prev?' selected':''}>${dt}</option>`).join('');
+      // Load summary
+      fetch('/api/cold-chain/summary').then(r=>r.json()).then(s=>{
+        const wrap = document.getElementById('cc-summary-wrap');
+        if (!wrap || !s.summary || !s.summary.length) return;
+        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);margin-bottom:6px;font-size:.85rem">📅 Historical Compliance</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">` +
+          s.summary.map(row=>{
+            const color = row.compliance_pct===100?'#dcfce7':row.compliance_pct>=80?'#fef9c3':'#fee2e2';
+            const tc = row.compliance_pct===100?'#166534':row.compliance_pct>=80?'#92400e':'#991b1b';
+            return `<div style="background:${color};border-radius:8px;padding:8px 14px;min-width:130px;cursor:pointer"
+                     onclick="document.getElementById('cc-date-filter').value='${row.date}';loadColdChain('${row.date}')">
+              <div style="font-weight:700;color:${tc};font-size:.82rem">${row.date}</div>
+              <div style="font-size:1.1rem;font-weight:800;color:${tc}">${row.compliance_pct}%</div>
+              <div style="font-size:.68rem;color:${tc}">${row.ok}/${row.total} OK · ${row.issues} issue${row.issues!==1?'s':''}</div>
+            </div>`;
+          }).join('') + '</div>';
+      });
+      if (prev) loadColdChain(prev);
+    });
+}
+
+function loadColdChain(date) {
+  if (!date) return;
+  const wrap = document.getElementById('cc-table-wrap');
+  if (wrap) wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Loading…</div>';
+  fetch('/api/cold-chain?date='+encodeURIComponent(date))
+    .then(r=>r.json()).then(d=>{
+      ccData = d.records || [];
+      // If no records yet, prefill from current plan's trucks
+      if (!ccData.length && currentPlan.length) {
+        ccData = currentPlan.map(t=>({
+          truck_id: t.truck_id, do_number:'', customer_name: t.stops.map(s=>s.customer_name).join(', ').slice(0,60),
+          has_issue:false, issue_details:'', plan_date: date,
+        }));
+      }
+      renderColdChain();
+    });
+}
+
+function renderColdChain() {
+  const wrap = document.getElementById('cc-table-wrap');
+  if (!wrap) return;
+  const total = ccData.length;
+  const issues = ccData.filter(r=>r.has_issue).length;
+  const ok = total - issues;
+  const pct = total ? Math.round(ok/total*100) : 100;
+  document.getElementById('cc-kpi-rate').textContent   = pct+'%';
+  document.getElementById('cc-kpi-total').textContent  = total;
+  document.getElementById('cc-kpi-ok').textContent     = ok;
+  document.getElementById('cc-kpi-issues').textContent = issues;
+  document.getElementById('cc-kpi-rate').style.color   = pct===100?'var(--green)':pct>=80?'#f9a825':'#e53935';
+
+  if (!total) {
+    wrap.innerHTML = '<div class="empty-state"><div class="icon">🌡️</div><h3>No trucks to log yet</h3><p>Generate a route plan first, then open Cold Chain to log compliance.</p></div>';
+    return;
+  }
+  wrap.innerHTML = `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+      <thead><tr style="background:var(--navy);color:#fff">
+        <th style="padding:8px 12px;text-align:left">Truck</th>
+        <th style="padding:8px 12px;text-align:left">DO #</th>
+        <th style="padding:8px 12px;text-align:left">Clients (Summary)</th>
+        <th style="padding:8px 12px;text-align:center">Temperature Issue?</th>
+        <th style="padding:8px 12px;text-align:left;min-width:200px">Issue Details</th>
+      </tr></thead>
+      <tbody>${ccData.map((r,i)=>{
+        const bg = r.has_issue?'#fff1f2':'#f0fdf4';
+        return `<tr style="border-bottom:1px solid #f1f5f9;background:${bg}">
+          <td style="padding:7px 12px;font-weight:700">${r.truck_id||''}</td>
+          <td style="padding:7px 12px"><input type="text" value="${r.do_number||''}" placeholder="DO #"
+            style="width:90px;border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.74rem;font-family:inherit"
+            onchange="ccData[${i}].do_number=this.value"></td>
+          <td style="padding:7px 12px;font-size:.72rem;color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${r.customer_name||''}">${r.customer_name||'—'}</td>
+          <td style="padding:7px 12px;text-align:center">
+            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="checkbox" ${r.has_issue?'checked':''} onchange="ccData[${i}].has_issue=this.checked;renderColdChain()">
+              <span style="font-size:.75rem;color:${r.has_issue?'#e53935':'#16a34a'}">${r.has_issue?'YES — Issue':'No Issue'}</span>
+            </label>
+          </td>
+          <td style="padding:7px 12px"><input type="text" value="${r.issue_details||''}" placeholder="${r.has_issue?'Describe issue…':'—'}"
+            ${r.has_issue?'':'disabled'}
+            style="width:100%;border:1px solid ${r.has_issue?'#fca5a5':'var(--border)'};border-radius:4px;padding:2px 6px;font-size:.74rem;font-family:inherit;background:${r.has_issue?'#fff':'#f9fafb'}"
+            onchange="ccData[${i}].issue_details=this.value"></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>
+    <div style="margin-top:10px;font-size:.75rem;color:var(--muted)">
+      ✅ <b>100%</b> = No temperature issues logged. Any issue logged = compliance drops. Save after logging.
+    </div>`;
+}
+
+function saveColdChain() {
+  const sel = document.getElementById('cc-date-filter');
+  const date = sel ? sel.value : currentDeliveryDate;
+  if (!date) { showToast('Select a date first','error'); return; }
+  fetch('/api/cold-chain', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({plan_date:date, records:ccData})
+  }).then(r=>r.json()).then(d=>{
+    if (d.success) { showToast('Cold chain records saved ✓','success'); loadColdChainDates(); }
+    else showToast(d.error||'Save failed','error');
+  });
+}
+
+// ======================================================
+//  POD RETURN COMPLIANCE
+// ======================================================
+let podData = [];
+
+function loadPod() {
+  fetch('/api/pod').then(r=>r.json()).then(d=>{
+    podData = d.records || [];
+    renderPod();
+  });
+}
+
+function addPodRow() {
+  podData.push({
+    id:null, do_number:'', customer_name:'', truck_id:'',
+    delivery_date: currentDeliveryDate, return_date:'', days_aging:null, status:'PENDING', remarks:''
+  });
+  renderPod();
+}
+
+function renderPod() {
+  const tbody = document.getElementById('pod-tbody');
+  if (!tbody) return;
+  const total    = podData.length;
+  const ontime   = podData.filter(r=>r.status==='ON-TIME').length;
+  const late     = podData.filter(r=>r.status==='LATE').length;
+  const pending  = podData.filter(r=>r.status==='PENDING').length;
+  const ratePct  = total ? Math.round(ontime/total*100) : 0;
+  document.getElementById('pod-kpi-rate').textContent   = total ? ratePct+'%' : '—';
+  document.getElementById('pod-kpi-total').textContent  = total || '—';
+  document.getElementById('pod-kpi-ontime').textContent = ontime || '—';
+  document.getElementById('pod-kpi-late').textContent   = (late+pending) || '—';
+  document.getElementById('pod-kpi-rate').style.color   = ratePct>=80?'var(--green)':ratePct>=50?'#f9a825':'#e53935';
+
+  if (!total) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted)">No POD records yet. Click ➕ Add DO to start.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = podData.map((r,i)=>{
+    const statusColor = r.status==='ON-TIME'?'#16a34a':r.status==='LATE'?'#e53935':'#6b7280';
+    const agingBg = r.days_aging===null?'':r.days_aging<=2?'#dcfce7':r.days_aging<=5?'#fef9c3':'#fee2e2';
+    return `<tr style="border-bottom:1px solid #f1f5f9">
+      <td style="padding:6px 8px"><input type="text" value="${r.do_number||''}" placeholder="DO #"
+        style="width:110px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
+        onchange="podData[${i}].do_number=this.value"></td>
+      <td style="padding:6px 8px"><input type="text" value="${r.customer_name||''}" placeholder="Client name"
+        style="width:160px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
+        onchange="podData[${i}].customer_name=this.value"></td>
+      <td style="padding:6px 8px"><input type="text" value="${r.truck_id||''}" placeholder="TRK-001"
+        style="width:70px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
+        onchange="podData[${i}].truck_id=this.value"></td>
+      <td style="padding:6px 8px"><input type="date" value="${r.delivery_date||''}"
+        style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
+        onchange="podData[${i}].delivery_date=this.value;updatePodAging(${i})"></td>
+      <td style="padding:6px 8px"><input type="date" value="${r.return_date||''}"
+        style="border:1px solid ${r.return_date?'#86efac':'var(--border)'};border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
+        onchange="podData[${i}].return_date=this.value;updatePodAging(${i})"></td>
+      <td style="padding:6px 8px;text-align:center;background:${agingBg};font-weight:700;font-size:.82rem">
+        ${r.days_aging!==null&&r.days_aging!==undefined?r.days_aging+' day'+(r.days_aging!==1?'s':''):'—'}
+      </td>
+      <td style="padding:6px 8px;text-align:center">
+        <span style="font-weight:700;font-size:.72rem;color:${statusColor}">${r.status||'PENDING'}</span>
+      </td>
+      <td style="padding:6px 8px"><input type="text" value="${r.remarks||''}" placeholder="Notes…"
+        style="width:120px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
+        onchange="podData[${i}].remarks=this.value"></td>
+      <td style="padding:6px 8px;text-align:center">
+        <button onclick="deletePodRow(${i})"
+          style="background:#fee2e2;border:none;color:#e53935;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.72rem">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function updatePodAging(i) {
+  const r = podData[i];
+  if (r.delivery_date && r.return_date) {
+    const d1 = new Date(r.delivery_date), d2 = new Date(r.return_date);
+    r.days_aging = Math.round((d2-d1)/(1000*60*60*24));
+    r.status = r.days_aging <= 2 ? 'ON-TIME' : 'LATE';
+  } else if (!r.return_date) {
+    r.days_aging = null;
+    r.status = 'PENDING';
+  }
+  renderPod();
+}
+
+function deletePodRow(i) {
+  const r = podData[i];
+  if (r.id) {
+    fetch('/api/pod/'+r.id, {method:'DELETE'}).then(()=>{ podData.splice(i,1); renderPod(); });
+  } else {
+    podData.splice(i,1); renderPod();
+  }
+}
+
+function savePod() {
+  if (!podData.length) { showToast('No POD records to save','error'); return; }
+  fetch('/api/pod', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({records: podData})
+  }).then(r=>r.json()).then(d=>{
+    if (d.success) { showToast('POD records saved ✓','success'); loadPod(); }
+    else showToast(d.error||'Save failed','error');
+  });
+}
+
+// Hook showPage to load Cold Chain / POD data on tab switch
+const _origShowPage = showPage;
+showPage = function(name, btn) {
+  _origShowPage(name, btn);
+  if (name === 'cold-chain') loadColdChainDates();
+  if (name === 'pod')        loadPod();
+};
+
 </script>
 </body>
 </html>

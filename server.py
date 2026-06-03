@@ -915,30 +915,64 @@ def init_db():
         concerns      TEXT,
         remarks       TEXT,
         trucker_code  TEXT,
-        shipping_address TEXT DEFAULT '',
+        shipping_address   TEXT DEFAULT '',
+        food_safety_issue  TEXT DEFAULT 'NONE',
+        food_safety_detail TEXT DEFAULT '',
+        crew_issue         TEXT DEFAULT 'NONE',
+        crew_detail        TEXT DEFAULT '',
         saved_at      TEXT DEFAULT (datetime('now','localtime'))
     )''')
     # Migrations: add any columns that may be missing in older DBs
     _mon_cols = [
-        ("plan_id",          "INTEGER"),
-        ("plan_date",        "TEXT"),
-        ("truck_type",       "TEXT"),
-        ("cluster_id",       "TEXT"),
-        ("area",             "TEXT"),
-        ("receiving_time",   "TEXT"),
-        ("actual_done",      "TEXT"),
-        ("otif_status",      "TEXT"),
-        ("concerns",         "TEXT"),
-        ("remarks",          "TEXT"),
-        ("trucker_code",     "TEXT"),
-        ("shipping_address", "TEXT DEFAULT ''"),
-        ("saved_at",         "TEXT DEFAULT (datetime('now','localtime'))"),
+        ("plan_id",           "INTEGER"),
+        ("plan_date",         "TEXT"),
+        ("truck_type",        "TEXT"),
+        ("cluster_id",        "TEXT"),
+        ("area",              "TEXT"),
+        ("receiving_time",    "TEXT"),
+        ("actual_done",       "TEXT"),
+        ("otif_status",       "TEXT"),
+        ("concerns",          "TEXT"),
+        ("remarks",           "TEXT"),
+        ("trucker_code",      "TEXT"),
+        ("shipping_address",  "TEXT DEFAULT ''"),
+        ("food_safety_issue", "TEXT DEFAULT 'NONE'"),
+        ("food_safety_detail","TEXT DEFAULT ''"),
+        ("crew_issue",        "TEXT DEFAULT 'NONE'"),
+        ("crew_detail",       "TEXT DEFAULT ''"),
+        ("saved_at",          "TEXT DEFAULT (datetime('now','localtime'))"),
     ]
     for col, coltype in _mon_cols:
         try:
             c.execute(f"ALTER TABLE monitoring_records ADD COLUMN {col} {coltype}")
         except Exception:
             pass  # column already exists
+
+    # Cold Chain compliance records
+    c.execute('''CREATE TABLE IF NOT EXISTS cold_chain_records (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_date     TEXT NOT NULL,
+        truck_id      TEXT NOT NULL,
+        do_number     TEXT DEFAULT '',
+        customer_name TEXT DEFAULT '',
+        has_issue     INTEGER DEFAULT 0,
+        issue_details TEXT DEFAULT '',
+        saved_at      TEXT DEFAULT (datetime('now','localtime'))
+    )''')
+
+    # POD return compliance records
+    c.execute('''CREATE TABLE IF NOT EXISTS pod_records (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        do_number     TEXT NOT NULL,
+        customer_name TEXT DEFAULT '',
+        truck_id      TEXT DEFAULT '',
+        delivery_date TEXT NOT NULL,
+        return_date   TEXT DEFAULT '',
+        days_aging    INTEGER DEFAULT NULL,
+        status        TEXT DEFAULT 'PENDING',
+        remarks       TEXT DEFAULT '',
+        saved_at      TEXT DEFAULT (datetime('now','localtime'))
+    )''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS geocode_cache (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1765,17 +1799,143 @@ def save_monitoring_db():
         c.execute('DELETE FROM monitoring_records WHERE plan_date=?',(plan_date,))
         saved = 0
         for row in monitoring:
-            c.execute('INSERT INTO monitoring_records (plan_id,plan_date,truck_id,truck_type,seq,customer_name,cluster_id,area,status,receiving_time,actual_done,otif_status,concerns,remarks,trucker_code,shipping_address) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            c.execute('''INSERT INTO monitoring_records
+                (plan_id,plan_date,truck_id,truck_type,seq,customer_name,cluster_id,area,
+                 status,receiving_time,actual_done,otif_status,concerns,remarks,trucker_code,
+                 shipping_address,food_safety_issue,food_safety_detail,crew_issue,crew_detail)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                       (plan_id,plan_date,row.get('truck_id'),row.get('truck_type'),row.get('seq'),
                        row.get('customer_name'),row.get('cluster_id'),row.get('area'),row.get('status'),
                        row.get('receiving_time'),row.get('actual_done'),row.get('otif_status'),
-                       row.get('concerns'),row.get('remarks'),row.get('trucker_code'),row.get('shipping_address','')))
+                       row.get('concerns'),row.get('remarks'),row.get('trucker_code'),
+                       row.get('shipping_address',''),
+                       row.get('food_safety_issue','NONE'), row.get('food_safety_detail',''),
+                       row.get('crew_issue','NONE'),        row.get('crew_detail','')))
             saved += 1
         conn.commit(); conn.close()
         return jsonify({'success': True, 'saved': saved})
     except Exception as e:
         import traceback
         return jsonify({'error': f'Monitoring DB save error: {str(e)}', 'trace': traceback.format_exc()}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+#  COLD CHAIN COMPLIANCE
+# ─────────────────────────────────────────────────────────────
+@app.route('/api/cold-chain', methods=['GET'])
+def get_cold_chain():
+    try:
+        date = request.args.get('date', '')
+        conn = open_db(); c = conn.cursor()
+        if date:
+            c.execute('SELECT * FROM cold_chain_records WHERE plan_date=? ORDER BY truck_id,id', (date,))
+        else:
+            c.execute('SELECT DISTINCT plan_date FROM cold_chain_records ORDER BY plan_date DESC')
+            dates = [r[0] for r in c.fetchall()]
+            conn.close()
+            return jsonify({'dates': dates})
+        cols = [d[0] for d in c.description]
+        rows = [dict(zip(cols, r)) for r in c.fetchall()]
+        conn.close()
+        return jsonify({'records': rows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cold-chain', methods=['POST'])
+def save_cold_chain():
+    try:
+        data = request.get_json() or {}
+        records = data.get('records', [])
+        plan_date = data.get('plan_date', datetime.now().strftime('%Y-%m-%d'))
+        conn = open_db(); c = conn.cursor()
+        c.execute('DELETE FROM cold_chain_records WHERE plan_date=?', (plan_date,))
+        for r in records:
+            c.execute('INSERT INTO cold_chain_records (plan_date,truck_id,do_number,customer_name,has_issue,issue_details) VALUES (?,?,?,?,?,?)',
+                      (plan_date, r.get('truck_id',''), r.get('do_number',''), r.get('customer_name',''),
+                       1 if r.get('has_issue') else 0, r.get('issue_details','')))
+        conn.commit(); conn.close()
+        return jsonify({'success': True, 'saved': len(records)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cold-chain/summary', methods=['GET'])
+def cold_chain_summary():
+    """Returns compliance % grouped by date."""
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('''SELECT plan_date,
+                            COUNT(*) as total,
+                            SUM(CASE WHEN has_issue=0 THEN 1 ELSE 0 END) as ok,
+                            SUM(CASE WHEN has_issue=1 THEN 1 ELSE 0 END) as issues
+                     FROM cold_chain_records GROUP BY plan_date ORDER BY plan_date DESC''')
+        rows = [{'date':r[0],'total':r[1],'ok':r[2],'issues':r[3],
+                 'compliance_pct': round(r[2]/r[1]*100,1) if r[1] else 100.0}
+                for r in c.fetchall()]
+        conn.close()
+        return jsonify({'summary': rows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+#  POD RETURN COMPLIANCE
+# ─────────────────────────────────────────────────────────────
+@app.route('/api/pod', methods=['GET'])
+def get_pod():
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('SELECT * FROM pod_records ORDER BY delivery_date DESC, id DESC')
+        cols = [d[0] for d in c.description]
+        rows = [dict(zip(cols, r)) for r in c.fetchall()]
+        conn.close()
+        return jsonify({'records': rows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pod', methods=['POST'])
+def save_pod():
+    try:
+        data = request.get_json() or {}
+        records = data.get('records', [])
+        conn = open_db(); c = conn.cursor()
+        saved = 0
+        for r in records:
+            # Calculate days aging if return date provided
+            days = None
+            if r.get('delivery_date') and r.get('return_date'):
+                try:
+                    d1 = datetime.strptime(r['delivery_date'], '%Y-%m-%d')
+                    d2 = datetime.strptime(r['return_date'],   '%Y-%m-%d')
+                    days = (d2 - d1).days
+                except Exception:
+                    pass
+            status = 'PENDING'
+            if r.get('return_date'):
+                status = 'ON-TIME' if (days is not None and days <= 2) else 'LATE'
+            if r.get('id'):
+                c.execute('''UPDATE pod_records SET return_date=?,days_aging=?,status=?,remarks=?,
+                             saved_at=datetime('now','localtime') WHERE id=?''',
+                          (r.get('return_date',''), days, status, r.get('remarks',''), r['id']))
+            else:
+                c.execute('''INSERT INTO pod_records (do_number,customer_name,truck_id,delivery_date,return_date,days_aging,status,remarks)
+                             VALUES (?,?,?,?,?,?,?,?)''',
+                          (r.get('do_number',''), r.get('customer_name',''), r.get('truck_id',''),
+                           r.get('delivery_date',''), r.get('return_date',''), days, status, r.get('remarks','')))
+            saved += 1
+        conn.commit(); conn.close()
+        return jsonify({'success': True, 'saved': saved})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/pod/<int:pod_id>', methods=['DELETE'])
+def delete_pod(pod_id):
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('DELETE FROM pod_records WHERE id=?', (pod_id,))
+        conn.commit(); conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/debug/db', methods=['GET'])
