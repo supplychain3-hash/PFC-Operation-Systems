@@ -167,20 +167,25 @@ SETTINGS = {
 }
 
 def select_truck_type(vol: float) -> dict:
-    """Smallest truck type that fits the given volume."""
+    """Smallest truck type that fits the given volume.
+    Routes ≤ 2000 kg always get 2T.
+    """
     if vol > 20000: return TRUCK_TYPES[5]
     if vol > 15000: return TRUCK_TYPES[4]
     if vol > 10000: return TRUCK_TYPES[3]
     if vol > 5000:  return TRUCK_TYPES[2]
-    if vol > SETTINGS['prefer_5mt_min_vol']: return TRUCK_TYPES[1]
-    return TRUCK_TYPES[0]
+    if vol > TRUCK_TYPES[0]['cap']: return TRUCK_TYPES[1]  # 2000–5000 kg → 2.5MT
+    return TRUCK_TYPES[0]  # ≤ 2000 kg → 2T
 
 def best_truck_type(vol: float, drops: int) -> dict:
     """Smallest truck type that fits both volume AND drop count.
     2T trucks are preferred for routes ≤2400 kg (120% utilization allowed).
+    If actual volume is under 2000 kg, always assign 2T regardless of drop count.
     """
+    two_ton_max = TRUCK_TYPES[0]['cap'] * SETTINGS['two_ton_max_util']  # 2400 kg
+    if vol <= TRUCK_TYPES[0]['cap']:  # vol ≤ 2000 kg → always 2T
+        return TRUCK_TYPES[0]
     for t in TRUCK_TYPES:
-        # 2T trucks get extended 120% utilization cap (2400 kg effective max)
         tol = SETTINGS['two_ton_max_util'] if t['label'] == '2T' else SETTINGS['cap_tolerance']
         if t['cap'] * tol >= vol and t['max_drops'] >= drops:
             return t
