@@ -794,10 +794,11 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
       <thead>
         <tr>
           <th>Truck</th><th>Seq</th><th>Progress</th>
-          <th style="min-width:175px">Client Name</th>
-          <th style="min-width:200px">Client Address</th>
+          <th style="min-width:110px">Trucking Name</th>
+          <th style="min-width:175px">Customer/Consignee</th>
+          <th style="min-width:200px">Delivery Address</th>
           <th>Cluster</th><th>Sched.</th><th>Status</th><th>Actual Done</th>
-          <th>OTIF</th><th style="min-width:145px">Concerns</th>
+          <th style="min-width:145px">Concerns</th><th>OTIF</th>
           <th style="min-width:160px;background:#064e3b;color:#d1fae5">🌡️ Cold Chain Issue</th>
           <th style="min-width:180px;background:#064e3b;color:#d1fae5">Issue Details</th>
           <th style="min-width:160px;background:#1e1b4b;color:#e0e7ff">👷 SOP Compliance</th>
@@ -4141,7 +4142,7 @@ function renderMonitoring() {
       <td><span style="background:${truckColor};color:#fff;border-radius:4px;padding:2px 7px;font-weight:700;font-size:.7rem">${r.truck_id}</span></td>
       <td style="text-align:center;font-weight:700">${r.seq}</td>
       <td style="text-align:center;font-size:.68rem;color:var(--muted)">${doneFrac}/${totalFrac}</td>
-      <td style="font-size:.72rem;color:var(--muted);white-space:nowrap">${r.trucker_code||'—'}</td>
+      <td style="font-size:.72rem;font-weight:600;white-space:nowrap;color:#1e3a5f">${r.trucker_code||'—'}</td>
       <td style="font-weight:600;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.customer_name}">${r.customer_name}${xferBadge}</td>
       <td style="font-size:.68rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${r.shipping_address||''}">${r.shipping_address||'—'}</td>
       <td style="font-size:.7rem">${r.cluster_id||''}</td>
@@ -4151,13 +4152,13 @@ function renderMonitoring() {
            style="border:none;border-radius:4px;padding:2px 5px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">${statusOpts}</select></td>
       <td><input type="time" value="${r.actual_time||''}" style="width:82px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;font-family:inherit"
            onchange="monData[${i}].actual_time=this.value;saveMonitoringTemp()"></td>
-      <td><select onchange="monData[${i}].otif_status=this.value;renderMonitoring();saveMonitoringTemp()"
-           style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%">
-        ${otifOpts}
-      </select></td>
       <td><select onchange="monData[${i}].concerns=this.value;this.closest('tr').dataset.concerns=this.value;renderMonitoring();saveMonitoringTemp()"
            style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%">
         ${concernOpts}
+      </select></td>
+      <td><select onchange="monData[${i}].otif_status=this.value;renderMonitoring();saveMonitoringTemp()"
+           style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%">
+        ${otifOpts}
       </select></td>
       <td style="background:#f0fdf4;min-width:140px">
         <select class="mon-food-safety"
