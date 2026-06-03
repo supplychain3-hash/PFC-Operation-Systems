@@ -4845,26 +4845,28 @@ function renderPod() {
 
 function _updatePodAging(i) {
   const r = _podRecords[i];
-  if (r.plan_date && r.return_date) {
-    try {
-      const d1 = new Date(r.plan_date); const d2 = new Date(r.return_date);
-      r.days_aging = Math.round((d2-d1)/(1000*60*60*24));
-      r.pod_status = r.days_aging<=2?'ON-TIME':'LATE';
-    } catch(e) {}
-  }
+  if (!r || !r.return_date || !r.plan_date) return;
+  const diff = Math.round((new Date(r.return_date) - new Date(r.plan_date)) / 86400000);
+  r.days_aging = diff;
+  r.pod_status = diff <= 2 ? 'ON-TIME' : 'LATE';
   renderPod();
 }
 
 function savePod() {
-  const toSave = _podRecords.filter(r=>r.id);
-  if (!toSave.length) { showToast('Select a date first','warning'); return; }
+  const btn = document.getElementById('pod-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   fetch('/api/pod', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({records: toSave})
-  }).then(r=>r.json()).then(d=>{
-    if (d.error) showToast('Save error: '+d.error,'error');
-    else { showToast('POD saved ('+d.saved+' records)','success'); loadPodDates(); }
-  }).catch(e=>showToast('Save error: '+e.message,'error'));
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(_podRecords)
+  }).then(r => r.json()).then(d => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save POD Updates'; }
+    if (d.success) showToast('POD records saved!', 'success');
+    else showToast('Save failed: ' + (d.error||'unknown'), 'error');
+  }).catch(() => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save POD Updates'; }
+    showToast('Connection error saving POD.', 'error');
+  });
 }
 
 </script>
