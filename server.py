@@ -118,6 +118,9 @@ def open_db():
 # ─────────────────────────────────────────────────────────────
 #  WAREHOUSE DATA
 # ─────────────────────────────────────────────────────────────
+# Warehouse groups that are NOT auto-routed — stops are floated to unrouted basket
+FLOAT_WH_GROUPS = {'FLOAT'}
+
 WAREHOUSE_DATA = {
     'FCSC': {'lat': 14.638413, 'lng': 120.955994, 'name': 'Frabelle Cold Storage (Navotas)',  'group': 'NAVOTAS'},
     'CCS1': {'lat': 14.640139, 'lng': 120.955142, 'name': 'Crystal Cold Storage 1 (Navotas)', 'group': 'NAVOTAS'},
@@ -126,6 +129,8 @@ WAREHOUSE_DATA = {
     'MLIC': {'lat': 14.289947, 'lng': 121.014182, 'name': 'Mets Cold Storage - Cavite',       'group': 'CARMONA'},
     'SACS': {'lat': 14.310108, 'lng': 121.035113, 'name': 'South Alps Cold Storage (Carmona)','group': 'CARMONA'},
     'FGCS': {'lat': 14.638413, 'lng': 120.955994, 'name': 'FGCS (Frabelle Navotas)',           'group': 'NAVOTAS'},
+    # Float warehouses — stops are NOT auto-routed; planner assigns manually
+    'RGM':  {'lat': 14.5995,  'lng': 120.9842,   'name': 'RGM Head Office',                    'group': 'FLOAT'},
 }
 
 # WH group → Rate Master "Pickup_WH" column value
@@ -645,7 +650,7 @@ def clarke_wright_routing(wh_lat, wh_lng, stops, cap_tolerance=None, target_cap=
 # ─────────────────────────────────────────────────────────────
 #  MAIN ROUTING ENGINE  (Clarke-Wright edition)
 # ─────────────────────────────────────────────────────────────
-def run_routing_engine(orders_df) -> list:
+def run_routing_engine(orders_df) -> tuple:
     col_map = normalize_headers(orders_df.columns.tolist())
 
     # ── Step 1: Build consolidated stops ──────────────────────
@@ -761,9 +766,12 @@ def run_routing_engine(orders_df) -> list:
     conn_geo.close()
 
     # ── Step 2: Separate by wh_group (hard WH boundary) ───────
+    # Float stops (RGM etc.) go to unrouted basket — planner assigns manually
+    floated_stops = [s for s in all_stops if s['wh_group'] in FLOAT_WH_GROUPS]
     by_wh_group: dict = defaultdict(list)
     for stop in all_stops:
-        by_wh_group[stop['wh_group']].append(stop)
+        if stop['wh_group'] not in FLOAT_WH_GROUPS:
+            by_wh_group[stop['wh_group']].append(stop)
 
     trucks_out = []
     truck_idx  = 0
@@ -859,7 +867,7 @@ def run_routing_engine(orders_df) -> list:
 
             trucks_out.append(truck)
 
-    return trucks_out
+    return trucks_out, floated_stops
 
 # ─────────────────────────────────────────────────────────────
 #  DATABASE
@@ -1055,7 +1063,7 @@ def run_routing():
             payload = json.load(fp)
         pd = _get_pd()
         df = pd.DataFrame(payload['records'])
-        trucks = run_routing_engine(df)
+        trucks, floated = run_routing_engine(df)
         with open(temp_plan, 'w') as fp:
             json.dump(trucks, fp, default=str)
         total_drops = sum(len(t['stops']) for t in trucks)
@@ -1067,7 +1075,7 @@ def run_routing():
         return jsonify({'success': True, 'truck_count': len(trucks), 'total_drops': total_drops,
                         'total_volume': round(total_vol,2), 'avg_utilization': round(avg_util*100,1),
                         'util_breakdown': {'under_60':under_60,'range_60_80':range_60,'above_80':above_80},
-                        'trucks': trucks})
+                        'trucks': trucks, 'floated_stops': floated})
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500

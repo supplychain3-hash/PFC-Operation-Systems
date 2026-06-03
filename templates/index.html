@@ -1523,7 +1523,30 @@ function runRouting() {
       if (d.error) { showToast(d.error,'error'); st.textContent='Error: '+d.error; st.style.color='#e53935'; return; }
       currentPlan = d.trucks;
       truckCosts  = {};
-      st.textContent = d.truck_count+' trucks assigned, '+d.total_drops+' drops, avg util '+d.avg_utilization+'%';
+      // Float stops (RGM etc.) go straight to unrouted basket for manual assignment
+      if (d.floated_stops && d.floated_stops.length) {
+        d.floated_stops.forEach(s => {
+          unroutedStops.push({
+            customer_name:    s.customer_name || '',
+            shipping_address: s.shipping_address || '',
+            vol:              s.vol || 0,
+            cluster_id:       s.cluster_id || '',
+            area:             s.area || '',
+            match_area:       s.match_area || '',
+            wh:               s.wh || '',
+            lat:              s.lat || 0,
+            lng:              s.lng || 0,
+            rows:             s.rows || [],
+            all_customers:    s.all_customers || [s.customer_name],
+            is_stock_transfer:s.is_stock_transfer || false,
+            doc_number:       s.doc_number || '',
+            _floated:         true,  // mark as originally floated
+          });
+        });
+        showToast(d.floated_stops.length+' RGM stop(s) placed in Unrouted basket — assign manually', 'warning');
+      }
+      const floatNote = d.floated_stops&&d.floated_stops.length ? ` · ${d.floated_stops.length} floated` : '';
+      st.textContent = d.truck_count+' trucks assigned, '+d.total_drops+' drops, avg util '+d.avg_utilization+'%'+floatNote;
       st.style.color = 'var(--green)';
 
       const bd = d.util_breakdown||{};
@@ -2322,6 +2345,7 @@ function renderUnrouted() {
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${stop.customer_name}">
           ${stop.is_stock_transfer ? '<span style="font-size:.58rem;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;margin-right:3px;font-weight:700">XFER</span>' : ''}
+          ${stop._floated ? '<span style="font-size:.58rem;background:#fef9c3;color:#92400e;border:1px solid #f59e0b;border-radius:3px;padding:1px 4px;margin-right:3px;font-weight:700">🏢 '+stop.wh+'</span>' : ''}
           ${stop.customer_name}
         </div>
         <div style="font-size:.72rem;color:#92400e">${stop.match_area||stop.area||'—'} · ${stop.wh||''} · ${(stop.vol||0).toLocaleString()} kg
@@ -3105,11 +3129,17 @@ const _WH_GROUPS = {
   FCSC:'NAVOTAS', CCS1:'NAVOTAS', CCS2:'NAVOTAS', FGCS:'NAVOTAS',
   MLIC:'CARMONA', SACS:'CARMONA',
   MLIB:'BULACAN',
+  RGM:'FLOAT',  // RGM Head Office — floated stops, can go to any truck
 };
+// Warehouse groups that are freely transferable to/from any truck
+const _FLOAT_GROUPS = new Set(['FLOAT']);
+
 function sameWhGroup(wh1, wh2) {
   if (!wh1 || !wh2 || wh1 === wh2) return true;
   const g1 = (warehouseData[wh1] || {}).group || _WH_GROUPS[wh1] || wh1;
   const g2 = (warehouseData[wh2] || {}).group || _WH_GROUPS[wh2] || wh2;
+  // Float warehouses (RGM etc.) can go to any truck
+  if (_FLOAT_GROUPS.has(g1) || _FLOAT_GROUPS.has(g2)) return true;
   return g1 === g2;
 }
 
