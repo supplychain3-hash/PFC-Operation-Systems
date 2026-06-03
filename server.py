@@ -1922,6 +1922,30 @@ def get_pod():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/pod/summary', methods=['GET'])
+def pod_summary():
+    """Returns POD compliance % grouped by date for historical trend tiles."""
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('''SELECT plan_date,
+                            COUNT(*) as total,
+                            SUM(CASE WHEN return_date IS NOT NULL AND return_date!='' THEN 1 ELSE 0 END) as returned,
+                            SUM(CASE WHEN return_date IS NOT NULL AND return_date!=''
+                                      AND (julianday(return_date)-julianday(plan_date))<=2 THEN 1 ELSE 0 END) as ontime
+                     FROM monitoring_records
+                     WHERE plan_date IS NOT NULL AND plan_date!=''
+                     GROUP BY plan_date ORDER BY plan_date DESC LIMIT 30''')
+        rows = []
+        for r in c.fetchall():
+            ret = r[2] or 0
+            ontime = r[3] or 0
+            pct = round(ontime/ret*100, 1) if ret else 0
+            rows.append({'date':r[0],'total':r[1],'returned':ret,'ontime':ontime,'compliance_pct':pct})
+        conn.close()
+        return jsonify({'summary': rows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/pod', methods=['POST'])
 def save_pod():
     """Update return_date and pod_remarks on individual monitoring_records rows."""
@@ -3133,6 +3157,7 @@ def gsheets_save_config():
     with open(cfg_path, 'w') as fp:
         json.dump({'sheet_id': sheet_id}, fp)
     return jsonify({'success': True})
+
 
 
 
