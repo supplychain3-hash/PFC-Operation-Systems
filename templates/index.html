@@ -2968,10 +2968,10 @@ function openReassign(ti, si) {
   const sel=document.getElementById('reassign-sel');
   sel.innerHTML=currentPlan.map((t,i)=>{
     const tWh=(t.pickup_wh||t.wh||'').toUpperCase().trim();
-    const diffWh=srcWh&&tWh&&tWh!==srcWh;
-    const label=t.truck_id+' ('+t.truck_type+' · '+t.stops.length+' drops)'+(tWh?' — '+tWh:'')+(diffWh?' [different WH — blocked]':'');
+    const incompatible=srcWh&&tWh&&!sameWhGroup(srcWh,tWh);
+    const label=t.truck_id+' ('+t.truck_type+' · '+t.stops.length+' drops)'+(tWh?' — '+tWh:'')+(incompatible?' [different region — blocked]':'');
     const selAttr=i===ti?' selected':'';
-    const disAttr=diffWh?' disabled style="color:#bbb;background:#f5f5f5"':'';
+    const disAttr=incompatible?' disabled style="color:#bbb;background:#f5f5f5"':'';
     return `<option value="${i}"${selAttr}${disAttr}>${label}</option>`;
   }).join('');
   document.getElementById('reassign-pos').value=1;
@@ -2982,11 +2982,11 @@ function confirmReassign() {
   const {ti,si}=reassignTarget;
   const newTi=parseInt(document.getElementById('reassign-sel').value);
   const pos=Math.max(1,parseInt(document.getElementById('reassign-pos').value)||1);
-  // Hard block: different pickup warehouse
+  // Block cross-region transfers (same-group warehouses like CCS1/CCS2/FCSC are allowed)
   const srcWh=(currentPlan[ti].pickup_wh||currentPlan[ti].wh||'').toUpperCase().trim();
   const dstWh=(currentPlan[newTi].pickup_wh||currentPlan[newTi].wh||'').toUpperCase().trim();
-  if(srcWh&&dstWh&&srcWh!==dstWh){
-    showToast('Cannot move stop — '+currentPlan[newTi].truck_id+' picks up from '+dstWh+', not '+srcWh,'error');
+  if(srcWh&&dstWh&&!sameWhGroup(srcWh,dstWh)){
+    showToast('Cannot move stop — '+currentPlan[newTi].truck_id+' is in a different region ('+dstWh+' vs '+srcWh+')','error');
     return;
   }
   if(newTi!==ti){
@@ -3008,6 +3008,16 @@ function confirmReassign() {
 }
 
 function round2(v){return Math.round(v*1000)/1000;}
+
+// Returns true if two warehouse codes are in the same pickup group
+// (e.g. CCS1/CCS2/FCSC/FGCS are all NAVOTAS group; MLIC/SACS are CARMONA group)
+// Same-group warehouses are allowed to share trucks and swap stops freely.
+function sameWhGroup(wh1, wh2) {
+  if (!wh1 || !wh2 || wh1 === wh2) return true;
+  const g1 = (warehouseData[wh1] || {}).group || wh1;
+  const g2 = (warehouseData[wh2] || {}).group || wh2;
+  return g1 === g2;
+}
 
 function updateRatedCap(ti,val){
   const cap=parseFloat(val);
@@ -3654,7 +3664,7 @@ function renderPerf(){
   const avgUtil=currentPlan.reduce((a,t)=>a+t.util_pct,0)/currentPlan.length*100;
   const above80=currentPlan.filter(t=>t.util_pct>=.8).length;
   const totalKm=currentPlan.reduce((a,t)=>a+(t.total_km||0),0);
-  const totalCost=currentPlan.reduce((a,t)=>a+(parseFloat(t.truck_rate)||0),0);
+  const totalCost=currentPlan.reduce((a,t)=>a+(parseFloat(String(t.truck_rate||'').replace(/[^\d.]/g,''))||0),0);
 
   document.getElementById('perf-kpi-strip').innerHTML=`
     <div class="kpi blue"><div class="kpi-label">Total Trucks</div><div class="kpi-value blue">${currentPlan.length}</div></div>
@@ -3663,8 +3673,8 @@ function renderPerf(){
     <div class="kpi green"><div class="kpi-label">Fleet Avg Util</div><div class="kpi-value green">${avgUtil.toFixed(1)}%</div></div>
     <div class="kpi"><div class="kpi-label">Trucks &ge;80%</div><div class="kpi-value">${above80}/${currentPlan.length}</div></div>
     <div class="kpi"><div class="kpi-label">Fleet Total KM</div><div class="kpi-value">&#x1F6E3; ${totalKm.toFixed(1)}</div></div>
-    ${totalCost>0?`<div class="kpi"><div class="kpi-label">Total Trip Cost</div><div class="kpi-value">&#x20B1;${Math.round(totalCost).toLocaleString()}</div></div>`:''}
-    ${(totalCost>0&&totalVol>0)?`<div class="kpi orange"><div class="kpi-label">Avg Cost / KG</div><div class="kpi-value orange">&#x20B1;${(totalCost/totalVol).toFixed(2)}/kg</div></div>`:''}`;
+    <div class="kpi"><div class="kpi-label">Total Trip Cost</div><div class="kpi-value">${totalCost>0?'&#x20B1;'+Math.round(totalCost).toLocaleString():'—'}</div></div>
+    <div class="kpi orange"><div class="kpi-label">Avg Cost / KG</div><div class="kpi-value orange">${(totalCost>0&&totalVol>0)?'&#x20B1;'+(totalCost/totalVol).toFixed(2)+'/kg':'—'}</div></div>`;
 
   document.getElementById('perf-tbody').innerHTML=currentPlan.map((truck,ti)=>{
     const color=TRUCK_COLORS[ti%TRUCK_COLORS.length];

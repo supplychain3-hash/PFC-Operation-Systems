@@ -863,10 +863,7 @@ def init_db():
     conn = open_db()
     c = conn.cursor()
 
-    # WAL mode: readers never block writers; multiple threads can read simultaneously
-    c.execute("PRAGMA journal_mode=WAL")
-    c.execute("PRAGMA synchronous=NORMAL")
-
+    # WAL + busy_timeout already set by open_db()
     c.execute('''CREATE TABLE IF NOT EXISTS route_plans (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,
         plan_date  TEXT NOT NULL,
