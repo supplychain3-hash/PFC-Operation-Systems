@@ -636,6 +636,17 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
     </div>
     <span id="search-count" style="font-size:.74rem;color:var(--muted)"></span>
   </div>
+  <!-- Delivery Date picker -->
+  <div style="display:flex;align-items:center;gap:10px;margin:6px 0;padding:8px 12px;
+              background:#fffbeb;border:1.5px solid #f59e0b;border-radius:8px">
+    <span style="font-size:.8rem;font-weight:700;color:#92400e;white-space:nowrap">📅 Delivery Date:</span>
+    <input type="date" id="delivery-date-input"
+      style="border:1px solid #f59e0b;border-radius:6px;padding:4px 10px;font-size:.82rem;
+             font-family:inherit;color:var(--navy);background:#fff;cursor:pointer"
+      onchange="setDeliveryDate(this.value)"
+      title="Set the actual delivery date for this route plan">
+    <span id="delivery-date-label" style="font-size:.75rem;color:#b45309;font-style:italic"></span>
+  </div>
   <div class="btn-row">
     <button class="btn btn-outline btn-sm" onclick="addEmptyTruck()" style="border-color:#43a047;color:#43a047">&#x2795; Add Truck</button>
     <button class="btn btn-primary btn-sm" onclick="savePlanToday()" id="save-plan-btn" title="Save today's route plan to History">💾 Save Plan</button>
@@ -1190,6 +1201,7 @@ function importRates(inp) {
 
 let currentPlan    = [];
 let leafletMap     = null;
+let currentDeliveryDate = new Date().toISOString().slice(0,10); // manually set by planner
 let mapLayers      = {};
 let whMarkers      = {};   // code → L.marker for CSW toggle
 let isolatedWH     = null; // code of isolated Cold Storage WH
@@ -1226,6 +1238,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const _today = new Date().toISOString().split('T')[0];
   _monDateEl.textContent = new Date().toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   _monDateEl.dataset.isodate = _today;
+  // Init delivery date picker to today
+  const _ddInput = document.getElementById('delivery-date-input');
+  if (_ddInput) { _ddInput.value = _today; setDeliveryDate(_today); }
 
   setupDropZone();
   initMap();
@@ -1313,7 +1328,7 @@ function applyUser(display, role) {
   currentRole   = role;
   currentRouter = display.replace(/\s+/g,'-').toLowerCase() || 'default';
   _collabMyName = currentRouter;
-  startCollab(new Date().toISOString().slice(0,10));
+  startCollab(currentDeliveryDate);
   const initials = display.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
   document.getElementById('user-avatar').textContent   = initials;
   document.getElementById('user-name-lbl').textContent = display;
@@ -1479,7 +1494,7 @@ function runRouting() {
          <span style="color:#f9a825">&#x25CF; 60-80%: ${bd.range_60_80||0}</span> &nbsp;
          <span style="color:#43a047">&#x25CF; &#x2265;80%: ${bd.above_80||0}</span>`;
 
-      startCollab(new Date().toISOString().slice(0,10));
+      startCollab(currentDeliveryDate);
       showToast('Route plan ready: '+d.truck_count+' trucks assigned','success');
       document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
       document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -2212,7 +2227,7 @@ function savePlanToday() {
   if (!currentPlan.length) { showToast('No plan to save — generate a route first', 'error'); return; }
   const btn = document.getElementById('save-plan-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = currentDeliveryDate;
   fetch('/api/save-plan?router=' + encodeURIComponent(currentRouter), {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -2739,7 +2754,7 @@ function loadSharedPlan() {
         _knownLatestPlanId  = id;
         _knownLatestPlanAt  = data.created_at || _knownLatestPlanAt;
         _pendingSharedPlanId = null;
-        startCollab(data.plan_date || new Date().toISOString().slice(0,10));
+        startCollab(data.plan_date || currentDeliveryDate);
         renderPlan();
         dismissSharedBanner();
         showToast(`Plan loaded — saved by ${data.created_by || 'team'}`, 'success');
@@ -2968,7 +2983,10 @@ function openReassign(ti, si) {
   const sel=document.getElementById('reassign-sel');
   sel.innerHTML=currentPlan.map((t,i)=>{
     const tWh=(t.pickup_wh||t.wh||'').toUpperCase().trim();
-    const incompatible=srcWh&&tWh&&!sameWhGroup(srcWh,tWh);
+    // Use truck's wh_group directly (set by server) for most reliable check
+    const srcGroup = srcTruck.wh_group || (warehouseData[srcWh]||{}).group || _WH_GROUPS[srcWh] || srcWh;
+    const dstGroup = t.wh_group       || (warehouseData[tWh] ||{}).group || _WH_GROUPS[tWh]  || tWh;
+    const incompatible=srcWh&&tWh&&srcGroup!==dstGroup;
     const label=t.truck_id+' ('+t.truck_type+' · '+t.stops.length+' drops)'+(tWh?' — '+tWh:'')+(incompatible?' [different region — blocked]':'');
     const selAttr=i===ti?' selected':'';
     const disAttr=incompatible?' disabled style="color:#bbb;background:#f5f5f5"':'';
@@ -2985,7 +3003,9 @@ function confirmReassign() {
   // Block cross-region transfers (same-group warehouses like CCS1/CCS2/FCSC are allowed)
   const srcWh=(currentPlan[ti].pickup_wh||currentPlan[ti].wh||'').toUpperCase().trim();
   const dstWh=(currentPlan[newTi].pickup_wh||currentPlan[newTi].wh||'').toUpperCase().trim();
-  if(srcWh&&dstWh&&!sameWhGroup(srcWh,dstWh)){
+  const srcGrp = currentPlan[ti].wh_group    || (warehouseData[srcWh]||{}).group || _WH_GROUPS[srcWh] || srcWh;
+  const dstGrp = currentPlan[newTi].wh_group || (warehouseData[dstWh]||{}).group || _WH_GROUPS[dstWh] || dstWh;
+  if(srcWh&&dstWh&&srcGrp!==dstGrp){
     showToast('Cannot move stop — '+currentPlan[newTi].truck_id+' is in a different region ('+dstWh+' vs '+srcWh+')','error');
     return;
   }
@@ -3009,13 +3029,40 @@ function confirmReassign() {
 
 function round2(v){return Math.round(v*1000)/1000;}
 
+function setDeliveryDate(val) {
+  currentDeliveryDate = val || new Date().toISOString().slice(0,10);
+  // Keep the delivery-date input in sync
+  const inp = document.getElementById('delivery-date-input');
+  if (inp && inp.value !== currentDeliveryDate) inp.value = currentDeliveryDate;
+  // Show a friendly label (e.g. "Tomorrow" / "Today" / the weekday)
+  const lbl = document.getElementById('delivery-date-label');
+  if (lbl) {
+    const today = new Date().toISOString().slice(0,10);
+    const tomorrow = new Date(Date.now()+86400000).toISOString().slice(0,10);
+    const wd = new Date(currentDeliveryDate+'T00:00:00').toLocaleDateString('en-PH',{weekday:'long',month:'short',day:'numeric'});
+    lbl.textContent = currentDeliveryDate===today ? '(Today — '+wd+')' : currentDeliveryDate===tomorrow ? '(Tomorrow — '+wd+')' : '('+wd+')';
+  }
+  // Sync the monitoring date display
+  const monEl = document.getElementById('mon-date');
+  if (monEl) {
+    monEl.dataset.isodate = currentDeliveryDate;
+    monEl.textContent = new Date(currentDeliveryDate+'T00:00:00').toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  }
+}
+
 // Returns true if two warehouse codes are in the same pickup group
 // (e.g. CCS1/CCS2/FCSC/FGCS are all NAVOTAS group; MLIC/SACS are CARMONA group)
 // Same-group warehouses are allowed to share trucks and swap stops freely.
+// Built-in fallback groups so this works even if warehouseData hasn't loaded yet.
+const _WH_GROUPS = {
+  FCSC:'NAVOTAS', CCS1:'NAVOTAS', CCS2:'NAVOTAS', FGCS:'NAVOTAS',
+  MLIC:'CARMONA', SACS:'CARMONA',
+  MLIB:'BULACAN',
+};
 function sameWhGroup(wh1, wh2) {
   if (!wh1 || !wh2 || wh1 === wh2) return true;
-  const g1 = (warehouseData[wh1] || {}).group || wh1;
-  const g2 = (warehouseData[wh2] || {}).group || wh2;
+  const g1 = (warehouseData[wh1] || {}).group || _WH_GROUPS[wh1] || wh1;
+  const g2 = (warehouseData[wh2] || {}).group || _WH_GROUPS[wh2] || wh2;
   return g1 === g2;
 }
 
@@ -3066,7 +3113,7 @@ function autosave() {
 //  REAL-TIME COLLABORATION
 // ======================================================
 function startCollab(collabId) {
-  _collabId     = collabId || new Date().toISOString().slice(0,10);
+  _collabId     = collabId || currentDeliveryDate;
   _collabMyName = currentRouter || 'user';
   _collabVersion = 0;
   stopCollab();
@@ -3757,7 +3804,7 @@ let monData = [];
 function goMonitoring() {
   if (!currentPlan.length) { showToast('Generate a route plan first','error'); return; }
   // Build monData FIRST so startLiveMonitoring skips the immediate loadMonitoring()
-  const today = new Date().toISOString().slice(0,10);
+  const today = currentDeliveryDate;
   const dateEl = document.getElementById('mon-date');
   if(dateEl){ dateEl.textContent=today; dateEl.dataset.isodate=today; }
   monData = [];
@@ -4423,7 +4470,7 @@ function gsheetsSync() {
     body: JSON.stringify({sheet_id: sheetId})
   }).catch(() => {});
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = currentDeliveryDate;
   const endpoint = _gsheetsMode === 'monitoring'
     ? '/api/gsheets/push-monitoring'
     : '/api/gsheets/push-plan';
