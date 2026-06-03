@@ -745,6 +745,45 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
       <button class="btn btn-sm" style="border:1px solid #fca5a5;color:#e53935;background:#fff" onclick="deleteMonitoringDb(document.getElementById('mon-date').dataset.isodate)">🗑 Clear DB Records</button>
     </div>
   </div>
+  <!-- Monitoring filter bar -->
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;padding:10px 12px;
+              background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+    <input type="text" id="mon-search" placeholder="🔍 Search client or address…"
+      oninput="filterMonitoring()"
+      style="flex:1;min-width:200px;padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;
+             font-size:.8rem;font-family:inherit;color:var(--navy)">
+    <select id="mon-filter-truck" onchange="filterMonitoring()"
+      style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;color:var(--navy);background:#fff">
+      <option value="">All Trucks</option>
+    </select>
+    <select id="mon-filter-status" onchange="filterMonitoring()"
+      style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;color:var(--navy);background:#fff">
+      <option value="">All Status</option>
+      <option value="PENDING">Pending</option>
+      <option value="IN-TRANSIT">In-Transit</option>
+      <option value="DONE">Done</option>
+    </select>
+    <select id="mon-filter-cluster" onchange="filterMonitoring()"
+      style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;color:var(--navy);background:#fff">
+      <option value="">All Clusters</option>
+    </select>
+    <select id="mon-filter-concerns" onchange="filterMonitoring()"
+      style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;color:var(--navy);background:#fff">
+      <option value="">All Concerns</option>
+      <option value="NONE">No Concerns</option>
+      <option value="Refused Delivery">Refused Delivery</option>
+      <option value="Closed">Closed</option>
+      <option value="Wrong Address">Wrong Address</option>
+      <option value="No One To Receive">No One To Receive</option>
+      <option value="Delayed Traffic">Delayed Traffic</option>
+      <option value="Vehicle Breakdown">Vehicle Breakdown</option>
+      <option value="Other">Other</option>
+    </select>
+    <button onclick="clearMonFilters()"
+      style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font-size:.78rem;
+             color:var(--muted);cursor:pointer;font-family:inherit" title="Clear all filters">✕ Clear</button>
+    <span id="mon-filter-count" style="font-size:.75rem;color:var(--muted);white-space:nowrap"></span>
+  </div>
   <div class="mon-wrap">
     <table class="mon-table" id="mon-table">
       <thead>
@@ -3876,7 +3915,12 @@ function renderMonitoring() {
     const statusOpts = STATUS_OPTS.map(o=>`<option value="${o}"${r.status===o?'selected':''}>${o}</option>`).join('');
     const otifOpts   = OTIF_OPTS.map(o=>`<option value="${o}"${r.otif_status===o?'selected':''}>${o}</option>`).join('');
     const xferBadge  = r.is_stock_transfer?'<span style="font-size:.58rem;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;font-weight:700">XFER</span>':'';
-    return `<tr data-mon-idx="${i}" style="border-left:3px solid ${truckColor}">
+    return `<tr data-mon-idx="${i}" style="border-left:3px solid ${truckColor}"
+      data-truck="${r.truck_id||''}"
+      data-status="${r.status||''}"
+      data-cluster="${r.cluster_id||''}"
+      data-concerns="${r.concerns||'NONE'}"
+      data-search="${((r.customer_name||'')+(r.shipping_address||'')).toLowerCase()}">
       <td><span style="background:${truckColor};color:#fff;border-radius:4px;padding:2px 7px;font-weight:700;font-size:.7rem">${r.truck_id}</span></td>
       <td style="text-align:center;font-weight:700">${r.seq}</td>
       <td style="text-align:center;font-size:.68rem;color:var(--muted)">${doneFrac}/${totalFrac}</td>
@@ -3885,7 +3929,7 @@ function renderMonitoring() {
       <td style="font-size:.7rem">${r.cluster_id||''}</td>
       <td><input type="text" value="${schedVal}" style="width:80px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;font-family:inherit"
            onchange="monData[${i}].receiving_time=this.value;monData[${i}].sched_time=this.value;saveMonitoringTemp()"></td>
-      <td><select class="mon-status-badge ${statusClass}" onchange="monData[${i}].status=this.value;renderMonitoring();saveMonitoringTemp()"
+      <td><select class="mon-status-badge ${statusClass}" onchange="monData[${i}].status=this.value;this.closest('tr').dataset.status=this.value;renderMonitoring();saveMonitoringTemp()"
            style="border:none;border-radius:4px;padding:2px 5px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit">${statusOpts}</select></td>
       <td><input type="time" value="${r.actual_time||''}" style="width:82px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;font-family:inherit"
            onchange="monData[${i}].actual_time=this.value;saveMonitoringTemp()"></td>
@@ -3893,7 +3937,7 @@ function renderMonitoring() {
            style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%">
         ${otifOpts}
       </select></td>
-      <td><select onchange="monData[${i}].concerns=this.value;renderMonitoring();saveMonitoringTemp()"
+      <td><select onchange="monData[${i}].concerns=this.value;this.closest('tr').dataset.concerns=this.value;renderMonitoring();saveMonitoringTemp()"
            style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%">
         ${concernOpts}
       </select></td>
@@ -3902,6 +3946,60 @@ function renderMonitoring() {
            onchange="monData[${i}].remarks=this.value;saveMonitoringTemp()"/></td>
     </tr>`;
   }).join('');
+  _populateMonFilterDropdowns();
+  filterMonitoring();
+}
+
+function _populateMonFilterDropdowns() {
+  const trucks   = [...new Set(monData.map(r=>r.truck_id).filter(Boolean))].sort();
+  const clusters = [...new Set(monData.map(r=>r.cluster_id).filter(Boolean))].sort();
+  const truckSel = document.getElementById('mon-filter-truck');
+  const clusterSel = document.getElementById('mon-filter-cluster');
+  if (truckSel) {
+    const prev = truckSel.value;
+    truckSel.innerHTML = '<option value="">All Trucks</option>' +
+      trucks.map(t=>`<option value="${t}"${t===prev?' selected':''}>${t}</option>`).join('');
+  }
+  if (clusterSel) {
+    const prev = clusterSel.value;
+    clusterSel.innerHTML = '<option value="">All Clusters</option>' +
+      clusters.map(c=>`<option value="${c}"${c===prev?' selected':''}>${c}</option>`).join('');
+  }
+}
+
+function filterMonitoring() {
+  const search   = (document.getElementById('mon-search')?.value||'').toLowerCase().trim();
+  const truck    = document.getElementById('mon-filter-truck')?.value||'';
+  const status   = document.getElementById('mon-filter-status')?.value||'';
+  const cluster  = document.getElementById('mon-filter-cluster')?.value||'';
+  const concerns = document.getElementById('mon-filter-concerns')?.value||'';
+
+  const rows = document.querySelectorAll('#mon-tbody tr[data-mon-idx]');
+  let shown = 0;
+  rows.forEach(tr => {
+    const match =
+      (!search   || (tr.dataset.search||'').includes(search)) &&
+      (!truck    || tr.dataset.truck === truck) &&
+      (!status   || tr.dataset.status === status) &&
+      (!cluster  || tr.dataset.cluster === cluster) &&
+      (!concerns || tr.dataset.concerns === concerns);
+    tr.style.display = match ? '' : 'none';
+    if (match) shown++;
+  });
+  const countEl = document.getElementById('mon-filter-count');
+  const total = rows.length;
+  if (countEl) {
+    const hasFilter = search||truck||status||cluster||concerns;
+    countEl.textContent = hasFilter ? `Showing ${shown} of ${total} drops` : `${total} drops`;
+  }
+}
+
+function clearMonFilters() {
+  ['mon-search','mon-filter-truck','mon-filter-status','mon-filter-cluster','mon-filter-concerns'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  filterMonitoring();
 }
 
 function saveMonitoringTemp() {
