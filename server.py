@@ -1838,8 +1838,9 @@ def get_cold_chain():
         date = request.args.get('date', '')
         conn = open_db(); c = conn.cursor()
         if date:
-            c.execute('''SELECT id, plan_date, truck_id, customer_name, do_number,
-                                food_safety_issue, food_safety_detail
+            c.execute('''SELECT id, plan_date, truck_id, truck_type, customer_name, do_number,
+                                trucker_code, food_safety_issue, food_safety_detail,
+                                crew_issue, crew_detail
                          FROM monitoring_records
                          WHERE plan_date=? ORDER BY truck_id, seq''', (date,))
             cols = [d[0] for d in c.description]
@@ -1856,21 +1857,45 @@ def get_cold_chain():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def _period_group_expr(period):
+    """Return SQL expression to group plan_date by period."""
+    if period == 'weekly':
+        return "strftime('%Y-W%W', plan_date)"
+    if period == 'monthly':
+        return "strftime('%Y-%m', plan_date)"
+    if period == 'quarterly':
+        return "(strftime('%Y', plan_date) || '-Q' || ((CAST(strftime('%m', plan_date) AS INTEGER) - 1) / 3 + 1))"
+    if period == 'yearly':
+        return "strftime('%Y', plan_date)"
+    return 'plan_date'  # daily (default)
+
 @app.route('/api/cold-chain/summary', methods=['GET'])
 def cold_chain_summary():
-    """Returns compliance % grouped by date, sourced from monitoring_records."""
+    """Returns compliance % grouped by period, sourced from monitoring_records."""
     try:
+        period = request.args.get('period', 'daily')
+        grp = _period_group_expr(period)
         conn = open_db(); c = conn.cursor()
-        c.execute('''SELECT plan_date,
+        c.execute(f'''SELECT {grp} as period_label,
+                            MIN(plan_date) as date,
                             COUNT(*) as total,
                             SUM(CASE WHEN food_safety_issue='NONE' OR food_safety_issue IS NULL THEN 1 ELSE 0 END) as ok,
-                            SUM(CASE WHEN food_safety_issue IS NOT NULL AND food_safety_issue!='NONE' THEN 1 ELSE 0 END) as issues
+                            SUM(CASE WHEN food_safety_issue IS NOT NULL AND food_safety_issue!='NONE' THEN 1 ELSE 0 END) as fs_issues,
+                            SUM(CASE WHEN crew_issue='NONE' OR crew_issue IS NULL THEN 1 ELSE 0 END) as crew_ok,
+                            SUM(CASE WHEN crew_issue IS NOT NULL AND crew_issue!='NONE' THEN 1 ELSE 0 END) as crew_issues
                      FROM monitoring_records
                      WHERE plan_date IS NOT NULL AND plan_date != ''
-                     GROUP BY plan_date ORDER BY plan_date DESC''')
-        rows = [{'date':r[0],'total':r[1],'ok':r[2],'issues':r[3],
-                 'compliance_pct': round(r[2]/r[1]*100,1) if r[1] else 100.0}
-                for r in c.fetchall()]
+                     GROUP BY {grp} ORDER BY {grp} DESC LIMIT 30''')
+        rows = []
+        for r in c.fetchall():
+            total = r[2] or 1
+            rows.append({
+                'label': r[0], 'date': r[1], 'total': r[2],
+                'ok': r[3], 'issues': r[4],
+                'compliance_pct': round(r[3]/total*100, 1),
+                'crew_ok': r[5], 'crew_issues': r[6],
+                'crew_pct': round(r[5]/total*100, 1)
+            })
         conn.close()
         return jsonify({'summary': rows})
     except Exception as e:
@@ -1924,23 +1949,26 @@ def get_pod():
 
 @app.route('/api/pod/summary', methods=['GET'])
 def pod_summary():
-    """Returns POD compliance % grouped by date for historical trend tiles."""
+    """Returns POD compliance % grouped by period for historical trend tiles."""
     try:
+        period = request.args.get('period', 'daily')
+        grp = _period_group_expr(period)
         conn = open_db(); c = conn.cursor()
-        c.execute('''SELECT plan_date,
+        c.execute(f'''SELECT {grp} as period_label,
+                            MIN(plan_date) as date,
                             COUNT(*) as total,
                             SUM(CASE WHEN return_date IS NOT NULL AND return_date!='' THEN 1 ELSE 0 END) as returned,
                             SUM(CASE WHEN return_date IS NOT NULL AND return_date!=''
                                       AND (julianday(return_date)-julianday(plan_date))<=2 THEN 1 ELSE 0 END) as ontime
                      FROM monitoring_records
                      WHERE plan_date IS NOT NULL AND plan_date!=''
-                     GROUP BY plan_date ORDER BY plan_date DESC LIMIT 30''')
+                     GROUP BY {grp} ORDER BY {grp} DESC LIMIT 30''')
         rows = []
         for r in c.fetchall():
-            ret = r[2] or 0
-            ontime = r[3] or 0
+            ret = r[3] or 0
+            ontime = r[4] or 0
             pct = round(ontime/ret*100, 1) if ret else 0
-            rows.append({'date':r[0],'total':r[1],'returned':ret,'ontime':ontime,'compliance_pct':pct})
+            rows.append({'label':r[0],'date':r[1],'total':r[2],'returned':ret,'ontime':ontime,'compliance_pct':pct})
         conn.close()
         return jsonify({'summary': rows})
     except Exception as e:

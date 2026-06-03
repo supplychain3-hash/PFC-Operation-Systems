@@ -4064,6 +4064,7 @@ function goMonitoring() {
         is_stock_transfer:stop.is_stock_transfer||false,
         doc_number:       stop.doc_number||'',
         shipping_address: stop.shipping_address||'',
+        trucker_code:     truck.trucker_code||'',
       });
     });
   });
@@ -4120,6 +4121,7 @@ function renderMonitoring() {
       <td><span style="background:${truckColor};color:#fff;border-radius:4px;padding:2px 7px;font-weight:700;font-size:.7rem">${r.truck_id}</span></td>
       <td style="text-align:center;font-weight:700">${r.seq}</td>
       <td style="text-align:center;font-size:.68rem;color:var(--muted)">${doneFrac}/${totalFrac}</td>
+      <td style="font-size:.72rem;color:var(--muted);white-space:nowrap">${r.trucker_code||'—'}</td>
       <td style="font-weight:600;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.customer_name}">${r.customer_name}${xferBadge}</td>
       <td style="font-size:.68rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)" title="${r.shipping_address||''}">${r.shipping_address||'—'}</td>
       <td style="font-size:.7rem">${r.cluster_id||''}</td>
@@ -4632,29 +4634,40 @@ function gsheetsSync() {
 //  COLD CHAIN & FOOD SAFETY / CREW COMPLIANCE
 // ======================================================
 function loadColdChainDates() {
+  const period = (document.getElementById('cc-period')||{}).value || 'daily';
   fetch('/api/cold-chain')
     .then(r=>r.json()).then(d=>{
       const sel = document.getElementById('cc-date-filter');
       if (!sel) return;
       const prev = sel.value;
-      sel.innerHTML = '<option value="">Select date…</option>' +
+      sel.innerHTML = '<option value="">— Select date —</option>' +
         (d.dates||[]).map(dt=>`<option value="${dt}"${dt===prev?' selected':''}>${dt}</option>`).join('');
-      // Load historical summary
-      fetch('/api/cold-chain/summary').then(r=>r.json()).then(s=>{
+      // Load period-based summary tiles
+      fetch('/api/cold-chain/summary?period='+period).then(r=>r.json()).then(s=>{
         const wrap = document.getElementById('cc-summary-wrap');
         if (!wrap) return;
-        const rows = (s.summary||[]).slice(0,10);
+        const rows = (s.summary||[]).slice(0,12);
         if (!rows.length) { wrap.innerHTML=''; return; }
-        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);font-size:.85rem;margin-bottom:8px">&#x1F4CA; Historical Compliance (last ${rows.length} dates)</div>
+        const periodLabel = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'}[period]||'Period';
+        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);font-size:.85rem;margin-bottom:8px">
+            📊 ${periodLabel}ly Compliance History (last ${rows.length} ${periodLabel.toLowerCase()}s)
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:8px">` +
           rows.map(row=>{
-            const bg = row.compliance_pct===100?'#dcfce7':row.compliance_pct>=80?'#fef9c3':'#fee2e2';
-            const tc = row.compliance_pct===100?'#166534':row.compliance_pct>=80?'#92400e':'#991b1b';
-            return `<div style="background:${bg};border-radius:8px;padding:8px 14px;min-width:130px;cursor:pointer;border:1px solid ${tc}22"
-                     onclick="document.getElementById('cc-date-filter').value='${row.date}';loadColdChain('${row.date}')">
-              <div style="font-weight:700;color:${tc};font-size:.8rem">${row.date}</div>
-              <div style="font-size:1.05rem;font-weight:800;color:${tc}">${row.compliance_pct}%</div>
-              <div style="font-size:.67rem;color:${tc}">${row.ok}/${row.total} OK · ${row.issues} issue${row.issues!==1?'s':''}</div>
+            const fsPct = row.compliance_pct;
+            const crewPct = row.crew_pct;
+            const worst = Math.min(fsPct, crewPct);
+            const bg = worst===100?'#f0fdf4':worst>=80?'#fefce8':'#fff1f2';
+            const tc = worst===100?'#166534':worst>=80?'#713f12':'#881337';
+            const clickDate = period==='daily' ? `document.getElementById('cc-date-filter').value='${row.date}';loadColdChain('${row.date}')` : '';
+            return `<div style="background:${bg};border-radius:8px;padding:8px 14px;min-width:140px;cursor:${period==='daily'?'pointer':'default'};border:1px solid ${tc}22;flex:0 0 auto"
+                     onclick="${clickDate}">
+              <div style="font-weight:700;color:${tc};font-size:.75rem;margin-bottom:3px">${row.label||row.date}</div>
+              <div style="display:flex;gap:8px;align-items:baseline">
+                <span style="font-size:.95rem;font-weight:800;color:#166534" title="Food Safety">🌡️ ${fsPct}%</span>
+                <span style="font-size:.95rem;font-weight:800;color:#4f46e5" title="Crew">👷 ${crewPct}%</span>
+              </div>
+              <div style="font-size:.67rem;color:${tc};margin-top:2px">${row.total} deliveries · ${row.issues} FS · ${row.crew_issues} Crew issue${(row.issues+row.crew_issues)!==1?'s':''}</div>
             </div>`;
           }).join('') + '</div>';
       }).catch(()=>{});
@@ -4680,64 +4693,101 @@ function renderColdChain(records) {
   const fsPct      = total ? Math.round((total-fsIssues)/total*1000)/10 : 100;
   const crewPct    = total ? Math.round((total-crewIssues)/total*1000)/10 : 100;
   const fsClr      = fsPct>=95?'#16a34a':fsPct>=80?'#f59e0b':'#e53935';
-  const crewClr    = crewPct>=95?'#6366f1':crewPct>=80?'#f59e0b':'#e53935';
+  const crewClr    = crewPct>=95?'#4f46e5':crewPct>=80?'#f59e0b':'#e53935';
   const set = (id,v,c)=>{ const el=document.getElementById(id); if(el){el.textContent=v; if(c)el.style.color=c;} };
-  set('cc-kpi-rate',         fsPct+'%',        fsClr);
-  set('cc-kpi-crew',         crewPct+'%',      crewClr);
-  set('cc-kpi-total',        total,            '');
-  set('cc-kpi-issues',       fsIssues,         '');
-  set('cc-kpi-crew-issues',  crewIssues,       '');
+  set('cc-kpi-rate',        fsPct+'%',   fsClr);
+  set('cc-kpi-crew',        crewPct+'%', crewClr);
+  set('cc-kpi-total',       total,       '');
+  set('cc-kpi-issues',      fsIssues,    fsIssues>0?'#e53935':'');
+  set('cc-kpi-crew-issues', crewIssues,  crewIssues>0?'#f59e0b':'');
   if (!total) {
-    wrap.innerHTML='<div class="empty-state"><div class="icon">\u{1F321}️</div><h3>No monitoring records for this date</h3><p>Save monitoring data first (use "Save &amp; Persist to DB" in the Monitoring tab), then view compliance here.</p></div>';
+    wrap.innerHTML='<div class="empty-state"><div class="icon">🌡️</div><h3>No monitoring records for this date</h3><p>Save monitoring data first, then view compliance here.</p></div>';
     return;
   }
-  wrap.innerHTML = `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
+
+  // Group records by truck_id for cleaner display
+  const byTruck = {};
+  records.forEach(r => {
+    if (!byTruck[r.truck_id]) byTruck[r.truck_id] = [];
+    byTruck[r.truck_id].push(r);
+  });
+
+  const truckColors = ['#1e3a5f','#0d5c3a','#5b21b6','#9a3412','#065f46','#1e40af','#7c2d12','#134e4a'];
+  const truckIds    = Object.keys(byTruck);
+
+  let rowsHtml = '';
+  truckIds.forEach((tid, ti) => {
+    const truckRows  = byTruck[tid];
+    const trk        = truckRows[0];
+    const tColor     = truckColors[ti % truckColors.length];
+    const tFsIss     = truckRows.filter(r=>r.food_safety_issue&&r.food_safety_issue!=='NONE').length;
+    const tCrewIss   = truckRows.filter(r=>r.crew_issue&&r.crew_issue!=='NONE').length;
+    const trucker    = trk.trucker_code || '—';
+    const truckType  = trk.truck_type   || '';
+
+    // Truck group header row
+    rowsHtml += `<tr style="background:#f1f5f9;border-top:2px solid ${tColor}">
+      <td colspan="8" style="padding:5px 12px">
+        <span style="background:${tColor};color:#fff;border-radius:4px;padding:2px 8px;font-weight:700;font-size:.75rem;margin-right:6px">${tid}</span>
+        ${truckType?`<span style="font-size:.72rem;color:var(--muted);margin-right:8px">${truckType}</span>`:''}
+        <span style="font-size:.75rem;color:#374151;font-weight:600">🚛 ${trucker}</span>
+        <span style="float:right;font-size:.72rem;color:var(--muted)">${truckRows.length} drops · FS: <b style="color:${tFsIss?'#e53935':'#16a34a'}">${tFsIss} issue${tFsIss!==1?'s':''}</b> · Crew: <b style="color:${tCrewIss?'#f59e0b':'#4f46e5'}">${tCrewIss} issue${tCrewIss!==1?'s':''}</b></span>
+      </td>
+    </tr>`;
+
+    truckRows.forEach(r => {
+      const fsIssue   = r.food_safety_issue && r.food_safety_issue!=='NONE';
+      const crewIssue = r.crew_issue && r.crew_issue!=='NONE';
+      const rowBg     = (fsIssue && crewIssue) ? '#fff1f2' : fsIssue ? '#fff8f0' : crewIssue ? '#f5f3ff' : '#fff';
+      const fsBadge   = fsIssue
+        ? `<span style="background:#fee2e2;color:#b91c1c;border-radius:4px;padding:1px 6px;font-size:.68rem;font-weight:700">${r.food_safety_issue}</span>`
+        : `<span style="color:#15803d;font-size:.7rem">✓ None</span>`;
+      const crewBadge = crewIssue
+        ? `<span style="background:#ede9fe;color:#6d28d9;border-radius:4px;padding:1px 6px;font-size:.68rem;font-weight:700">${r.crew_issue}</span>`
+        : `<span style="color:#4f46e5;font-size:.7rem">✓ None</span>`;
+      // Shorten customer name: take part after last " : " if present
+      const cname = r.customer_name||'—';
+      const shortName = cname.includes(' : ') ? cname.split(' : ').pop() : cname;
+
+      rowsHtml += `<tr style="border-bottom:1px solid #e5e7eb;background:${rowBg}">
+        <td style="padding:4px 10px 4px 20px;color:var(--muted);font-size:.7rem">${r.do_number||'—'}</td>
+        <td style="padding:4px 10px;font-size:.77rem;font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${cname}">${shortName}</td>
+        <td style="padding:4px 10px;text-align:center">${fsBadge}</td>
+        <td style="padding:4px 10px;font-size:.7rem;color:${fsIssue?'#b91c1c':'var(--muted)'};max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.food_safety_detail||''}">${r.food_safety_detail||'—'}</td>
+        <td style="padding:4px 10px;text-align:center">${crewBadge}</td>
+        <td style="padding:4px 10px;font-size:.7rem;color:${crewIssue?'#6d28d9':'var(--muted)'};max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.crew_detail||''}">${r.crew_detail||'—'}</td>
+      </tr>`;
+    });
+  });
+
+  wrap.innerHTML = `
+    <div style="display:flex;gap:12px;margin-bottom:10px;font-size:.77rem">
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:6px 14px;font-weight:700;color:#166534">
+        🌡️ Food Safety: <span style="font-size:1.1rem;color:${fsClr}">${fsPct}%</span>
+        <span style="font-weight:400;color:var(--muted);margin-left:6px">${total-fsIssues}/${total} clean</span>
+      </div>
+      <div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:6px;padding:6px 14px;font-weight:700;color:#4f46e5">
+        👷 Crew: <span style="font-size:1.1rem;color:${crewClr}">${crewPct}%</span>
+        <span style="font-weight:400;color:var(--muted);margin-left:6px">${total-crewIssues}/${total} clean</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
     <table style="width:100%;border-collapse:collapse;font-size:.77rem">
       <thead>
-        <tr>
-          <th colspan="5" style="padding:7px 12px;text-align:left;background:#064e3b;color:#d1fae5;font-size:.8rem">
-            🌡️ Food Safety Compliance &mdash; ${fsPct}% (${total-fsIssues}/${total} no issues)
-          </th>
-          <th colspan="2" style="padding:7px 12px;text-align:left;background:#1e1b4b;color:#e0e7ff;font-size:.8rem">
-            👷 Crew Compliance &mdash; ${crewPct}% (${total-crewIssues}/${total} no issues)
-          </th>
-        </tr>
-        <tr style="background:#f8fafc;border-bottom:2px solid var(--border)">
-          <th style="padding:7px 10px;text-align:left;min-width:80px">Truck</th>
-          <th style="padding:7px 10px;text-align:left;min-width:160px">Client</th>
-          <th style="padding:7px 10px;text-align:left">DO #</th>
-          <th style="padding:7px 10px;text-align:center;background:#f0fdf4">Food Safety</th>
-          <th style="padding:7px 10px;text-align:left;min-width:150px;background:#f0fdf4">FS Details</th>
-          <th style="padding:7px 10px;text-align:center;background:#f5f3ff">Crew</th>
-          <th style="padding:7px 10px;text-align:left;min-width:150px;background:#f5f3ff">Crew Details</th>
+        <tr style="background:#1e293b;color:#f1f5f9">
+          <th style="padding:7px 10px 7px 20px;text-align:left;width:90px">DO #</th>
+          <th style="padding:7px 10px;text-align:left">Client</th>
+          <th style="padding:7px 10px;text-align:center;background:#064e3b;color:#d1fae5;width:130px">🌡️ Food Safety</th>
+          <th style="padding:7px 10px;text-align:left;background:#064e3b;color:#d1fae5">FS Detail</th>
+          <th style="padding:7px 10px;text-align:center;background:#1e1b4b;color:#e0e7ff;width:130px">👷 Crew</th>
+          <th style="padding:7px 10px;text-align:left;background:#1e1b4b;color:#e0e7ff">Crew Detail</th>
         </tr>
       </thead>
-      <tbody>
-        ${records.map(r=>{
-          const fsIssue   = r.food_safety_issue && r.food_safety_issue!=='NONE';
-          const crewIssue = r.crew_issue && r.crew_issue!=='NONE';
-          const rowBg     = fsIssue||crewIssue ? '#fff8f0' : '';
-          const fsBadge   = fsIssue
-            ? `<span style="background:#fee2e2;color:#b91c1c;border-radius:4px;padding:2px 6px;font-size:.7rem;font-weight:700">${r.food_safety_issue}</span>`
-            : `<span style="background:#dcfce7;color:#15803d;border-radius:4px;padding:2px 6px;font-size:.7rem">✓ None</span>`;
-          const crewBadge = crewIssue
-            ? `<span style="background:#ede9fe;color:#6d28d9;border-radius:4px;padding:2px 6px;font-size:.7rem;font-weight:700">${r.crew_issue}</span>`
-            : `<span style="background:#ede9fe;color:#6d28d9;border-radius:4px;padding:2px 6px;font-size:.7rem">✓ None</span>`;
-          return `<tr style="border-bottom:1px solid var(--border);background:${rowBg}">
-            <td style="padding:5px 10px;font-weight:700">${r.truck_id||'—'}</td>
-            <td style="padding:5px 10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.customer_name||''}">${r.customer_name||'—'}</td>
-            <td style="padding:5px 10px;font-family:monospace;font-size:.72rem">${r.do_number||'—'}</td>
-            <td style="padding:5px 10px;text-align:center;background:#f0fdf4">${fsBadge}</td>
-            <td style="padding:5px 10px;background:#f0fdf4;color:${fsIssue?'#b91c1c':'var(--muted)'};font-size:.72rem">${r.food_safety_detail||'—'}</td>
-            <td style="padding:5px 10px;text-align:center;background:#f5f3ff">${crewBadge}</td>
-            <td style="padding:5px 10px;background:#f5f3ff;color:${crewIssue?'#6d28d9':'var(--muted)'};font-size:.72rem">${r.crew_detail||'—'}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
+      <tbody>${rowsHtml}</tbody>
     </table>
   </div>
-  <p style="margin-top:8px;font-size:.73rem;color:var(--muted)">
-    Data from Monitoring tab. To update food safety or crew fields, edit them in Monitoring and re-save.
+  <p style="margin-top:6px;font-size:.71rem;color:var(--muted)">
+    Source: Monitoring tab. Edit Food Safety &amp; Crew fields there and re-save to update.
   </p>`;
 }
 
@@ -4747,29 +4797,34 @@ function renderColdChain(records) {
 let _podRecords = [];
 
 function loadPodDates() {
+  const period = (document.getElementById('pod-period')||{}).value || 'daily';
   fetch('/api/pod')
     .then(r=>r.json()).then(d=>{
       const sel = document.getElementById('pod-date-filter');
       if (!sel) return;
       const prev = sel.value;
-      sel.innerHTML = '<option value="">Select date…</option>' +
+      sel.innerHTML = '<option value="">— Select date —</option>' +
         (d.dates||[]).map(dt=>`<option value="${dt}"${dt===prev?' selected':''}>${dt}</option>`).join('');
-      // POD historical summary
-      fetch('/api/pod/summary').then(r=>r.json()).then(s=>{
+      // POD historical summary tiles with period
+      fetch('/api/pod/summary?period='+period).then(r=>r.json()).then(s=>{
         const wrap = document.getElementById('pod-summary-wrap');
         if (!wrap) return;
-        const rows = (s.summary||[]).slice(0,10);
+        const rows = (s.summary||[]).slice(0,12);
         if (!rows.length) { wrap.innerHTML=''; return; }
-        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);font-size:.85rem;margin-bottom:8px">&#x1F4CA; Historical POD Compliance (last ${rows.length} dates)</div>
+        const periodLabel = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'}[period]||'Period';
+        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);font-size:.85rem;margin-bottom:8px">
+            📊 POD ${periodLabel}ly History (last ${rows.length} ${periodLabel.toLowerCase()}s)
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:8px">` +
           rows.map(row=>{
-            const bg = row.compliance_pct>=95?'#dcfce7':row.compliance_pct>=80?'#fef9c3':'#fee2e2';
-            const tc = row.compliance_pct>=95?'#166534':row.compliance_pct>=80?'#92400e':'#991b1b';
-            return `<div style="background:${bg};border-radius:8px;padding:8px 14px;min-width:130px;cursor:pointer;border:1px solid ${tc}22"
-                     onclick="document.getElementById('pod-date-filter').value='${row.date}';loadPod('${row.date}')">
-              <div style="font-weight:700;color:${tc};font-size:.8rem">${row.date}</div>
+            const bg = row.compliance_pct>=95?'#f0fdf4':row.compliance_pct>=80?'#fefce8':'#fff1f2';
+            const tc = row.compliance_pct>=95?'#166534':row.compliance_pct>=80?'#713f12':'#881337';
+            const clickFn = period==='daily' ? `document.getElementById('pod-date-filter').value='${row.date}';loadPod('${row.date}')` : '';
+            return `<div style="background:${bg};border-radius:8px;padding:8px 14px;min-width:140px;cursor:${period==='daily'?'pointer':'default'};border:1px solid ${tc}22;flex:0 0 auto"
+                     onclick="${clickFn}">
+              <div style="font-weight:700;color:${tc};font-size:.75rem;margin-bottom:3px">📋 ${row.label||row.date}</div>
               <div style="font-size:1.05rem;font-weight:800;color:${tc}">${row.compliance_pct}%</div>
-              <div style="font-size:.67rem;color:${tc}">${row.ontime}/${row.total} on-time</div>
+              <div style="font-size:.67rem;color:${tc}">${row.ontime||0}/${row.total} on-time · ${row.returned||0} returned</div>
             </div>`;
           }).join('') + '</div>';
       }).catch(()=>{});
