@@ -798,10 +798,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
           <th style="min-width:200px">Client Address</th>
           <th>Cluster</th><th>Sched.</th><th>Status</th><th>Actual Done</th>
           <th>OTIF</th><th style="min-width:145px">Concerns</th>
-          <th style="min-width:120px;background:#064e3b;color:#d1fae5">🌡️ Cold Chain</th>
+          <th style="min-width:160px;background:#064e3b;color:#d1fae5">🌡️ Cold Chain Issue</th>
           <th style="min-width:180px;background:#064e3b;color:#d1fae5">Issue Details</th>
-          <th style="min-width:120px;background:#1e1b4b;color:#e0e7ff">👷 Crew</th>
-          <th style="min-width:180px;background:#1e1b4b;color:#e0e7ff">Crew Details</th>
+          <th style="min-width:160px;background:#1e1b4b;color:#e0e7ff">👷 SOP Compliance</th>
+          <th style="min-width:180px;background:#1e1b4b;color:#e0e7ff">SOP Details</th>
           <th style="min-width:130px">Remarks</th>
         </tr>
       </thead>
@@ -902,8 +902,15 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
 <!-- ══════════════ COLD CHAIN ══════════════ -->
 <div class="page" id="page-cold-chain">
   <div class="section-row">
-    <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">🌡️ Cold Chain &amp; Food Safety Compliance</span>
+    <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">🌡️ Cold Chain &amp; SOP Compliance</span>
     <div class="btn-row" style="margin:0">
+      <!-- View toggle: Summary vs Detail -->
+      <div style="display:flex;border:1.5px solid var(--border);border-radius:6px;overflow:hidden;font-size:.8rem">
+        <button id="cc-view-summary" onclick="setCcView('summary')"
+          style="padding:4px 12px;border:none;background:#1e3a5f;color:#fff;cursor:pointer;font-family:inherit;font-size:.8rem">📊 Summary</button>
+        <button id="cc-view-detail" onclick="setCcView('detail')"
+          style="padding:4px 12px;border:none;background:#fff;color:var(--navy);cursor:pointer;font-family:inherit;font-size:.8rem">📋 Daily Detail</button>
+      </div>
       <select id="cc-period" onchange="loadColdChainDates()"
         style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
         <option value="daily">Daily</option>
@@ -913,47 +920,60 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
         <option value="yearly">Yearly</option>
       </select>
       <select id="cc-date-filter" onchange="loadColdChain(this.value)"
-        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
-        <option value="">Select date…</option>
+        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;display:none">
+        <option value="">— Select date —</option>
       </select>
       <button class="btn btn-outline btn-sm" onclick="loadColdChainDates()">🔄 Refresh</button>
     </div>
   </div>
   <p style="font-size:.76rem;color:var(--muted);margin:4px 0 10px">
-    Data sourced from Monitoring tab (Food Safety &amp; Crew columns). Persist monitoring first, then view compliance here.
-    <strong>100% = no food safety issues logged.</strong>
+    Data sourced from Monitoring tab. Persist monitoring first, then view compliance here.
+    <strong>100% = no issues logged.</strong>
   </p>
 
-  <!-- KPI strip -->
+  <!-- KPI strip (shown in both views) -->
   <div class="kpi-strip" style="margin:0 0 12px">
     <div class="kpi" style="border-left:4px solid #16a34a">
-      <div class="kpi-label">🌡️ Food Safety</div>
+      <div class="kpi-label">🌡️ Cold Chain</div>
       <div class="kpi-value" id="cc-kpi-rate" style="color:#16a34a">—</div>
     </div>
-    <div class="kpi" style="border-left:4px solid #6366f1">
-      <div class="kpi-label">👷 Crew Compliance</div>
-      <div class="kpi-value" id="cc-kpi-crew" style="color:#6366f1">—</div>
+    <div class="kpi" style="border-left:4px solid #4f46e5">
+      <div class="kpi-label">👷 SOP Compliance</div>
+      <div class="kpi-value" id="cc-kpi-crew" style="color:#4f46e5">—</div>
     </div>
     <div class="kpi" style="border-left:4px solid #0ea5e9">
       <div class="kpi-label">Total Deliveries</div>
       <div class="kpi-value" id="cc-kpi-total" style="color:#0ea5e9">—</div>
     </div>
     <div class="kpi" style="border-left:4px solid #e53935">
-      <div class="kpi-label">Food Safety Issues</div>
+      <div class="kpi-label">Cold Chain Issues</div>
       <div class="kpi-value" id="cc-kpi-issues" style="color:#e53935">—</div>
     </div>
     <div class="kpi" style="border-left:4px solid #f59e0b">
-      <div class="kpi-label">Crew Issues</div>
+      <div class="kpi-label">SOP Issues</div>
       <div class="kpi-value" id="cc-kpi-crew-issues" style="color:#f59e0b">—</div>
     </div>
   </div>
 
-  <!-- Historical trend summary -->
-  <div id="cc-summary-wrap" style="margin-bottom:14px"></div>
+  <!-- SUMMARY VIEW: period tiles + aggregated table -->
+  <div id="cc-view-summary-wrap">
+    <div id="cc-summary-wrap" style="margin-bottom:14px"></div>
+    <!-- Aggregated summary table by period -->
+    <div id="cc-agg-table-wrap"></div>
+  </div>
 
-  <!-- Per-delivery detail table -->
-  <div id="cc-table-wrap">
-    <div class="empty-state"><div class="icon">🌡️</div><h3>Select a date to view compliance records</h3></div>
+  <!-- DETAIL VIEW: date selector + per-delivery table -->
+  <div id="cc-view-detail-wrap" style="display:none">
+    <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      <label style="font-size:.8rem;font-weight:600;color:var(--navy)">Select Date:</label>
+      <select id="cc-date-filter-detail" onchange="document.getElementById('cc-date-filter').value=this.value;loadColdChain(this.value)"
+        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;min-width:160px">
+        <option value="">— Select date —</option>
+      </select>
+    </div>
+    <div id="cc-table-wrap">
+      <div class="empty-state"><div class="icon">🌡️</div><h3>Select a date to view records</h3></div>
+    </div>
   </div>
 </div>
 
@@ -4143,10 +4163,10 @@ function renderMonitoring() {
         <select class="mon-food-safety"
           onchange="monData[${i}].food_safety_issue=this.value;_toggleOtherInput(this,'fs-other-${i}');saveMonitoringTemp()"
           style="border:1px solid #86efac;border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%;background:#fff">
-          ${['NONE','Temperature Issue','Packaging Issue','Product Damage','Contamination Risk','Others'].map(o=>`<option value="${o}"${(r.food_safety_issue||'NONE')===o?' selected':''}>${o}</option>`).join('')}
+          ${['NONE','Temperature Deviation','Cold Storage Breach','Improper Handling','Packaging Damage','Cross-Contamination Risk','Equipment Failure','Delivery Delay (Temp Impact)','Others'].map(o=>`<option value="${o}"${(r.food_safety_issue||'NONE')===o?' selected':''}>${o}</option>`).join('')}
         </select>
-        <input id="fs-other-${i}" type="text" value="${(r.food_safety_issue&&!['NONE','Temperature Issue','Packaging Issue','Product Damage','Contamination Risk','Others'].includes(r.food_safety_issue))?r.food_safety_issue:''}" placeholder="Specify issue…"
-          style="margin-top:2px;width:100%;border:1px solid #f97316;border-radius:4px;padding:2px 5px;font-size:.72rem;font-family:inherit;box-sizing:border-box;display:${(r.food_safety_issue&&r.food_safety_issue!=='NONE'&&!['Temperature Issue','Packaging Issue','Product Damage','Contamination Risk','Others'].includes(r.food_safety_issue))||r.food_safety_issue==='Others'?'block':'none'}"
+        <input id="fs-other-${i}" type="text" value="${(r.food_safety_issue&&!['NONE','Temperature Deviation','Cold Storage Breach','Improper Handling','Packaging Damage','Cross-Contamination Risk','Equipment Failure','Delivery Delay (Temp Impact)','Others'].includes(r.food_safety_issue))?r.food_safety_issue:''}" placeholder="Specify issue…"
+          style="margin-top:2px;width:100%;border:1px solid #f97316;border-radius:4px;padding:2px 5px;font-size:.72rem;font-family:inherit;box-sizing:border-box;display:${(r.food_safety_issue&&r.food_safety_issue!=='NONE'&&!['Temperature Deviation','Cold Storage Breach','Improper Handling','Packaging Damage','Cross-Contamination Risk','Equipment Failure','Delivery Delay (Temp Impact)','Others'].includes(r.food_safety_issue))||r.food_safety_issue==='Others'?'block':'none'}"
           onchange="monData[${i}].food_safety_issue=this.value||'Others';saveMonitoringTemp()"/>
       </td>
       <td style="background:#f0fdf4;min-width:140px">
@@ -4158,10 +4178,10 @@ function renderMonitoring() {
         <select class="mon-crew-issue"
           onchange="monData[${i}].crew_issue=this.value;_toggleOtherInput(this,'crew-other-${i}');saveMonitoringTemp()"
           style="border:1px solid #a5b4fc;border-radius:4px;padding:2px 4px;font-size:.72rem;width:100%;background:#fff">
-          ${['NONE','SOP Violation','No Uniform','Behavior Issue','Absent/Late','Incomplete Docs','Others'].map(o=>`<option value="${o}"${(r.crew_issue||'NONE')===o?' selected':''}>${o}</option>`).join('')}
+          ${['NONE','SOP Violation','Incomplete Checklist','Improper Uniform/PPE','Behavior Issue','Absent/Late','Incomplete Docs','Others'].map(o=>`<option value="${o}"${(r.crew_issue||'NONE')===o?' selected':''}>${o}</option>`).join('')}
         </select>
-        <input id="crew-other-${i}" type="text" value="${(r.crew_issue&&!['NONE','SOP Violation','No Uniform','Behavior Issue','Absent/Late','Incomplete Docs','Others'].includes(r.crew_issue))?r.crew_issue:''}" placeholder="Specify issue…"
-          style="margin-top:2px;width:100%;border:1px solid #f97316;border-radius:4px;padding:2px 5px;font-size:.72rem;font-family:inherit;box-sizing:border-box;display:${(r.crew_issue&&r.crew_issue!=='NONE'&&!['SOP Violation','No Uniform','Behavior Issue','Absent/Late','Incomplete Docs','Others'].includes(r.crew_issue))||r.crew_issue==='Others'?'block':'none'}"
+        <input id="crew-other-${i}" type="text" value="${(r.crew_issue&&!['NONE','SOP Violation','Incomplete Checklist','Improper Uniform/PPE','Behavior Issue','Absent/Late','Incomplete Docs','Others'].includes(r.crew_issue))?r.crew_issue:''}" placeholder="Specify issue…"
+          style="margin-top:2px;width:100%;border:1px solid #f97316;border-radius:4px;padding:2px 5px;font-size:.72rem;font-family:inherit;box-sizing:border-box;display:${(r.crew_issue&&r.crew_issue!=='NONE'&&!['SOP Violation','Incomplete Checklist','Improper Uniform/PPE','Behavior Issue','Absent/Late','Incomplete Docs','Others'].includes(r.crew_issue))||r.crew_issue==='Others'?'block':'none'}"
           onchange="monData[${i}].crew_issue=this.value||'Others';saveMonitoringTemp()"/>
       </td>
       <td style="background:#f5f3ff;min-width:140px">
@@ -4633,56 +4653,126 @@ function gsheetsSync() {
 // ======================================================
 //  COLD CHAIN & FOOD SAFETY / CREW COMPLIANCE
 // ======================================================
+let _ccView = 'summary';
+function setCcView(v) {
+  _ccView = v;
+  const sw = document.getElementById('cc-view-summary-wrap');
+  const dw = document.getElementById('cc-view-detail-wrap');
+  const sb = document.getElementById('cc-view-summary');
+  const db = document.getElementById('cc-view-detail');
+  const ps = document.getElementById('cc-period');
+  if (sw) sw.style.display = v==='summary'?'':'none';
+  if (dw) dw.style.display = v==='detail'?'':'none';
+  if (sb) { sb.style.background = v==='summary'?'#1e3a5f':'#fff'; sb.style.color = v==='summary'?'#fff':'var(--navy)'; }
+  if (db) { db.style.background = v==='detail'?'#1e3a5f':'#fff'; db.style.color = v==='detail'?'#fff':'var(--navy)'; }
+  if (ps) ps.style.display = v==='summary'?'':'none';
+}
+
 function loadColdChainDates() {
   const period = (document.getElementById('cc-period')||{}).value || 'daily';
   fetch('/api/cold-chain')
     .then(r=>r.json()).then(d=>{
-      const sel = document.getElementById('cc-date-filter');
-      if (!sel) return;
-      const prev = sel.value;
-      sel.innerHTML = '<option value="">— Select date —</option>' +
-        (d.dates||[]).map(dt=>`<option value="${dt}"${dt===prev?' selected':''}>${dt}</option>`).join('');
-      // Load period-based summary tiles
+      // Populate detail date selectors
+      const dates = d.dates||[];
+      ['cc-date-filter','cc-date-filter-detail'].forEach(id=>{
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">— Select date —</option>' +
+          dates.map(dt=>`<option value="${dt}"${dt===prev?' selected':''}>${dt}</option>`).join('');
+      });
+      // Load period-based summary TABLE
       fetch('/api/cold-chain/summary?period='+period).then(r=>r.json()).then(s=>{
-        const wrap = document.getElementById('cc-summary-wrap');
-        if (!wrap) return;
-        const rows = (s.summary||[]).slice(0,12);
-        if (!rows.length) { wrap.innerHTML=''; return; }
-        const periodLabel = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'}[period]||'Period';
-        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);font-size:.85rem;margin-bottom:8px">
-            📊 ${periodLabel}ly Compliance History (last ${rows.length} ${periodLabel.toLowerCase()}s)
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">` +
-          rows.map(row=>{
-            const fsPct = row.compliance_pct;
-            const crewPct = row.crew_pct;
-            const worst = Math.min(fsPct, crewPct);
-            const bg = worst===100?'#f0fdf4':worst>=80?'#fefce8':'#fff1f2';
-            const tc = worst===100?'#166534':worst>=80?'#713f12':'#881337';
-            const clickDate = period==='daily' ? `document.getElementById('cc-date-filter').value='${row.date}';loadColdChain('${row.date}')` : '';
-            return `<div style="background:${bg};border-radius:8px;padding:8px 14px;min-width:140px;cursor:${period==='daily'?'pointer':'default'};border:1px solid ${tc}22;flex:0 0 auto"
-                     onclick="${clickDate}">
-              <div style="font-weight:700;color:${tc};font-size:.75rem;margin-bottom:3px">${row.label||row.date}</div>
-              <div style="display:flex;gap:8px;align-items:baseline">
-                <span style="font-size:.95rem;font-weight:800;color:#166534" title="Food Safety">🌡️ ${fsPct}%</span>
-                <span style="font-size:.95rem;font-weight:800;color:#4f46e5" title="Crew">👷 ${crewPct}%</span>
-              </div>
-              <div style="font-size:.67rem;color:${tc};margin-top:2px">${row.total} deliveries · ${row.issues} FS · ${row.crew_issues} Crew issue${(row.issues+row.crew_issues)!==1?'s':''}</div>
-            </div>`;
-          }).join('') + '</div>';
+        _renderCcSummaryTable(s.summary||[], period);
       }).catch(()=>{});
-      if (prev) loadColdChain(prev);
     }).catch(e=>showToast('Cold chain error: '+e.message,'error'));
+}
+
+function _renderCcSummaryTable(rows, period) {
+  const wrap = document.getElementById('cc-agg-table-wrap');
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML='<div class="empty-state"><div class="icon">\u{1F321}️</div><h3>No data yet</h3><p>Save monitoring records first.</p></div>';
+    return;
+  }
+  const periodLabel = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'}[period]||'Period';
+  // Update KPI strip from most recent row
+  const latest = rows[0];
+  const set = (id,v,c)=>{ const el=document.getElementById(id); if(el){el.textContent=v; if(c)el.style.color=c;} };
+  const fsClr   = latest.compliance_pct>=95?'#16a34a':latest.compliance_pct>=80?'#f59e0b':'#e53935';
+  const crewClr = latest.crew_pct>=95?'#4f46e5':latest.crew_pct>=80?'#f59e0b':'#e53935';
+  set('cc-kpi-rate',        latest.compliance_pct+'%', fsClr);
+  set('cc-kpi-crew',        latest.crew_pct+'%',       crewClr);
+  set('cc-kpi-total',       latest.total,              '');
+  set('cc-kpi-issues',      latest.issues,             latest.issues>0?'#e53935':'');
+  set('cc-kpi-crew-issues', latest.crew_issues,        latest.crew_issues>0?'#f59e0b':'');
+
+  function pctBar(pct, color) {
+    return '<div style="display:flex;align-items:center;gap:5px">' +
+      '<div style="flex:1;height:7px;background:#e5e7eb;border-radius:3px">' +
+        '<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:3px"></div>' +
+      '</div>' +
+      '<span style="font-weight:700;color:'+color+';font-size:.78rem;min-width:40px;text-align:right">'+pct+'%</span>' +
+    '</div>';
+  }
+
+  let rowsHtml = '';
+  rows.forEach(function(row) {
+    const fsPct   = row.compliance_pct;
+    const crewPct = row.crew_pct;
+    const fsColor   = fsPct>=95  ? '#16a34a' : fsPct>=80  ? '#f59e0b' : '#e53935';
+    const crewColor = crewPct>=95? '#4f46e5' : crewPct>=80? '#f59e0b' : '#e53935';
+    const worst     = Math.min(fsPct, crewPct);
+    const rowBg     = worst===100 ? '' : (worst>=80 ? '#fffbeb' : '#fff5f5');
+    const viewBtn   = period==='daily'
+      ? '<button onclick="setCcView(\'detail\');[\'cc-date-filter\',\'cc-date-filter-detail\'].forEach(function(id){var el=document.getElementById(id);if(el)el.value=\''+row.date+'\'});loadColdChain(\''+row.date+'\')" style="background:#1e3a5f;color:#fff;border:none;border-radius:4px;padding:2px 9px;font-size:.72rem;cursor:pointer">View</button>'
+      : '';
+    rowsHtml +=
+      '<tr style="border-bottom:1px solid #e5e7eb;background:'+rowBg+'">' +
+        '<td style="padding:8px 14px;font-weight:700;color:var(--navy)">'+(row.label||row.date)+'</td>' +
+        '<td style="padding:8px 10px;text-align:center;color:var(--muted)">'+row.total+'</td>' +
+        '<td style="padding:8px 14px;background:#f0fdf4;min-width:160px">'+pctBar(fsPct,fsColor)+'</td>' +
+        '<td style="padding:8px 10px;text-align:center;background:#f0fdf4;color:'+(row.issues>0?'#e53935':'#16a34a')+';font-weight:700">'+row.issues+'</td>' +
+        '<td style="padding:8px 10px;text-align:center;background:#f0fdf4;color:#16a34a">'+row.ok+'</td>' +
+        '<td style="padding:8px 14px;background:#f5f3ff;min-width:160px">'+pctBar(crewPct,crewColor)+'</td>' +
+        '<td style="padding:8px 10px;text-align:center;background:#f5f3ff;color:'+(row.crew_issues>0?'#f59e0b':'#4f46e5')+';font-weight:700">'+row.crew_issues+'</td>' +
+        '<td style="padding:8px 10px;text-align:center;background:#f5f3ff;color:#4f46e5">'+row.crew_ok+'</td>' +
+        (period==='daily' ? '<td style="padding:8px 10px;text-align:center">'+viewBtn+'</td>' : '') +
+      '</tr>';
+  });
+
+  const viewTh = period==='daily' ? '<th style="padding:9px 10px;text-align:center">Detail</th>' : '';
+  wrap.innerHTML =
+    '<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">' +
+    '<table style="width:100%;border-collapse:collapse;font-size:.8rem">' +
+      '<thead>' +
+        '<tr style="background:#1e293b;color:#f1f5f9">' +
+          '<th style="padding:9px 14px;text-align:left;min-width:120px">'+periodLabel+'</th>' +
+          '<th style="padding:9px 10px;text-align:center">Deliveries</th>' +
+          '<th style="padding:9px 14px;text-align:left;min-width:180px;background:#064e3b">🌡️ Cold Chain</th>' +
+          '<th style="padding:9px 10px;text-align:center;background:#064e3b">Issues</th>' +
+          '<th style="padding:9px 10px;text-align:center;background:#064e3b">Clean</th>' +
+          '<th style="padding:9px 14px;text-align:left;min-width:180px;background:#1e1b4b">👷 SOP Compliance</th>' +
+          '<th style="padding:9px 10px;text-align:center;background:#1e1b4b">Issues</th>' +
+          '<th style="padding:9px 10px;text-align:center;background:#1e1b4b">Clean</th>' +
+          viewTh +
+        '</tr>' +
+      '</thead>' +
+      '<tbody>'+rowsHtml+'</tbody>' +
+    '</table></div>' +
+    '<p style="margin-top:6px;font-size:.71rem;color:var(--muted)">Last '+rows.length+' '+periodLabel.toLowerCase()+'s. Change period above to regroup.</p>';
 }
 
 function loadColdChain(date) {
   if (!date) return;
+  setCcView('detail');
   const wrap = document.getElementById('cc-table-wrap');
   if (wrap) wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Loading…</div>';
   fetch('/api/cold-chain?date='+encodeURIComponent(date))
     .then(r=>r.json()).then(d=>{ renderColdChain(d.records||[]); })
     .catch(e=>showToast('Load error: '+e.message,'error'));
 }
+
 
 function renderColdChain(records) {
   const wrap = document.getElementById('cc-table-wrap');
@@ -4800,36 +4890,62 @@ function loadPodDates() {
   const period = (document.getElementById('pod-period')||{}).value || 'daily';
   fetch('/api/pod')
     .then(r=>r.json()).then(d=>{
+      const dates = d.dates||[];
       const sel = document.getElementById('pod-date-filter');
-      if (!sel) return;
-      const prev = sel.value;
-      sel.innerHTML = '<option value="">— Select date —</option>' +
-        (d.dates||[]).map(dt=>`<option value="${dt}"${dt===prev?' selected':''}>${dt}</option>`).join('');
-      // POD historical summary tiles with period
+      if (sel) {
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">— Select date —</option>' +
+          dates.map(function(dt){ return '<option value="'+dt+'"'+(dt===prev?' selected':'')+'>'+dt+'</option>'; }).join('');
+        if (prev) loadPod(prev);
+      }
+      // POD summary table
       fetch('/api/pod/summary?period='+period).then(r=>r.json()).then(s=>{
         const wrap = document.getElementById('pod-summary-wrap');
         if (!wrap) return;
-        const rows = (s.summary||[]).slice(0,12);
+        const rows = (s.summary||[]).slice(0,20);
         if (!rows.length) { wrap.innerHTML=''; return; }
         const periodLabel = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'}[period]||'Period';
-        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);font-size:.85rem;margin-bottom:8px">
-            📊 POD ${periodLabel}ly History (last ${rows.length} ${periodLabel.toLowerCase()}s)
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">` +
-          rows.map(row=>{
-            const bg = row.compliance_pct>=95?'#f0fdf4':row.compliance_pct>=80?'#fefce8':'#fff1f2';
-            const tc = row.compliance_pct>=95?'#166534':row.compliance_pct>=80?'#713f12':'#881337';
-            const clickFn = period==='daily' ? `document.getElementById('pod-date-filter').value='${row.date}';loadPod('${row.date}')` : '';
-            return `<div style="background:${bg};border-radius:8px;padding:8px 14px;min-width:140px;cursor:${period==='daily'?'pointer':'default'};border:1px solid ${tc}22;flex:0 0 auto"
-                     onclick="${clickFn}">
-              <div style="font-weight:700;color:${tc};font-size:.75rem;margin-bottom:3px">📋 ${row.label||row.date}</div>
-              <div style="font-size:1.05rem;font-weight:800;color:${tc}">${row.compliance_pct}%</div>
-              <div style="font-size:.67rem;color:${tc}">${row.ontime||0}/${row.total} on-time · ${row.returned||0} returned</div>
-            </div>`;
-          }).join('') + '</div>';
-      }).catch(()=>{});
-      if (prev) loadPod(prev);
-    }).catch(e=>showToast('POD error: '+e.message,'error'));
+        let rowsHtml = '';
+        rows.forEach(function(row) {
+          const pct    = row.compliance_pct;
+          const color  = pct>=95?'#16a34a':pct>=80?'#f59e0b':'#e53935';
+          const rowBg  = pct===100?'':pct>=80?'#fffbeb':'#fff5f5';
+          const bar    = '<div style="display:flex;align-items:center;gap:5px">'+
+            '<div style="flex:1;height:7px;background:#e5e7eb;border-radius:3px">'+
+              '<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:3px"></div>'+
+            '</div>'+
+            '<span style="font-weight:700;color:'+color+';font-size:.78rem;min-width:40px;text-align:right">'+pct+'%</span>'+
+          '</div>';
+          const viewBtn = period==='daily'
+            ? '<button onclick="document.getElementById(\'pod-date-filter\').value=\''+row.date+'\';loadPod(\''+row.date+'\')" style="background:#0d5c3a;color:#fff;border:none;border-radius:4px;padding:2px 9px;font-size:.72rem;cursor:pointer">View</button>'
+            : '';
+          rowsHtml +=
+            '<tr style="border-bottom:1px solid #e5e7eb;background:'+rowBg+'">'+
+              '<td style="padding:8px 14px;font-weight:700;color:var(--navy)">'+(row.label||row.date)+'</td>'+
+              '<td style="padding:8px 10px;text-align:center;color:var(--muted)">'+row.total+'</td>'+
+              '<td style="padding:8px 10px;text-align:center">'+row.returned+'</td>'+
+              '<td style="padding:8px 10px;text-align:center;color:#16a34a;font-weight:700">'+row.ontime+'</td>'+
+              '<td style="padding:8px 14px;min-width:160px">'+bar+'</td>'+
+              (period==='daily'?'<td style="padding:8px 10px;text-align:center">'+viewBtn+'</td>':'')+
+            '</tr>';
+        });
+        const viewTh = period==='daily'?'<th style="padding:9px 10px;text-align:center">Detail</th>':'';
+        wrap.innerHTML =
+          '<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">'+
+          '<table style="width:100%;border-collapse:collapse;font-size:.8rem">'+
+            '<thead><tr style="background:#1e293b;color:#f1f5f9">'+
+              '<th style="padding:9px 14px;text-align:left">'+periodLabel+'</th>'+
+              '<th style="padding:9px 10px;text-align:center">Deliveries</th>'+
+              '<th style="padding:9px 10px;text-align:center">Returned</th>'+
+              '<th style="padding:9px 10px;text-align:center">On-Time</th>'+
+              '<th style="padding:9px 14px;text-align:left;min-width:180px">POD Compliance</th>'+
+              viewTh+
+            '</tr></thead>'+
+            '<tbody>'+rowsHtml+'</tbody>'+
+          '</table></div>'+
+          '<p style="margin-top:6px;font-size:.71rem;color:var(--muted)">Last '+rows.length+' '+periodLabel.toLowerCase()+'s. Target: ≥95% on-time (within 2 days).</p>';
+      }).catch(function(){});
+    }).catch(function(e){ showToast('POD error: '+e.message,'error'); });
 }
 
 function loadPod(date) {
@@ -4845,13 +4961,13 @@ function renderPod() {
   const tbody = document.getElementById('pod-tbody');
   if (!tbody) return;
   const total   = _podRecords.length;
-  const ontime  = _podRecords.filter(r=>r.pod_status==='ON-TIME').length;
-  const late    = _podRecords.filter(r=>r.pod_status==='LATE').length;
-  const pending = _podRecords.filter(r=>!r.return_date).length;
+  const ontime  = _podRecords.filter(function(r){return r.pod_status==='ON-TIME';}).length;
+  const late    = _podRecords.filter(function(r){return r.pod_status==='LATE';}).length;
+  const pending = _podRecords.filter(function(r){return !r.return_date;}).length;
   const ret     = total - pending;
   const compPct = ret ? Math.round(ontime/ret*1000)/10 : 0;
   const clr     = compPct>=95?'#16a34a':compPct>=80?'#f59e0b':'#e53935';
-  const set = (id,v,c)=>{ const el=document.getElementById(id); if(el){el.textContent=v; if(c)el.style.color=c;} };
+  const set = function(id,v,c){ var el=document.getElementById(id); if(el){el.textContent=v; if(c)el.style.color=c;} };
   set('pod-kpi-rate',    ret?compPct+'%':'—', ret?clr:'');
   set('pod-kpi-total',   total,    '');
   set('pod-kpi-ontime',  ontime,   '');
@@ -4861,60 +4977,60 @@ function renderPod() {
     tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No monitoring records for this date. Persist monitoring first.</td></tr>';
     return;
   }
-  tbody.innerHTML = _podRecords.map((r,i)=>{
-    let agingTxt='—';
-    let statusBadge='<span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 7px;font-size:.72rem">PENDING</span>';
+  tbody.innerHTML = _podRecords.map(function(r,i){
+    var agingTxt='—';
+    var statusBadge='<span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 7px;font-size:.72rem">PENDING</span>';
     if (r.return_date) {
-      const days = (r.days_aging!==null&&r.days_aging!==undefined)?r.days_aging:'?';
+      var days = (r.days_aging!==null&&r.days_aging!==undefined)?r.days_aging:'?';
       agingTxt = days+'d';
-      if (r.pod_status==='ON-TIME') statusBadge=`<span style="background:#dcfce7;color:#15803d;border-radius:4px;padding:2px 7px;font-size:.72rem;font-weight:700">✓ ON-TIME</span>`;
-      else statusBadge=`<span style="background:#fee2e2;color:#b91c1c;border-radius:4px;padding:2px 7px;font-size:.72rem;font-weight:700">LATE</span>`;
+      if (r.pod_status==='ON-TIME') statusBadge='<span style="background:#dcfce7;color:#15803d;border-radius:4px;padding:2px 7px;font-size:.72rem;font-weight:700">✓ ON-TIME</span>';
+      else statusBadge='<span style="background:#fee2e2;color:#b91c1c;border-radius:4px;padding:2px 7px;font-size:.72rem;font-weight:700">LATE</span>';
     }
-    const agingClr = r.pod_status==='LATE'?'#b91c1c':r.pod_status==='ON-TIME'?'#15803d':'';
-    const rowBg    = r.pod_status==='LATE'?'#fff5f5':r.pod_status==='ON-TIME'?'#f0fdf4':'';
-    return `<tr style="border-bottom:1px solid var(--border);background:${rowBg}">
-      <td style="padding:6px 10px;font-family:monospace;font-size:.74rem">${r.do_number||'—'}</td>
-      <td style="padding:6px 10px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.customer_name||''}">${r.customer_name||'—'}</td>
-      <td style="padding:6px 10px;font-weight:700">${r.truck_id||'—'}</td>
-      <td style="padding:6px 10px">${r.plan_date||'—'}</td>
-      <td style="padding:6px 10px">
-        <input type="date" value="${r.return_date||''}"
-          style="border:1px solid var(--border);border-radius:4px;padding:3px 7px;font-size:.78rem;font-family:inherit"
-          onchange="_podRecords[${i}].return_date=this.value;_updatePodAging(${i})">
-      </td>
-      <td style="padding:6px 10px;text-align:center;font-weight:700;color:${agingClr}">${agingTxt}</td>
-      <td style="padding:6px 10px;text-align:center">${statusBadge}</td>
-      <td style="padding:6px 10px">
-        <input type="text" value="${r.pod_remarks||''}" placeholder="remarks…"
-          style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.78rem;font-family:inherit"
-          onchange="_podRecords[${i}].pod_remarks=this.value">
-      </td>
-    </tr>`;
+    var agingClr = r.pod_status==='LATE'?'#b91c1c':r.pod_status==='ON-TIME'?'#15803d':'';
+    var rowBg    = r.pod_status==='LATE'?'#fff5f5':r.pod_status==='ON-TIME'?'#f0fdf4':'';
+    return '<tr style="border-bottom:1px solid var(--border);background:'+rowBg+'">'+
+      '<td style="padding:6px 10px;font-family:monospace;font-size:.74rem">'+(r.do_number||'—')+'</td>'+
+      '<td style="padding:6px 10px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(r.customer_name||'')+'">'+(r.customer_name||'—')+'</td>'+
+      '<td style="padding:6px 10px;font-weight:700">'+(r.truck_id||'—')+'</td>'+
+      '<td style="padding:6px 10px">'+(r.plan_date||'—')+'</td>'+
+      '<td style="padding:6px 10px">'+
+        '<input type="date" value="'+(r.return_date||'')+'" '+
+          'style="border:1px solid var(--border);border-radius:4px;padding:3px 7px;font-size:.78rem;font-family:inherit" '+
+          'onchange="_podRecords['+i+'].return_date=this.value;_updatePodAging('+i+')">'+
+      '</td>'+
+      '<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+agingClr+'">'+agingTxt+'</td>'+
+      '<td style="padding:6px 10px;text-align:center">'+statusBadge+'</td>'+
+      '<td style="padding:6px 10px">'+
+        '<input type="text" value="'+(r.pod_remarks||'')+'" placeholder="remarks…" '+
+          'style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.78rem;font-family:inherit" '+
+          'onchange="_podRecords['+i+'].pod_remarks=this.value">'+
+      '</td>'+
+    '</tr>';
   }).join('');
 }
 
 function _updatePodAging(i) {
-  const r = _podRecords[i];
+  var r = _podRecords[i];
   if (!r || !r.return_date || !r.plan_date) return;
-  const diff = Math.round((new Date(r.return_date) - new Date(r.plan_date)) / 86400000);
+  var diff = Math.round((new Date(r.return_date) - new Date(r.plan_date)) / 86400000);
   r.days_aging = diff;
   r.pod_status = diff <= 2 ? 'ON-TIME' : 'LATE';
   renderPod();
 }
 
 function savePod() {
-  const btn = document.getElementById('pod-save-btn');
+  var btn = document.getElementById('pod-save-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   fetch('/api/pod', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(_podRecords)
-  }).then(r => r.json()).then(d => {
-    if (btn) { btn.disabled = false; btn.textContent = 'Save POD Updates'; }
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Return Dates'; }
     if (d.success) showToast('POD records saved!', 'success');
-    else showToast('Save failed: ' + (d.error||'unknown'), 'error');
-  }).catch(() => {
-    if (btn) { btn.disabled = false; btn.textContent = 'Save POD Updates'; }
+    else showToast('Save failed: '+(d.error||'unknown'), 'error');
+  }).catch(function(){
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Return Dates'; }
     showToast('Connection error saving POD.', 'error');
   });
 }
