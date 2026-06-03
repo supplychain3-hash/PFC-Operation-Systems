@@ -465,7 +465,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
   <div style="background:#fff;border-radius:14px;padding:42px 38px;width:390px;max-width:95vw;box-shadow:0 8px 48px rgba(0,0,0,.55);text-align:center">
     <div style="font-size:2.5rem;margin-bottom:6px">&#x1F69A;</div>
     <div style="font-size:1.4rem;font-weight:700;color:#0d2748;margin-bottom:4px">PFC Logistics System</div>
-    <div style="font-size:.85rem;color:#888;margin-bottom:28px">Sign in to access the routing system</div>
+    <div style="font-size:.85rem;color:#888;margin-bottom:14px">Sign in to access the routing system</div>
+    <div id="login-wake-hint" style="font-size:.75rem;color:#f59e0b;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:7px 11px;margin-bottom:16px;display:none">
+      ⏳ Server is waking up from sleep — this can take up to 60 seconds on first load. Please wait…
+    </div>
     <div style="text-align:left;margin-bottom:14px">
       <label style="font-size:.8rem;font-weight:600;color:#444;display:block;margin-bottom:5px">Username</label>
       <input type="text" id="login-username" placeholder="e.g. planner1, tower1"
@@ -1425,8 +1428,16 @@ document.addEventListener('DOMContentLoaded', () => {
   initMap();
   loadWarehouseData();
 
+  // Show "waking up" hint if server takes >5s (Render cold start on free tier)
+  const _pageWakeTimer = setTimeout(()=>{
+    const h = document.getElementById('login-wake-hint');
+    if (h) { h.style.display='block'; showLoginOverlay(); }
+  }, 5000);
+
   // Check authentication via server session
   fetch('/api/me').then(r=>r.json()).then(d=>{
+    clearTimeout(_pageWakeTimer);
+    const h = document.getElementById('login-wake-hint'); if(h) h.style.display='none';
     if (d.authenticated) {
       applyUser(d.display, d.role);
       fetch('/api/get-plan?router=' + encodeURIComponent(currentRouter))
@@ -1440,7 +1451,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       showLoginOverlay();
     }
-  }).catch(()=>showLoginOverlay());
+  }).catch(()=>{ clearTimeout(_pageWakeTimer); showLoginOverlay(); });
 });
 
 // ======================================================
@@ -1463,9 +1474,14 @@ function doLogin() {
     errEl.style.display = 'block'; return;
   }
   btn.disabled = true; btn.textContent = 'Signing in...';
+  // Show "waking up" hint if server takes >4s (Render cold start)
+  const _wakeTimer = setTimeout(()=>{
+    if (btn.disabled) btn.textContent = 'Waking up server... (30s)';
+  }, 4000);
   fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({username, password})
   }).then(r => r.json()).then(d => {
+    clearTimeout(_wakeTimer);
     btn.disabled = false; btn.innerHTML = 'Sign In &#x2192;';
     if (d.ok) {
       document.getElementById('login-overlay').style.display = 'none';
@@ -1485,8 +1501,9 @@ function doLogin() {
       document.getElementById('login-password').focus();
     }
   }).catch(() => {
+    clearTimeout(_wakeTimer);
     btn.disabled = false; btn.innerHTML = 'Sign In &#x2192;';
-    errEl.textContent = 'Connection error. Please try again.';
+    errEl.textContent = 'Connection error — server may be starting up. Wait 30s and try again.';
     errEl.style.display = 'block';
   });
 }

@@ -3213,5 +3213,11 @@ def gsheets_push_plan():
         return jsonify({'error': str(e)}), 500
 
 
+# ── Initialise DB on every startup (safe: uses IF NOT EXISTS + migrations) ──
+try:
+    init_db()
+except Exception as _e:
+    print(f"[WARN] init_db() failed: {_e}")
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
