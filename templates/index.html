@@ -2242,8 +2242,8 @@ function addEmptyTruck() {
   const newId = 'TRK-'+String(maxNum+1).padStart(3,'0');
   currentPlan.push({
     truck_id:newId, truck_type:'5MT', truck_cap:5000, rated_cap:5000,
-    acc_weight:0, util_pct:0, pickup_wh:'FCSC', all_whs:['FCSC'],
-    wh_group:'NAVOTAS', trucker_code:'', ref_number:'',
+    acc_weight:0, util_pct:0, pickup_wh:'', all_whs:[],
+    wh_group:'', trucker_code:'', ref_number:'',
     total_km:0, stops:[],
   });
   autosave(); renderPlan();
@@ -2251,7 +2251,7 @@ function addEmptyTruck() {
     const el=document.getElementById('tc-'+(currentPlan.length-1));
     if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
   },100);
-  showToast('Empty truck added — drag stops in','success');
+  showToast('Empty truck added — WH will be set by first stop moved in','success');
 }
 
 // ── Renumber trucks TRK-001, TRK-002... after any delete/merge ─────────────
@@ -3023,6 +3023,7 @@ function openReassign(ti, si) {
   sel.innerHTML=currentPlan.map((t,i)=>{
     const tWh=(t.pickup_wh||t.wh||'').toUpperCase().trim();
     // Use truck's wh_group directly (set by server) for most reliable check
+    // If destination truck has no WH yet (newly added empty truck), always allow
     const srcGroup = srcTruck.wh_group || (warehouseData[srcWh]||{}).group || _WH_GROUPS[srcWh] || srcWh;
     const dstGroup = t.wh_group       || (warehouseData[tWh] ||{}).group || _WH_GROUPS[tWh]  || tWh;
     const incompatible=srcWh&&tWh&&srcGroup!==dstGroup;
@@ -3060,6 +3061,13 @@ function confirmReassign() {
     currentPlan[ti].util_pct      = round2(currentPlan[ti].acc_weight/rc1);
     currentPlan[newTi].acc_weight = round2(currentPlan[newTi].stops.reduce((a,s)=>a+s.vol,0));
     currentPlan[newTi].util_pct   = round2(currentPlan[newTi].acc_weight/rc2);
+    // Auto-assign WH to empty truck from the first stop moved in
+    if (!currentPlan[newTi].pickup_wh && stop.wh) {
+      const wh = (stop.wh||'').toUpperCase().trim();
+      currentPlan[newTi].pickup_wh = wh;
+      currentPlan[newTi].all_whs   = [wh];
+      currentPlan[newTi].wh_group  = _WH_GROUPS[wh] || (warehouseData[wh]||{}).group || '';
+    }
     showToast('Stop moved to '+currentPlan[newTi].truck_id,'success');
   }
   closeOverlay('reassign-overlay');
