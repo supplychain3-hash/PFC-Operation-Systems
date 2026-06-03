@@ -940,6 +940,9 @@ def init_db():
         ("food_safety_detail","TEXT DEFAULT ''"),
         ("crew_issue",        "TEXT DEFAULT 'NONE'"),
         ("crew_detail",       "TEXT DEFAULT ''"),
+        ("do_number",         "TEXT DEFAULT ''"),
+        ("return_date",       "TEXT DEFAULT ''"),
+        ("pod_remarks",       "TEXT DEFAULT ''"),
         ("saved_at",          "TEXT DEFAULT (datetime('now','localtime'))"),
     ]
     for col, coltype in _mon_cols:
@@ -1802,15 +1805,18 @@ def save_monitoring_db():
             c.execute('''INSERT INTO monitoring_records
                 (plan_id,plan_date,truck_id,truck_type,seq,customer_name,cluster_id,area,
                  status,receiving_time,actual_done,otif_status,concerns,remarks,trucker_code,
-                 shipping_address,food_safety_issue,food_safety_detail,crew_issue,crew_detail)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                 shipping_address,food_safety_issue,food_safety_detail,crew_issue,crew_detail,
+                 do_number,return_date,pod_remarks)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                       (plan_id,plan_date,row.get('truck_id'),row.get('truck_type'),row.get('seq'),
                        row.get('customer_name'),row.get('cluster_id'),row.get('area'),row.get('status'),
                        row.get('receiving_time'),row.get('actual_done'),row.get('otif_status'),
                        row.get('concerns'),row.get('remarks'),row.get('trucker_code'),
                        row.get('shipping_address',''),
                        row.get('food_safety_issue','NONE'), row.get('food_safety_detail',''),
-                       row.get('crew_issue','NONE'),        row.get('crew_detail','')))
+                       row.get('crew_issue','NONE'),        row.get('crew_detail',''),
+                       row.get('do_number',''),             row.get('return_date',''),
+                       row.get('pod_remarks','')))
             saved += 1
         conn.commit(); conn.close()
         return jsonify({'success': True, 'saved': saved})
@@ -1820,54 +1826,48 @@ def save_monitoring_db():
 
 
 # ─────────────────────────────────────────────────────────────
-#  COLD CHAIN COMPLIANCE
+#  COLD CHAIN COMPLIANCE  (reads from monitoring_records)
 # ─────────────────────────────────────────────────────────────
 @app.route('/api/cold-chain', methods=['GET'])
 def get_cold_chain():
+    """
+    GET /api/cold-chain          → list of dates that have monitoring records
+    GET /api/cold-chain?date=X   → all monitoring rows for that date (cold chain view)
+    """
     try:
         date = request.args.get('date', '')
         conn = open_db(); c = conn.cursor()
         if date:
-            c.execute('SELECT * FROM cold_chain_records WHERE plan_date=? ORDER BY truck_id,id', (date,))
+            c.execute('''SELECT id, plan_date, truck_id, customer_name, do_number,
+                                food_safety_issue, food_safety_detail
+                         FROM monitoring_records
+                         WHERE plan_date=? ORDER BY truck_id, seq''', (date,))
+            cols = [d[0] for d in c.description]
+            rows = [dict(zip(cols, r)) for r in c.fetchall()]
+            conn.close()
+            return jsonify({'records': rows})
         else:
-            c.execute('SELECT DISTINCT plan_date FROM cold_chain_records ORDER BY plan_date DESC')
+            c.execute('''SELECT DISTINCT plan_date FROM monitoring_records
+                         WHERE plan_date IS NOT NULL AND plan_date != ''
+                         ORDER BY plan_date DESC''')
             dates = [r[0] for r in c.fetchall()]
             conn.close()
             return jsonify({'dates': dates})
-        cols = [d[0] for d in c.description]
-        rows = [dict(zip(cols, r)) for r in c.fetchall()]
-        conn.close()
-        return jsonify({'records': rows})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/cold-chain', methods=['POST'])
-def save_cold_chain():
-    try:
-        data = request.get_json() or {}
-        records = data.get('records', [])
-        plan_date = data.get('plan_date', datetime.now().strftime('%Y-%m-%d'))
-        conn = open_db(); c = conn.cursor()
-        c.execute('DELETE FROM cold_chain_records WHERE plan_date=?', (plan_date,))
-        for r in records:
-            c.execute('INSERT INTO cold_chain_records (plan_date,truck_id,do_number,customer_name,has_issue,issue_details) VALUES (?,?,?,?,?,?)',
-                      (plan_date, r.get('truck_id',''), r.get('do_number',''), r.get('customer_name',''),
-                       1 if r.get('has_issue') else 0, r.get('issue_details','')))
-        conn.commit(); conn.close()
-        return jsonify({'success': True, 'saved': len(records)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/cold-chain/summary', methods=['GET'])
 def cold_chain_summary():
-    """Returns compliance % grouped by date."""
+    """Returns compliance % grouped by date, sourced from monitoring_records."""
     try:
         conn = open_db(); c = conn.cursor()
         c.execute('''SELECT plan_date,
                             COUNT(*) as total,
-                            SUM(CASE WHEN has_issue=0 THEN 1 ELSE 0 END) as ok,
-                            SUM(CASE WHEN has_issue=1 THEN 1 ELSE 0 END) as issues
-                     FROM cold_chain_records GROUP BY plan_date ORDER BY plan_date DESC''')
+                            SUM(CASE WHEN food_safety_issue='NONE' OR food_safety_issue IS NULL THEN 1 ELSE 0 END) as ok,
+                            SUM(CASE WHEN food_safety_issue IS NOT NULL AND food_safety_issue!='NONE' THEN 1 ELSE 0 END) as issues
+                     FROM monitoring_records
+                     WHERE plan_date IS NOT NULL AND plan_date != ''
+                     GROUP BY plan_date ORDER BY plan_date DESC''')
         rows = [{'date':r[0],'total':r[1],'ok':r[2],'issues':r[3],
                  'compliance_pct': round(r[2]/r[1]*100,1) if r[1] else 100.0}
                 for r in c.fetchall()]
@@ -1878,62 +1878,69 @@ def cold_chain_summary():
 
 
 # ─────────────────────────────────────────────────────────────
-#  POD RETURN COMPLIANCE
+#  POD RETURN COMPLIANCE  (reads/updates monitoring_records)
 # ─────────────────────────────────────────────────────────────
 @app.route('/api/pod', methods=['GET'])
 def get_pod():
+    """
+    GET /api/pod              → list of dates with monitoring records
+    GET /api/pod?date=X       → monitoring rows for that date with POD fields
+    """
     try:
+        date = request.args.get('date', '')
         conn = open_db(); c = conn.cursor()
-        c.execute('SELECT * FROM pod_records ORDER BY delivery_date DESC, id DESC')
-        cols = [d[0] for d in c.description]
-        rows = [dict(zip(cols, r)) for r in c.fetchall()]
-        conn.close()
-        return jsonify({'records': rows})
+        if date:
+            c.execute('''SELECT id, plan_date, truck_id, customer_name, do_number,
+                                area, status, return_date, pod_remarks
+                         FROM monitoring_records
+                         WHERE plan_date=? ORDER BY truck_id, seq''', (date,))
+            cols = [d[0] for d in c.description]
+            rows = []
+            for r in c.fetchall():
+                row = dict(zip(cols, r))
+                # compute aging
+                row['days_aging'] = None
+                row['pod_status'] = 'PENDING'
+                if row.get('return_date'):
+                    try:
+                        d1 = datetime.strptime(row['plan_date'], '%Y-%m-%d')
+                        d2 = datetime.strptime(row['return_date'], '%Y-%m-%d')
+                        row['days_aging'] = (d2 - d1).days
+                        row['pod_status'] = 'ON-TIME' if row['days_aging'] <= 2 else 'LATE'
+                    except Exception:
+                        pass
+                rows.append(row)
+            conn.close()
+            return jsonify({'records': rows})
+        else:
+            c.execute('''SELECT DISTINCT plan_date FROM monitoring_records
+                         WHERE plan_date IS NOT NULL AND plan_date != ''
+                         ORDER BY plan_date DESC''')
+            dates = [r[0] for r in c.fetchall()]
+            conn.close()
+            return jsonify({'dates': dates})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/pod', methods=['POST'])
 def save_pod():
+    """Update return_date and pod_remarks on individual monitoring_records rows."""
     try:
         data = request.get_json() or {}
         records = data.get('records', [])
         conn = open_db(); c = conn.cursor()
         saved = 0
         for r in records:
-            # Calculate days aging if return date provided
-            days = None
-            if r.get('delivery_date') and r.get('return_date'):
-                try:
-                    d1 = datetime.strptime(r['delivery_date'], '%Y-%m-%d')
-                    d2 = datetime.strptime(r['return_date'],   '%Y-%m-%d')
-                    days = (d2 - d1).days
-                except Exception:
-                    pass
-            status = 'PENDING'
-            if r.get('return_date'):
-                status = 'ON-TIME' if (days is not None and days <= 2) else 'LATE'
-            if r.get('id'):
-                c.execute('''UPDATE pod_records SET return_date=?,days_aging=?,status=?,remarks=?,
-                             saved_at=datetime('now','localtime') WHERE id=?''',
-                          (r.get('return_date',''), days, status, r.get('remarks',''), r['id']))
-            else:
-                c.execute('''INSERT INTO pod_records (do_number,customer_name,truck_id,delivery_date,return_date,days_aging,status,remarks)
-                             VALUES (?,?,?,?,?,?,?,?)''',
-                          (r.get('do_number',''), r.get('customer_name',''), r.get('truck_id',''),
-                           r.get('delivery_date',''), r.get('return_date',''), days, status, r.get('remarks','')))
+            if not r.get('id'):
+                continue
+            c.execute('''UPDATE monitoring_records
+                         SET return_date=?, pod_remarks=?,
+                             saved_at=datetime('now','localtime')
+                         WHERE id=?''',
+                      (r.get('return_date', ''), r.get('pod_remarks', ''), r['id']))
             saved += 1
         conn.commit(); conn.close()
         return jsonify({'success': True, 'saved': saved})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/pod/<int:pod_id>', methods=['DELETE'])
-def delete_pod(pod_id):
-    try:
-        conn = open_db(); c = conn.cursor()
-        c.execute('DELETE FROM pod_records WHERE id=?', (pod_id,))
-        conn.commit(); conn.close()
-        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -3128,6 +3135,8 @@ def gsheets_save_config():
     return jsonify({'success': True})
 
 
+
+
 @app.route('/api/gsheets/push-plan', methods=['POST'])
 def gsheets_push_plan():
     data      = request.get_json() or {}
@@ -3165,12 +3174,7 @@ def gsheets_push_plan():
     try:
         svc = _get_gsheets_service()
         tab = 'Route Plan'
-        try:
-            svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={
-                'requests': [{'addSheet': {'properties': {'title': tab}}}]
-            }).execute()
-        except Exception:
-            pass
+        _ensure_tab(svc, sheet_id, tab)
         svc.spreadsheets().values().clear(
             spreadsheetId=sheet_id, range="'" + tab + "'").execute()
         svc.spreadsheets().values().update(
@@ -3179,186 +3183,10 @@ def gsheets_push_plan():
             valueInputOption='USER_ENTERED',
             body={'values': rows}
         ).execute()
-        return jsonify({'success': True, 'rows_written': len(rows) - 1,
-                        'sheet_url': 'https://docs.google.com/spreadsheets/d/' + sheet_id})
-    except RuntimeError as e:
-        return jsonify({'error': str(e)}), 503
+        return jsonify({'success': True, 'rows': len(rows) - 1})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-@app.route('/api/gsheets/push-monitoring', methods=['POST'])
-def gsheets_push_monitoring():
-    data     = request.get_json() or {}
-    sheet_id = (data.get('sheet_id') or '').strip()
-    router   = (data.get('router') or 'default').strip()
-    records  = data.get('records', [])
-    if not sheet_id:
-        return jsonify({'error': 'sheet_id is required'}), 400
-    if not records:
-        temp_mon = get_router_temp('monitoring', router)
-        if os.path.exists(temp_mon):
-            with open(temp_mon) as fp:
-                saved = json.load(fp)
-                records = saved.get('records', [])
-    rows = [['Date', 'Truck ID', 'Truck Type', 'Seq', 'Customer', 'Address',
-             'Cluster', 'WH', 'Volume (KG)', 'SO#', 'Sched. Time', 'Status',
-             'Actual Time', 'OTIF Status', 'Concerns', 'Remarks', 'Stock Transfer']]
-    for r in records:
-        rows.append([
-            r.get('plan_date', ''),
-            r.get('truck_id', ''),
-            r.get('truck_type', ''),
-            r.get('seq', ''),
-            r.get('customer_name', ''),
-            r.get('shipping_address', ''),
-            r.get('cluster_id', ''),
-            r.get('wh', ''),
-            round(float(r.get('vol', 0) or 0), 2),
-            r.get('doc_number', ''),
-            r.get('receiving_time') or r.get('sched_time', ''),
-            r.get('status', ''),
-            r.get('actual_time', ''),
-            r.get('otif_status', ''),
-            r.get('concerns', ''),
-            r.get('remarks', ''),
-            'YES' if r.get('is_stock_transfer') else '',
-        ])
-    try:
-        svc = _get_gsheets_service()
-        tab = 'Monitoring'
-        try:
-            svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={
-                'requests': [{'addSheet': {'properties': {'title': tab}}}]
-            }).execute()
-        except Exception:
-            pass
-        svc.spreadsheets().values().clear(
-            spreadsheetId=sheet_id, range="'" + tab + "'").execute()
-        svc.spreadsheets().values().update(
-            spreadsheetId=sheet_id,
-            range="'" + tab + "'!A1",
-            valueInputOption='USER_ENTERED',
-            body={'values': rows}
-        ).execute()
-        return jsonify({'success': True, 'rows_written': len(rows) - 1,
-                        'sheet_url': 'https://docs.google.com/spreadsheets/d/' + sheet_id})
-    except RuntimeError as e:
-        return jsonify({'error': str(e)}), 503
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# Analytics helpers
-def _iso_week(d):
-    from datetime import datetime as _dt
-    try: return _dt.strptime(d, '%Y-%m-%d').strftime('%G-W%V')
-    except: return d
-
-def _quarter_key(d):
-    try:
-        m = int(d[5:7])
-        return d[:4] + '-Q' + str((m - 1) // 3 + 1)
-    except: return d
-
-
-@app.route('/api/analytics', methods=['GET'])
-def get_analytics():
-    period = request.args.get('period', 'daily')
-    conn = sqlite3.connect(DB_PATH); c = conn.cursor()
-    # Use the most recent plan per date (handles multiple routers saving same day)
-    c.execute('''SELECT plan_date, summary FROM route_plans
-                 WHERE id IN (SELECT MAX(id) FROM route_plans GROUP BY plan_date)
-                 ORDER BY plan_date''')
-    plans_raw = c.fetchall()
-    c.execute('''SELECT plan_date, COUNT(*),
-                        SUM(CASE WHEN otif_status LIKE '%OTIF%' THEN 1 ELSE 0 END),
-                        SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END)
-                 FROM monitoring_records GROUP BY plan_date''')
-    mon_raw = c.fetchall()
-    conn.close()
-    mon_by_date = {r[0]: {'total': r[1], 'otif': r[2], 'done': r[3]} for r in mon_raw}
-
-    # Build flat daily list
-    daily = []
-    for plan_date, summary_json in plans_raw:
-        try: s = json.loads(summary_json) if summary_json else {}
-        except: s = {}
-        mon = mon_by_date.get(plan_date, {})
-        total = int(mon.get('total') or 0)
-        otif  = int(mon.get('otif') or 0)
-        done  = int(mon.get('done') or 0)
-        daily.append({
-            'date':          plan_date,
-            'truck_count':   int(s.get('truck_count') or 0),
-            'total_drops':   int(s.get('total_drops') or 0),
-            'total_volume':  round(float(s.get('total_volume') or 0), 0),
-            'avg_util':      round(float(s.get('avg_utilization') or 0), 1),
-            'total_cost':    round(float(s.get('total_cost') or 0), 2),
-            'total_stops':   total,
-            'otif_count':    otif,
-            'done_count':    done,
-            'otif_rate':     round(otif / total * 100, 1) if total else 0,
-            'completion_pct':round(done / total * 100, 1) if total else 0,
-            'plan_days':     1,
-        })
-
-    # Period grouping
-    key_fns = {
-        'daily':     lambda d: d,
-        'weekly':    _iso_week,
-        'monthly':   lambda d: d[:7],
-        'quarterly': _quarter_key,
-        'yearly':    lambda d: d[:4],
-    }
-    key_fn = key_fns.get(period, key_fns['daily'])
-
-    if period == 'daily':
-        return jsonify(daily)
-
-    from collections import OrderedDict
-    groups = OrderedDict()
-    for e in daily:
-        k = key_fn(e['date'])
-        if k not in groups:
-            groups[k] = {'date': k, 'truck_count': 0, 'total_drops': 0, 'total_volume': 0.0,
-                         '_util_sum': 0.0, '_util_cnt': 0, 'total_cost': 0.0,
-                         'total_stops': 0, 'otif_count': 0, 'done_count': 0, 'plan_days': 0}
-        g = groups[k]
-        g['truck_count']  += e['truck_count']
-        g['total_drops']  += e['total_drops']
-        g['total_volume'] += e['total_volume']
-        g['total_cost']   += e['total_cost']
-        g['total_stops']  += e['total_stops']
-        g['otif_count']   += e['otif_count']
-        g['done_count']   += e['done_count']
-        g['plan_days']    += 1
-        if e['avg_util'] > 0:
-            g['_util_sum'] += e['avg_util']
-            g['_util_cnt'] += 1
-
-    result = []
-    for g in groups.values():
-        ts = g['total_stops']
-        g['avg_util']       = round(g['_util_sum'] / g['_util_cnt'], 1) if g['_util_cnt'] else 0
-        g['otif_rate']      = round(g['otif_count'] / ts * 100, 1) if ts else 0
-        g['completion_pct'] = round(g['done_count'] / ts * 100, 1) if ts else 0
-        g['total_volume']   = round(g['total_volume'], 0)
-        g['total_cost']     = round(g['total_cost'], 2)
-        del g['_util_sum']; del g['_util_cnt']
-        result.append(g)
-    return jsonify(result)
-
-
-# Initialise DB tables on startup (works with both gunicorn and direct run)
-init_db()
 
 if __name__ == '__main__':
-    _PORT = 5050
-    try:
-        from waitress import serve
-        print('PFC Routing Server starting on port', _PORT, '(waitress)...')
-        serve(app, host='0.0.0.0', port=_PORT, threads=8)
-    except ImportError:
-        print('PFC Routing Server starting on port', _PORT, '(Flask dev server)...')
-        app.run(host='0.0.0.0', port=_PORT, debug=False, threaded=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

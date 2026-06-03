@@ -905,10 +905,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
         style="padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit">
         <option value="">Select date…</option>
       </select>
-      <button class="btn btn-success btn-sm" onclick="saveColdChain()">💾 Save</button>
       <button class="btn btn-outline btn-sm" onclick="loadColdChainDates()">🔄 Refresh</button>
     </div>
   </div>
+  <p style="font-size:.78rem;color:var(--muted);margin:4px 0 8px">Read-only view from Monitoring records. Update food safety fields in the Monitoring tab.</p>
 
   <!-- KPI summary strip -->
   <div class="kpi-strip" style="margin:10px 0">
@@ -932,11 +932,15 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
   <div class="section-row">
     <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">📋 POD Return Compliance</span>
     <div class="btn-row" style="margin:0">
-      <button class="btn btn-success btn-sm" onclick="addPodRow()">➕ Add DO</button>
-      <button class="btn btn-outline btn-sm" onclick="savePod()">💾 Save All</button>
-      <button class="btn btn-outline btn-sm" onclick="loadPod()">🔄 Refresh</button>
+      <select id="pod-date-filter" onchange="loadPod(this.value)"
+        style="padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:.82rem;font-family:inherit">
+        <option value="">Select date…</option>
+      </select>
+      <button class="btn btn-success btn-sm" onclick="savePod()">💾 Save Return Dates</button>
+      <button class="btn btn-outline btn-sm" onclick="loadPodDates()">🔄 Refresh</button>
     </div>
   </div>
+  <p style="font-size:.78rem;color:var(--muted);margin:4px 0 8px">DOs pulled from Monitoring records. Enter POD Return Date for each delivery to track aging (target: T+2).</p>
 
   <!-- KPI strip -->
   <div class="kpi-strip" style="margin:10px 0">
@@ -958,11 +962,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
           <th style="padding:8px 10px;text-align:center">Days Aging</th>
           <th style="padding:8px 10px;text-align:center">Status</th>
           <th style="padding:8px 10px;text-align:left;min-width:130px">Remarks</th>
-          <th style="padding:8px 10px;text-align:center">Action</th>
         </tr>
       </thead>
       <tbody id="pod-tbody">
-        <tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted)">No POD records yet. Click ➕ Add DO to start.</td></tr>
+        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">Select a date to load POD records from monitoring.</td></tr>
       </tbody>
     </table>
   </div>
@@ -1514,6 +1517,8 @@ function showPage(name, btn) {
   if (name==='analytics')  loadAnalytics();
   if (name==='history')      loadHistory();
   if (name==='mon-history')  loadMonitoringHistory();
+  if (name==='cold-chain')   loadColdChainDates();
+  if (name==='pod')          loadPodDates();
   if (name==='plan')       { setTimeout(()=>leafletMap&&leafletMap.invalidateSize(),180); }
   // Start/stop live pollers based on active tab
   if (name==='monitoring') startLiveMonitoring();
@@ -3177,7 +3182,6 @@ function confirmReassign() {
   autosave(); renderPlan();
 }
 
-function round2(v){return Math.round(v*1000)/1000;}
 
 function setDeliveryDate(val) {
   currentDeliveryDate = val || new Date().toISOString().slice(0,10);
@@ -4425,210 +4429,6 @@ function loadHistoryPlan(id) {
 }
 
 // ======================================================
-//  MONITORING HISTORY
-// ======================================================
-function loadMonitoringHistory() {
-  fetch('/api/monitoring-history')
-    .then(r=>r.json()).then(d=>{
-      const grid = document.getElementById('mon-history-grid');
-      if (!d || !d.dates || !d.dates.length) {
-        grid.innerHTML='<div class="empty-state"><div class="icon">&#x1F5C2;&#xFE0F;</div><h3>No monitoring records yet</h3><p>Use "&#x1F4BE; Save &amp; Persist to DB" in the Monitoring tab to save records here.</p></div>';
-        return;
-      }
-      grid.innerHTML = d.dates.map(row => {
-        let dateLabel = row.plan_date;
-        try {
-          const dt = new Date(row.plan_date + 'T00:00:00');
-          dateLabel = dt.toLocaleDateString('en-PH', {weekday:'short', year:'numeric', month:'short', day:'numeric'});
-        } catch(e) {}
-
-        const compPct  = row.completion_pct || 0;
-        const otifPct  = row.otif_pct || 0;
-        const compColor = compPct >= 80 ? '#16a34a' : compPct >= 50 ? '#f59e0b' : '#e53935';
-        const otifColor = otifPct >= 80 ? '#16a34a' : otifPct >= 50 ? '#f59e0b' : '#e53935';
-
-        return `<div class="history-date-group">
-          <div class="hist-date-header" style="cursor:pointer" onclick="toggleMonHistoryDetail('mhd-${row.plan_date}')">
-            <div class="hist-date-label">&#x1F4C5; ${dateLabel}</div>
-            <div style="display:flex;align-items:center;gap:16px">
-              <span style="font-size:.74rem;color:var(--muted)">${row.truck_count} truck${row.truck_count!==1?'s':''} &nbsp;·&nbsp; ${row.total_stops} stop${row.total_stops!==1?'s':''}</span>
-              <span style="font-size:.74rem;font-weight:700;color:${compColor}">✔ ${compPct}% done</span>
-              <span style="font-size:.74rem;font-weight:700;color:${otifColor}">OTIF ${otifPct}%</span>
-              <button class="btn btn-sm" style="border:1px solid #fca5a5;color:#e53935;background:#fff;font-size:.7rem;padding:3px 9px"
-                onclick="event.stopPropagation();deleteMonHistoryDate('${row.plan_date}')">&#x1F5D1;</button>
-            </div>
-          </div>
-          <div id="mhd-${row.plan_date}" style="display:none">
-            <div style="padding:10px 16px;text-align:center;color:var(--muted);font-size:.78rem">Loading…</div>
-          </div>
-        </div>`;
-      }).join('');
-    }).catch(e=>showToast('Load error: '+e.message,'error'));
-}
-
-function toggleMonHistoryDetail(divId) {
-  const div = document.getElementById(divId);
-  if (!div) return;
-  if (div.style.display !== 'none') { div.style.display = 'none'; return; }
-  div.style.display = 'block';
-  // Only fetch if not yet loaded
-  if (div.dataset.loaded) return;
-  div.dataset.loaded = '1';
-  const planDate = divId.replace('mhd-', '');
-  fetch('/api/monitoring-history/' + encodeURIComponent(planDate))
-    .then(r=>r.json()).then(d=>{
-      if (!d.records || !d.records.length) {
-        div.innerHTML='<div style="padding:14px 16px;color:var(--muted);font-size:.78rem">No detail records found.</div>';
-        return;
-      }
-      // Group by truck
-      const byTruck = {};
-      d.records.forEach(r => {
-        const key = r.truck_id || 'Unknown';
-        if (!byTruck[key]) byTruck[key] = {type: r.truck_type||'', trucker: r.trucker_code||'', stops:[]};
-        byTruck[key].stops.push(r);
-      });
-
-      div.innerHTML = '<div style="overflow-x:auto">' +
-        Object.entries(byTruck).map(([truckId, t]) => {
-          const rows = t.stops.map((s,i) => {
-            const statusColor = s.status==='DONE' ? '#16a34a' : s.status==='IN TRANSIT' ? '#1976d2' : '#64748b';
-            const otifColor   = (s.otif_status||'').includes('OTIF') ? '#16a34a' : '#e53935';
-            return `<tr style="border-top:1px solid var(--border);font-size:.74rem">
-              <td style="padding:5px 10px;color:var(--muted)">${i+1}</td>
-              <td style="padding:5px 10px;font-weight:600">${s.customer_name||''}</td>
-              <td style="padding:5px 10px;color:var(--muted)">${s.area||''}</td>
-              <td style="padding:5px 10px"><span style="font-weight:700;color:${statusColor}">${s.status||''}</span></td>
-              <td style="padding:5px 10px">${s.receiving_time||''}</td>
-              <td style="padding:5px 10px">${s.actual_done||''}</td>
-              <td style="padding:5px 10px;color:${otifColor};font-weight:700">${s.otif_status||'—'}</td>
-              <td style="padding:5px 10px;color:var(--muted)">${s.concerns||''}</td>
-              <td style="padding:5px 10px;color:var(--muted)">${s.remarks||''}</td>
-            </tr>`;
-          }).join('');
-
-          return `<div style="margin:10px 12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-            <div style="background:var(--light);padding:7px 12px;font-size:.78rem;font-weight:700;color:var(--navy);display:flex;gap:10px;align-items:center">
-              <span>🚛 Truck ${truckId}</span>
-              <span style="font-weight:400;color:var(--muted)">${t.type}</span>
-              ${t.trucker ? '<span style="font-weight:400;color:var(--muted)">· '+t.trucker+'</span>' : ''}
-              <span style="margin-left:auto;font-weight:400;color:var(--muted)">${t.stops.length} stop${t.stops.length!==1?'s':''}</span>
-            </div>
-            <table style="width:100%;border-collapse:collapse">
-              <thead><tr style="background:#f8fafc;font-size:.7rem;color:var(--muted)">
-                <th style="padding:5px 10px;text-align:left">#</th>
-                <th style="padding:5px 10px;text-align:left">Customer</th>
-                <th style="padding:5px 10px;text-align:left">Area</th>
-                <th style="padding:5px 10px;text-align:left">Status</th>
-                <th style="padding:5px 10px;text-align:left">Sched</th>
-                <th style="padding:5px 10px;text-align:left">Actual</th>
-                <th style="padding:5px 10px;text-align:left">OTIF</th>
-                <th style="padding:5px 10px;text-align:left">Concerns</th>
-                <th style="padding:5px 10px;text-align:left">Remarks</th>
-              </tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>`;
-        }).join('') + '</div>';
-    }).catch(e=>{ div.innerHTML='<div style="padding:14px;color:#e53935">Load error: '+e.message+'</div>'; });
-}
-
-function deleteMonHistoryDate(planDate) {
-  if (!confirm('Delete all monitoring records for '+planDate+'?')) return;
-  fetch('/api/monitoring-db?date='+encodeURIComponent(planDate), {method:'DELETE'})
-    .then(r=>r.json()).then(d=>{
-      showToast(d.message||'Records deleted','success');
-      loadMonitoringHistory();
-    }).catch(e=>showToast('Delete error: '+e.message,'error'));
-}
-
-// ======================================================
-//  ANALYTICS
-// ======================================================
-function loadAnalytics() {
-  fetch('/api/analytics?period='+encodeURIComponent(analyticsPeriod||'daily'))
-    .then(r=>r.json()).then(rows=>{
-      const tbody   = document.getElementById('analytics-tbody');
-      const kpiStrip = document.getElementById('analytics-kpi-strip');
-      const titleEl  = document.getElementById('analytics-title');
-      if (!tbody) return;
-
-      // Update title
-      const titles = {daily:'Daily Performance Summary',weekly:'Weekly Summary',
-                      monthly:'Monthly Summary',quarterly:'Quarterly Summary',yearly:'Yearly Summary'};
-      if (titleEl) titleEl.textContent = titles[analyticsPeriod] || 'Performance Summary';
-
-      if (!rows || !rows.length) {
-        tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">No data yet — save route plans and persist monitoring to see analytics.</td></tr>';
-        if (kpiStrip) kpiStrip.innerHTML='';
-        return;
-      }
-
-      // Aggregate KPIs across all rows
-      const totVol   = rows.reduce((a,r)=>a+(r.total_volume||0),0);
-      const totDrops = rows.reduce((a,r)=>a+(r.total_drops||0),0);
-      const totCost  = rows.reduce((a,r)=>a+(r.total_cost||0),0);
-      const totStops = rows.reduce((a,r)=>a+(r.total_stops||0),0);
-      const totOtif  = rows.reduce((a,r)=>a+(r.otif_count||0),0);
-      const avgUtil  = rows.filter(r=>r.avg_util>0).length
-        ? Math.round(rows.filter(r=>r.avg_util>0).reduce((a,r)=>a+r.avg_util,0) / rows.filter(r=>r.avg_util>0).length * 10) / 10
-        : 0;
-      const overallOtif = totStops ? Math.round(totOtif/totStops*1000)/10 : 0;
-      const cpkOverall  = totVol > 0 ? (totCost/totVol).toFixed(2) : '--';
-      const otifColor   = overallOtif>=95?'#16a34a':overallOtif>=80?'#f59e0b':'#e53935';
-      const utilColor   = avgUtil>=80?'#16a34a':avgUtil>=60?'#f59e0b':'#e53935';
-
-      if (kpiStrip) kpiStrip.innerHTML = `
-        <div class="kpi"><div class="kpi-label">Total Volume</div><div class="kpi-value">${Number(totVol).toLocaleString(undefined,{maximumFractionDigits:0})} kg</div></div>
-        <div class="kpi"><div class="kpi-label">Total Drops</div><div class="kpi-value">${totDrops.toLocaleString()}</div></div>
-        <div class="kpi"><div class="kpi-label">Avg Truck Util</div><div class="kpi-value" style="color:${utilColor}">${avgUtil}%</div></div>
-        <div class="kpi"><div class="kpi-label">OTIF Rate</div><div class="kpi-value" style="color:${otifColor}">${overallOtif}%</div></div>
-        <div class="kpi"><div class="kpi-label">Total Cost</div><div class="kpi-value">₱${Number(totCost).toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
-        <div class="kpi"><div class="kpi-label">Cost / KG</div><div class="kpi-value">₱${cpkOverall}</div></div>
-      `;
-
-      // Update table header for period column
-      const hdr = document.getElementById('analytics-period-hdr');
-      if (hdr) {
-        const hdrLabels = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'};
-        hdr.textContent = hdrLabels[analyticsPeriod] || 'Period';
-      }
-
-      tbody.innerHTML = rows.map(r=>{
-        const otif     = r.otif_rate || 0;
-        const util     = r.avg_util  || 0;
-        const done     = r.completion_pct || 0;
-        const otifClr  = otif>=95?'#16a34a':otif>=80?'#f59e0b':'#e53935';
-        const utilClr  = util>=80?'#16a34a':util>=60?'#f59e0b':'#e53935';
-        const doneClr  = done>=90?'#16a34a':done>=70?'#f59e0b':'#e53935';
-        const vol      = r.total_volume ? Number(r.total_volume).toLocaleString(undefined,{maximumFractionDigits:0}) : '--';
-        const cost     = r.total_cost   ? '₱'+Number(r.total_cost).toLocaleString(undefined,{maximumFractionDigits:0}) : '--';
-        const cpk      = (r.total_cost&&r.total_volume&&r.total_volume>0) ? '₱'+(r.total_cost/r.total_volume).toFixed(2) : '--';
-        const days     = analyticsPeriod!=='daily' && r.plan_days ? `<span style="font-size:.7rem;color:var(--muted)">(${r.plan_days}d)</span>` : '';
-        return `<tr>
-          <td style="font-weight:700;white-space:nowrap">${r.date} ${days}</td>
-          <td style="text-align:center">${r.truck_count||'--'}</td>
-          <td style="text-align:center">${r.total_drops||'--'}</td>
-          <td style="text-align:right">${vol}</td>
-          <td style="text-align:center;font-weight:700;color:${utilClr}">${util?util+'%':'--'}</td>
-          <td style="text-align:center">${r.total_stops||0}</td>
-          <td style="text-align:center;font-weight:700;color:${otifClr}">${otif?otif+'%':'--'}</td>
-          <td style="text-align:center;font-weight:700;color:${doneClr}">${done?done+'%':'--'}</td>
-          <td style="text-align:right;font-size:.75rem">${cost}</td>
-          <td style="text-align:right;font-size:.75rem;color:var(--muted)">${cpk}</td>
-        </tr>`;
-      }).join('');
-    }).catch(e=>showToast('Analytics error: '+e.message,'error'));
-}
-
-function setAnalyticsPeriod(period, btn) {
-  analyticsPeriod = period;
-  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  loadAnalytics();
-}
-
-// ======================================================
 //  GOOGLE SHEETS SYNC
 // ======================================================
 let _gsheetsMode = 'plan';
@@ -4747,237 +4547,194 @@ function gsheetsSync() {
 }
 
 // ======================================================
-//  COLD CHAIN COMPLIANCE
+//  COLD CHAIN COMPLIANCE  (read-only from monitoring)
 // ======================================================
-let ccData = [];  // cold chain records for current date
-
 function loadColdChainDates() {
   fetch('/api/cold-chain')
     .then(r=>r.json()).then(d=>{
       const sel = document.getElementById('cc-date-filter');
       if (!sel) return;
       const prev = sel.value;
-      sel.innerHTML = '<option value="">Select date…</option>' +
+      sel.innerHTML = '<option value="">Select date\u2026</option>' +
         (d.dates||[]).map(dt=>`<option value="${dt}"${dt===prev?' selected':''}>${dt}</option>`).join('');
-      // Load summary
       fetch('/api/cold-chain/summary').then(r=>r.json()).then(s=>{
         const wrap = document.getElementById('cc-summary-wrap');
-        if (!wrap || !s.summary || !s.summary.length) return;
-        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);margin-bottom:6px;font-size:.85rem">📅 Historical Compliance</div>
+        if (!wrap) return;
+        const rows = s.summary || [];
+        if (!rows.length) { wrap.innerHTML=''; return; }
+        wrap.innerHTML = `<div style="font-weight:700;color:var(--navy);margin-bottom:6px;font-size:.85rem">&#x1F4C5; Historical Compliance</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px">` +
-          s.summary.map(row=>{
-            const color = row.compliance_pct===100?'#dcfce7':row.compliance_pct>=80?'#fef9c3':'#fee2e2';
+          rows.map(row=>{
+            const bg = row.compliance_pct===100?'#dcfce7':row.compliance_pct>=80?'#fef9c3':'#fee2e2';
             const tc = row.compliance_pct===100?'#166534':row.compliance_pct>=80?'#92400e':'#991b1b';
-            return `<div style="background:${color};border-radius:8px;padding:8px 14px;min-width:130px;cursor:pointer"
+            return `<div style="background:${bg};border-radius:8px;padding:8px 14px;min-width:130px;cursor:pointer"
                      onclick="document.getElementById('cc-date-filter').value='${row.date}';loadColdChain('${row.date}')">
               <div style="font-weight:700;color:${tc};font-size:.82rem">${row.date}</div>
               <div style="font-size:1.1rem;font-weight:800;color:${tc}">${row.compliance_pct}%</div>
-              <div style="font-size:.68rem;color:${tc}">${row.ok}/${row.total} OK · ${row.issues} issue${row.issues!==1?'s':''}</div>
+              <div style="font-size:.68rem;color:${tc}">${row.ok}/${row.total} OK \u00b7 ${row.issues} issue${row.issues!==1?'s':''}</div>
             </div>`;
           }).join('') + '</div>';
-      });
+      }).catch(()=>{});
       if (prev) loadColdChain(prev);
-    });
+    }).catch(e=>showToast('Cold chain error: '+e.message,'error'));
 }
 
 function loadColdChain(date) {
   if (!date) return;
   const wrap = document.getElementById('cc-table-wrap');
-  if (wrap) wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Loading…</div>';
+  if (wrap) wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Loading\u2026</div>';
   fetch('/api/cold-chain?date='+encodeURIComponent(date))
-    .then(r=>r.json()).then(d=>{
-      ccData = d.records || [];
-      // If no records yet, prefill from current plan's trucks
-      if (!ccData.length && currentPlan.length) {
-        ccData = currentPlan.map(t=>({
-          truck_id: t.truck_id, do_number:'', customer_name: t.stops.map(s=>s.customer_name).join(', ').slice(0,60),
-          has_issue:false, issue_details:'', plan_date: date,
-        }));
-      }
-      renderColdChain();
-    });
+    .then(r=>r.json()).then(d=>{ renderColdChain(d.records||[]); })
+    .catch(e=>showToast('Load error: '+e.message,'error'));
 }
 
-function renderColdChain() {
+function renderColdChain(records) {
   const wrap = document.getElementById('cc-table-wrap');
   if (!wrap) return;
-  const total = ccData.length;
-  const issues = ccData.filter(r=>r.has_issue).length;
-  const ok = total - issues;
-  const pct = total ? Math.round(ok/total*100) : 100;
-  document.getElementById('cc-kpi-rate').textContent   = pct+'%';
-  document.getElementById('cc-kpi-total').textContent  = total;
-  document.getElementById('cc-kpi-ok').textContent     = ok;
-  document.getElementById('cc-kpi-issues').textContent = issues;
-  document.getElementById('cc-kpi-rate').style.color   = pct===100?'var(--green)':pct>=80?'#f9a825':'#e53935';
-
+  const total  = records.length;
+  const issues = records.filter(r=>r.food_safety_issue && r.food_safety_issue!=='NONE').length;
+  const ok     = total - issues;
+  const pct    = total ? Math.round(ok/total*100*10)/10 : 100;
+  const clr    = pct>=95?'#16a34a':pct>=80?'#f59e0b':'#e53935';
+  const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  set('cc-kpi-rate', pct+'%'); set('cc-kpi-total', total);
+  set('cc-kpi-ok', ok); set('cc-kpi-issues', issues);
+  const re = document.getElementById('cc-kpi-rate'); if(re) re.style.color=clr;
   if (!total) {
-    wrap.innerHTML = '<div class="empty-state"><div class="icon">🌡️</div><h3>No trucks to log yet</h3><p>Generate a route plan first, then open Cold Chain to log compliance.</p></div>';
+    wrap.innerHTML='<div class="empty-state"><div class="icon">&#x1F321;&#xFE0F;</div><h3>No monitoring records for this date</h3><p>Persist monitoring data first, then return here to view cold chain compliance.</p></div>';
     return;
   }
   wrap.innerHTML = `<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
-    <table style="width:100%;border-collapse:collapse;font-size:.8rem">
-      <thead><tr style="background:var(--navy);color:#fff">
-        <th style="padding:8px 12px;text-align:left">Truck</th>
-        <th style="padding:8px 12px;text-align:left">DO #</th>
-        <th style="padding:8px 12px;text-align:left">Clients (Summary)</th>
-        <th style="padding:8px 12px;text-align:center">Temperature Issue?</th>
-        <th style="padding:8px 12px;text-align:left;min-width:200px">Issue Details</th>
+    <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+      <thead><tr style="background:#064e3b;color:#d1fae5">
+        <th style="padding:8px 10px;text-align:left">Truck</th>
+        <th style="padding:8px 10px;text-align:left;min-width:180px">Client</th>
+        <th style="padding:8px 10px;text-align:left">DO #</th>
+        <th style="padding:8px 10px;text-align:center">Food Safety Status</th>
+        <th style="padding:8px 10px;text-align:left;min-width:200px">Issue Details</th>
       </tr></thead>
-      <tbody>${ccData.map((r,i)=>{
-        const bg = r.has_issue?'#fff1f2':'#f0fdf4';
-        return `<tr style="border-bottom:1px solid #f1f5f9;background:${bg}">
-          <td style="padding:7px 12px;font-weight:700">${r.truck_id||''}</td>
-          <td style="padding:7px 12px"><input type="text" value="${r.do_number||''}" placeholder="DO #"
-            style="width:90px;border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.74rem;font-family:inherit"
-            onchange="ccData[${i}].do_number=this.value"></td>
-          <td style="padding:7px 12px;font-size:.72rem;color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-            title="${r.customer_name||''}">${r.customer_name||'—'}</td>
-          <td style="padding:7px 12px;text-align:center">
-            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
-              <input type="checkbox" ${r.has_issue?'checked':''} onchange="ccData[${i}].has_issue=this.checked;renderColdChain()">
-              <span style="font-size:.75rem;color:${r.has_issue?'#e53935':'#16a34a'}">${r.has_issue?'YES — Issue':'No Issue'}</span>
-            </label>
-          </td>
-          <td style="padding:7px 12px"><input type="text" value="${r.issue_details||''}" placeholder="${r.has_issue?'Describe issue…':'—'}"
-            ${r.has_issue?'':'disabled'}
-            style="width:100%;border:1px solid ${r.has_issue?'#fca5a5':'var(--border)'};border-radius:4px;padding:2px 6px;font-size:.74rem;font-family:inherit;background:${r.has_issue?'#fff':'#f9fafb'}"
-            onchange="ccData[${i}].issue_details=this.value"></td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table></div>
-    <div style="margin-top:10px;font-size:.75rem;color:var(--muted)">
-      ✅ <b>100%</b> = No temperature issues logged. Any issue logged = compliance drops. Save after logging.
-    </div>`;
-}
-
-function saveColdChain() {
-  const sel = document.getElementById('cc-date-filter');
-  const date = sel ? sel.value : currentDeliveryDate;
-  if (!date) { showToast('Select a date first','error'); return; }
-  fetch('/api/cold-chain', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({plan_date:date, records:ccData})
-  }).then(r=>r.json()).then(d=>{
-    if (d.success) { showToast('Cold chain records saved ✓','success'); loadColdChainDates(); }
-    else showToast(d.error||'Save failed','error');
-  });
+      <tbody>
+        ${records.map(r=>{
+          const hasIssue = r.food_safety_issue && r.food_safety_issue!=='NONE';
+          const bg = hasIssue?'#fef2f2':'';
+          const badge = hasIssue
+            ? `<span style="background:#fee2e2;color:#b91c1c;border-radius:4px;padding:2px 7px;font-size:.72rem;font-weight:700">${r.food_safety_issue}</span>`
+            : `<span style="background:#dcfce7;color:#15803d;border-radius:4px;padding:2px 7px;font-size:.72rem;font-weight:700">&#x2713; NONE</span>`;
+          return `<tr style="border-bottom:1px solid var(--border);background:${bg}">
+            <td style="padding:6px 10px;font-weight:700">${r.truck_id||'\u2014'}</td>
+            <td style="padding:6px 10px">${r.customer_name||'\u2014'}</td>
+            <td style="padding:6px 10px;font-family:monospace;font-size:.74rem">${r.do_number||'\u2014'}</td>
+            <td style="padding:6px 10px;text-align:center">${badge}</td>
+            <td style="padding:6px 10px;color:${hasIssue?'#b91c1c':'var(--muted)'}">${r.food_safety_detail||'\u2014'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <div style="margin-top:8px;font-size:.74rem;color:var(--muted)">
+    Food safety data is pulled from the Monitoring tab. To update, edit the Food Safety fields there and re-save.
+  </div>`;
 }
 
 // ======================================================
-//  POD RETURN COMPLIANCE
+//  POD RETURN COMPLIANCE  (from monitoring + editable return_date)
 // ======================================================
-let podData = [];
+let _podRecords = [];
 
-function loadPod() {
-  fetch('/api/pod').then(r=>r.json()).then(d=>{
-    podData = d.records || [];
-    renderPod();
-  });
+function loadPodDates() {
+  fetch('/api/pod')
+    .then(r=>r.json()).then(d=>{
+      const sel = document.getElementById('pod-date-filter');
+      if (!sel) return;
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">Select date\u2026</option>' +
+        (d.dates||[]).map(dt=>`<option value="${dt}"${dt===prev?' selected':''}>${dt}</option>`).join('');
+      if (prev) loadPod(prev);
+    }).catch(e=>showToast('POD error: '+e.message,'error'));
 }
 
-function addPodRow() {
-  podData.push({
-    id:null, do_number:'', customer_name:'', truck_id:'',
-    delivery_date: currentDeliveryDate, return_date:'', days_aging:null, status:'PENDING', remarks:''
-  });
-  renderPod();
+function loadPod(date) {
+  if (!date) return;
+  const tbody = document.getElementById('pod-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Loading\u2026</td></tr>';
+  fetch('/api/pod?date='+encodeURIComponent(date))
+    .then(r=>r.json()).then(d=>{ _podRecords = d.records||[]; renderPod(); })
+    .catch(e=>showToast('Load error: '+e.message,'error'));
 }
 
 function renderPod() {
   const tbody = document.getElementById('pod-tbody');
   if (!tbody) return;
-  const total    = podData.length;
-  const ontime   = podData.filter(r=>r.status==='ON-TIME').length;
-  const late     = podData.filter(r=>r.status==='LATE').length;
-  const pending  = podData.filter(r=>r.status==='PENDING').length;
-  const ratePct  = total ? Math.round(ontime/total*100) : 0;
-  document.getElementById('pod-kpi-rate').textContent   = total ? ratePct+'%' : '—';
-  document.getElementById('pod-kpi-total').textContent  = total || '—';
-  document.getElementById('pod-kpi-ontime').textContent = ontime || '—';
-  document.getElementById('pod-kpi-late').textContent   = (late+pending) || '—';
-  document.getElementById('pod-kpi-rate').style.color   = ratePct>=80?'var(--green)':ratePct>=50?'#f9a825':'#e53935';
-
+  const total   = _podRecords.length;
+  const ontime  = _podRecords.filter(r=>r.pod_status==='ON-TIME').length;
+  const late    = _podRecords.filter(r=>r.pod_status==='LATE').length;
+  const pending = _podRecords.filter(r=>!r.return_date).length;
+  const ret     = total - pending;
+  const compPct = ret ? Math.round(ontime/ret*100*10)/10 : 0;
+  const clr     = compPct>=95?'#16a34a':compPct>=80?'#f59e0b':'#e53935';
+  const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  set('pod-kpi-rate', ret ? compPct+'%' : '\u2014');
+  set('pod-kpi-total', total);
+  set('pod-kpi-ontime', ontime);
+  set('pod-kpi-late', late+' late / '+pending+' pending');
+  const re = document.getElementById('pod-kpi-rate'); if(re && ret) re.style.color=clr;
   if (!total) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--muted)">No POD records yet. Click ➕ Add DO to start.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No monitoring records for this date. Persist monitoring data first.</td></tr>';
     return;
   }
-  tbody.innerHTML = podData.map((r,i)=>{
-    const statusColor = r.status==='ON-TIME'?'#16a34a':r.status==='LATE'?'#e53935':'#6b7280';
-    const agingBg = r.days_aging===null?'':r.days_aging<=2?'#dcfce7':r.days_aging<=5?'#fef9c3':'#fee2e2';
-    return `<tr style="border-bottom:1px solid #f1f5f9">
-      <td style="padding:6px 8px"><input type="text" value="${r.do_number||''}" placeholder="DO #"
-        style="width:110px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
-        onchange="podData[${i}].do_number=this.value"></td>
-      <td style="padding:6px 8px"><input type="text" value="${r.customer_name||''}" placeholder="Client name"
-        style="width:160px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
-        onchange="podData[${i}].customer_name=this.value"></td>
-      <td style="padding:6px 8px"><input type="text" value="${r.truck_id||''}" placeholder="TRK-001"
-        style="width:70px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
-        onchange="podData[${i}].truck_id=this.value"></td>
-      <td style="padding:6px 8px"><input type="date" value="${r.delivery_date||''}"
-        style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
-        onchange="podData[${i}].delivery_date=this.value;updatePodAging(${i})"></td>
-      <td style="padding:6px 8px"><input type="date" value="${r.return_date||''}"
-        style="border:1px solid ${r.return_date?'#86efac':'var(--border)'};border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
-        onchange="podData[${i}].return_date=this.value;updatePodAging(${i})"></td>
-      <td style="padding:6px 8px;text-align:center;background:${agingBg};font-weight:700;font-size:.82rem">
-        ${r.days_aging!==null&&r.days_aging!==undefined?r.days_aging+' day'+(r.days_aging!==1?'s':''):'—'}
+  tbody.innerHTML = _podRecords.map((r,i)=>{
+    let agingTxt='\u2014', statusBadge='<span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 6px;font-size:.72rem">PENDING</span>';
+    if (r.return_date) {
+      const days = r.days_aging !== null && r.days_aging !== undefined ? r.days_aging : '?';
+      agingTxt = days+'d';
+      if (r.pod_status==='ON-TIME') statusBadge=`<span style="background:#dcfce7;color:#15803d;border-radius:4px;padding:2px 6px;font-size:.72rem;font-weight:700">&#x2713; ON-TIME</span>`;
+      else statusBadge=`<span style="background:#fee2e2;color:#b91c1c;border-radius:4px;padding:2px 6px;font-size:.72rem;font-weight:700">LATE</span>`;
+    }
+    const agingClr = r.pod_status==='LATE'?'#b91c1c':r.pod_status==='ON-TIME'?'#15803d':'';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 10px;font-family:monospace;font-size:.74rem">${r.do_number||'\u2014'}</td>
+      <td style="padding:6px 10px">${r.customer_name||'\u2014'}</td>
+      <td style="padding:6px 10px;font-weight:700">${r.truck_id||'\u2014'}</td>
+      <td style="padding:6px 10px">${r.plan_date||'\u2014'}</td>
+      <td style="padding:6px 10px">
+        <input type="date" value="${r.return_date||''}"
+          style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.78rem;font-family:inherit"
+          onchange="_podRecords[${i}].return_date=this.value;_updatePodAging(${i})">
       </td>
-      <td style="padding:6px 8px;text-align:center">
-        <span style="font-weight:700;font-size:.72rem;color:${statusColor}">${r.status||'PENDING'}</span>
-      </td>
-      <td style="padding:6px 8px"><input type="text" value="${r.remarks||''}" placeholder="Notes…"
-        style="width:120px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.76rem;font-family:inherit"
-        onchange="podData[${i}].remarks=this.value"></td>
-      <td style="padding:6px 8px;text-align:center">
-        <button onclick="deletePodRow(${i})"
-          style="background:#fee2e2;border:none;color:#e53935;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.72rem">🗑</button>
+      <td style="padding:6px 10px;text-align:center;font-weight:700;color:${agingClr}">${agingTxt}</td>
+      <td style="padding:6px 10px;text-align:center">${statusBadge}</td>
+      <td style="padding:6px 10px">
+        <input type="text" value="${r.pod_remarks||''}" placeholder="remarks\u2026"
+          style="width:100%;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:.78rem;font-family:inherit"
+          onchange="_podRecords[${i}].pod_remarks=this.value">
       </td>
     </tr>`;
   }).join('');
 }
 
-function updatePodAging(i) {
-  const r = podData[i];
-  if (r.delivery_date && r.return_date) {
-    const d1 = new Date(r.delivery_date), d2 = new Date(r.return_date);
-    r.days_aging = Math.round((d2-d1)/(1000*60*60*24));
-    r.status = r.days_aging <= 2 ? 'ON-TIME' : 'LATE';
-  } else if (!r.return_date) {
-    r.days_aging = null;
-    r.status = 'PENDING';
+function _updatePodAging(i) {
+  const r = _podRecords[i];
+  if (r.plan_date && r.return_date) {
+    try {
+      const d1 = new Date(r.plan_date); const d2 = new Date(r.return_date);
+      r.days_aging = Math.round((d2-d1)/(1000*60*60*24));
+      r.pod_status = r.days_aging<=2?'ON-TIME':'LATE';
+    } catch(e) {}
   }
   renderPod();
 }
 
-function deletePodRow(i) {
-  const r = podData[i];
-  if (r.id) {
-    fetch('/api/pod/'+r.id, {method:'DELETE'}).then(()=>{ podData.splice(i,1); renderPod(); });
-  } else {
-    podData.splice(i,1); renderPod();
-  }
-}
-
 function savePod() {
-  if (!podData.length) { showToast('No POD records to save','error'); return; }
+  const toSave = _podRecords.filter(r=>r.id);
+  if (!toSave.length) { showToast('Select a date with monitoring records first','warning'); return; }
   fetch('/api/pod', {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({records: podData})
+    body: JSON.stringify({records: toSave})
   }).then(r=>r.json()).then(d=>{
-    if (d.success) { showToast('POD records saved ✓','success'); loadPod(); }
-    else showToast(d.error||'Save failed','error');
-  });
+    if (d.error) showToast('Save error: '+d.error,'error');
+    else showToast('POD data saved ('+d.saved+' records)','success');
+  }).catch(e=>showToast('Save error: '+e.message,'error'));
 }
-
-// Hook showPage to load Cold Chain / POD data on tab switch
-const _origShowPage = showPage;
-showPage = function(name, btn) {
-  _origShowPage(name, btn);
-  if (name === 'cold-chain') loadColdChainDates();
-  if (name === 'pod')        loadPod();
-};
 
 </script>
 </body>
