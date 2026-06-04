@@ -791,6 +791,9 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
     <button onclick="clearMonFilters()"
       style="padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font-size:.78rem;
              color:var(--muted);cursor:pointer;font-family:inherit" title="Clear all filters">✕ Clear</button>
+    <button onclick="exportMonitoringFromData()"
+      style="padding:6px 12px;border:1px solid #16a34a;border-radius:6px;background:#fff;font-size:.78rem;
+             color:#16a34a;cursor:pointer;font-family:inherit">⬇ Download Excel</button>
     <span id="mon-filter-count" style="font-size:.75rem;color:var(--muted);white-space:nowrap"></span>
   </div>
   <div class="mon-wrap">
@@ -929,6 +932,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
         <option value="">— Select date —</option>
       </select>
       <button class="btn btn-outline btn-sm" onclick="loadColdChainDates()">🔄 Refresh</button>
+      <button class="btn btn-outline btn-sm" id="cc-download-btn" onclick="_ccDownload()" style="color:#16a34a;border-color:#16a34a">⬇ Download Excel</button>
     </div>
   </div>
   <p style="font-size:.76rem;color:var(--muted);margin:4px 0 10px">
@@ -1037,6 +1041,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
       </select>
       <button class="btn btn-success btn-sm" onclick="savePod()">💾 Save Return Dates</button>
       <button class="btn btn-outline btn-sm" onclick="loadPodDates()">🔄 Refresh</button>
+      <button class="btn btn-outline btn-sm" id="pod-download-btn" onclick="_podDownload()" style="color:#16a34a;border-color:#16a34a">⬇ Download Excel</button>
     </div>
   </div>
   <p style="font-size:.76rem;color:var(--muted);margin:4px 0 10px">
@@ -1133,6 +1138,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
   <div class="section-row">
     <span style="font-weight:800;font-size:1.05rem;color:var(--navy)">📈 Performance Analytics</span>
     <button class="btn btn-outline btn-sm" onclick="loadAnalytics()">🔄 Refresh</button>
+    <button class="btn btn-outline btn-sm" onclick="exportAnalyticsCSV()" style="color:#16a34a;border-color:#16a34a">⬇ Download Excel</button>
   </div>
   <div class="kpi-strip" id="analytics-kpi-strip" style="margin-bottom:16px"></div>
   <div class="analytics-controls">
@@ -1153,10 +1159,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
             <th style="text-align:center">Trucks</th>
             <th style="text-align:center">Drops</th>
             <th style="text-align:right">Volume (KG)</th>
-            <th style="text-align:center">Avg Util</th>
-            <th style="text-align:center">Total Stops</th>
-            <th style="text-align:center">OTIF Rate</th>
             <th style="text-align:center">Done %</th>
+            <th style="text-align:center">OTIF %</th>
+            <th style="text-align:center;background:#064e3b;color:#d1fae5">FS Issues</th>
+            <th style="text-align:center;background:#1e1b4b;color:#e0e7ff">SOP Issues</th>
             <th style="text-align:right">Total Cost</th>
             <th style="text-align:right">Cost/KG</th>
           </tr>
@@ -5254,6 +5260,229 @@ function savePod() {
     showToast('Connection error saving POD.', 'error');
   });
 }
+
+// ======================================================
+//  ANALYTICS TAB
+// ======================================================
+let analyticsPeriod = 'daily';
+let _analyticsRows  = [];
+
+function setAnalyticsPeriod(p, btn) {
+  analyticsPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const titles = {daily:'Daily',weekly:'Weekly',monthly:'Monthly',quarterly:'Quarterly',yearly:'Yearly'};
+  const hdrs   = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'};
+  var t = document.getElementById('analytics-title');
+  var h = document.getElementById('analytics-period-hdr');
+  if (t) t.textContent = (titles[p]||p) + ' Performance Summary';
+  if (h) h.textContent = hdrs[p]||p;
+  loadAnalytics();
+}
+
+function loadAnalytics() {
+  const tbody = document.getElementById('analytics-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="analytics-empty">Loading…</td></tr>';
+  fetch('/api/analytics?period=' + analyticsPeriod)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.error) { showToast('Analytics error: '+d.error,'error'); return; }
+      _analyticsRows = d.rows || [];
+      renderAnalytics(_analyticsRows);
+    })
+    .catch(function(e){ showToast('Analytics load error: '+e.message,'error'); });
+}
+
+function renderAnalytics(rows) {
+  const tbody = document.getElementById('analytics-tbody');
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="analytics-empty">No data yet. Save route plans and persist monitoring to see analytics.</td></tr>';
+    _updateAnalyticsKPI([]);
+    return;
+  }
+  _updateAnalyticsKPI(rows);
+  tbody.innerHTML = rows.map(function(r) {
+    var otifClr  = r.otif_pct>=95?'#16a34a':r.otif_pct>=80?'#f59e0b':'#e53935';
+    var doneClr  = r.done_pct>=95?'#16a34a':r.done_pct>=80?'#f59e0b':'#e53935';
+    var fsClr    = r.fs_issues>0?'#e53935':'#16a34a';
+    var crewClr  = r.crew_issues>0?'#f59e0b':'#4f46e5';
+    var rowBg    = (r.otif_pct<80||r.done_pct<80)?'#fff5f5':'';
+    var costFmt  = r.total_cost>0?'₱'+Number(r.total_cost).toLocaleString():'—';
+    var cpkFmt   = r.cost_per_kg>0?'₱'+r.cost_per_kg.toFixed(2):'—';
+    var volFmt   = r.total_vol>0?Number(r.total_vol).toLocaleString()+' kg':'—';
+    return '<tr style="border-bottom:1px solid #f1f5f9;background:'+rowBg+'">' +
+      '<td style="font-weight:700;color:var(--navy)">'+r.label+'</td>' +
+      '<td style="text-align:center">'+r.trucks+'</td>' +
+      '<td style="text-align:center">'+r.drops+'</td>' +
+      '<td style="text-align:right">'+volFmt+'</td>' +
+      '<td style="text-align:center;color:'+doneClr+';font-weight:700">'+r.done_pct+'%</td>' +
+      '<td style="text-align:center;color:'+otifClr+';font-weight:700">'+r.otif_pct+'%</td>' +
+      '<td style="text-align:center;color:'+fsClr+'">'+r.fs_issues+'</td>' +
+      '<td style="text-align:center;color:'+crewClr+'">'+r.crew_issues+'</td>' +
+      '<td style="text-align:right">'+costFmt+'</td>' +
+      '<td style="text-align:right">'+cpkFmt+'</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function _updateAnalyticsKPI(rows) {
+  const strip = document.getElementById('analytics-kpi-strip');
+  if (!strip) return;
+  if (!rows.length) { strip.innerHTML=''; return; }
+  var totalDrops = rows.reduce(function(s,r){return s+r.drops;},0);
+  var totalOtif  = rows.reduce(function(s,r){return s+r.otif_count;},0);
+  var totalDone  = rows.reduce(function(s,r){return s+r.done_count;},0);
+  var totalCost  = rows.reduce(function(s,r){return s+r.total_cost;},0);
+  var totalVol   = rows.reduce(function(s,r){return s+r.total_vol;},0);
+  var totalFs    = rows.reduce(function(s,r){return s+r.fs_issues;},0);
+  var totalCrew  = rows.reduce(function(s,r){return s+r.crew_issues;},0);
+  var otifPct    = totalDrops?Math.round(totalOtif/totalDrops*100):0;
+  var donePct    = totalDrops?Math.round(totalDone/totalDrops*100):0;
+  var cpk        = totalVol>0?'₱'+(totalCost/totalVol).toFixed(2):'—';
+  var otifClr    = otifPct>=95?'#16a34a':otifPct>=80?'#f59e0b':'#e53935';
+  strip.innerHTML =
+    '<div class="kpi" style="border-left:4px solid #0ea5e9"><div class="kpi-label">Total Drops</div><div class="kpi-value" style="color:#0ea5e9">'+totalDrops+'</div></div>' +
+    '<div class="kpi" style="border-left:4px solid '+otifClr+'"><div class="kpi-label">OTIF Rate</div><div class="kpi-value" style="color:'+otifClr+'">'+otifPct+'%</div></div>' +
+    '<div class="kpi" style="border-left:4px solid #16a34a"><div class="kpi-label">Done Rate</div><div class="kpi-value" style="color:#16a34a">'+donePct+'%</div></div>' +
+    '<div class="kpi" style="border-left:4px solid #e53935"><div class="kpi-label">FS Issues</div><div class="kpi-value" style="color:#e53935">'+totalFs+'</div></div>' +
+    '<div class="kpi" style="border-left:4px solid #f59e0b"><div class="kpi-label">SOP Issues</div><div class="kpi-value" style="color:#f59e0b">'+totalCrew+'</div></div>' +
+    '<div class="kpi" style="border-left:4px solid #6366f1"><div class="kpi-label">Cost / KG</div><div class="kpi-value" style="color:#6366f1">'+cpk+'</div></div>';
+}
+
+// ======================================================
+//  EXCEL / CSV EXPORT  (pure JS, no library needed)
+// ======================================================
+function _downloadCSV(rows, filename) {
+  var csv = rows.map(function(row){
+    return row.map(function(cell){
+      var s = (cell===null||cell===undefined)?'':String(cell);
+      if (s.includes(',') || s.includes('"') || s.includes('\n'))
+        s = '"' + s.replace(/"/g,'""') + '"';
+      return s;
+    }).join(',');
+  }).join('\r\n');
+  var blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportAnalyticsCSV() {
+  if (!_analyticsRows.length) { showToast('No analytics data to export.','error'); return; }
+  var period = analyticsPeriod.charAt(0).toUpperCase()+analyticsPeriod.slice(1);
+  var header = [period,'Trucks','Drops','Volume (KG)','Done %','OTIF %','FS Issues','SOP Issues','Total Cost (PHP)','Cost/KG (PHP)'];
+  var rows   = [header].concat(_analyticsRows.map(function(r){
+    return [r.label, r.trucks, r.drops, r.total_vol, r.done_pct+'%', r.otif_pct+'%',
+            r.fs_issues, r.crew_issues, r.total_cost, r.cost_per_kg];
+  }));
+  _downloadCSV(rows, 'PFC_Analytics_'+analyticsPeriod+'_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportMonitoringCSV() {
+  var rows = document.querySelectorAll('#mon-tbody tr[data-mon-idx]');
+  var visible = [];
+  rows.forEach(function(tr){ if(tr.style.display!=='none') visible.push(tr); });
+  if (!visible.length) { showToast('No monitoring data to export.','error'); return; }
+  var header = ['Truck','Trucking Name','Seq','Customer/Consignee','Delivery Address',
+                'Cluster','Scheduled','Status','Actual Done','Concerns','OTIF',
+                'Cold Chain Issue','FS Detail','SOP Compliance','SOP Detail','Remarks'];
+  var data = [header];
+  visible.forEach(function(tr){
+    var cells = tr.querySelectorAll('td');
+    var get   = function(i){ return cells[i]?(cells[i].querySelector('select')||cells[i].querySelector('input')||cells[i]).value||(cells[i].textContent.trim()):'' };
+    data.push([get(0),get(3),get(1),get(4),get(5),get(6),get(7),get(8),get(9),get(10),get(11),get(12),get(13),get(14),get(15),get(16)]);
+  });
+  _downloadCSV(data, 'PFC_Monitoring_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportMonitoringFromData() {
+  if (!monData.length) { showToast('No monitoring data to export.','error'); return; }
+  var header = ['Plan Date','Truck','Trucking Name','DO Number','Customer/Consignee',
+                'Delivery Address','Cluster','Status','Actual Done','OTIF',
+                'Concerns','Cold Chain Issue','FS Detail','SOP Compliance','SOP Detail','Remarks'];
+  var data = [header].concat(monData.map(function(r){
+    return [r.plan_date||'', r.truck_id||'', r.trucker_code||'', r.do_number||'',
+            r.customer_name||'', r.shipping_address||'', r.cluster_id||'',
+            r.status||'', r.actual_time||'', r.otif_status||'', r.concerns||'',
+            r.food_safety_issue||'', r.food_safety_detail||'',
+            r.crew_issue||'', r.crew_detail||'', r.remarks||''];
+  }));
+  _downloadCSV(data, 'PFC_Monitoring_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportColdChainCSV() {
+  if (!_ccDetailRecords.length) { showToast('No cold chain data to export.','error'); return; }
+  var header = ['Date','Truck','Trucking Name','Truck Type','DO Number',
+                'Customer/Consignee','Cold Chain Issue','FS Detail','SOP Compliance','SOP Detail'];
+  var data = [header].concat(_ccDetailRecords.map(function(r){
+    return [r.plan_date||'', r.truck_id||'', r.trucker_code||'', r.truck_type||'',
+            r.do_number||'', r.customer_name||'',
+            r.food_safety_issue||'NONE', r.food_safety_detail||'',
+            r.crew_issue||'NONE', r.crew_detail||''];
+  }));
+  _downloadCSV(data, 'PFC_ColdChain_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportColdChainSummaryCSV() {
+  if (!_ccSummaryRows.length) { showToast('No summary data to export.','error'); return; }
+  var period = _ccSummaryPeriod.charAt(0).toUpperCase()+_ccSummaryPeriod.slice(1);
+  var header = [period,'Deliveries','Cold Chain %','FS Issues','FS Clean','SOP %','SOP Issues','SOP Clean'];
+  var data   = [header].concat(_ccSummaryRows.map(function(r){
+    return [r.label||r.date, r.total, r.compliance_pct+'%', r.issues, r.ok,
+            r.crew_pct+'%', r.crew_issues, r.crew_ok];
+  }));
+  _downloadCSV(data, 'PFC_ColdChain_Summary_'+_ccSummaryPeriod+'_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportPodCSV() {
+  if (!_podRecords.length) { showToast('No POD data to export.','error'); return; }
+  var header = ['Plan Date','DO Number','Customer/Consignee','Truck','Trucking Name',
+                'Return Date','Days Aging','Status','Remarks'];
+  var data = [header].concat(_podRecords.map(function(r){
+    return [r.plan_date||'', r.do_number||'', r.customer_name||'',
+            r.truck_id||'', r.trucker_code||'', r.return_date||'',
+            r.days_aging!==null&&r.days_aging!==undefined?r.days_aging:'',
+            r.pod_status||'PENDING', r.pod_remarks||''];
+  }));
+  _downloadCSV(data, 'PFC_POD_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportPodSummaryCSV() {
+  if (!_podSummaryRows.length) { showToast('No POD summary to export.','error'); return; }
+  var period = _podSummaryPeriod.charAt(0).toUpperCase()+_podSummaryPeriod.slice(1);
+  var header = [period,'Deliveries','Returned','On-Time','Late','Pending','Compliance %'];
+  var data   = [header].concat(_podSummaryRows.map(function(r){
+    var late = (r.returned||0)-(r.ontime||0);
+    var pend = (r.total||0)-(r.returned||0);
+    return [r.label||r.date, r.total, r.returned, r.ontime, late, pend, r.compliance_pct+'%'];
+  }));
+  _downloadCSV(data, 'PFC_POD_Summary_'+_podSummaryPeriod+'_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+
+function _ccDownload() {
+  // Downloads summary or detail depending on which view is active
+  var summaryWrap = document.getElementById('cc-view-summary-wrap');
+  var isDetail = summaryWrap && summaryWrap.style.display === 'none';
+  if (isDetail) {
+    exportColdChainCSV();
+  } else {
+    exportColdChainSummaryCSV();
+  }
+}
+
+function _podDownload() {
+  // Downloads summary or detail depending on whether records are loaded
+  if (_podRecords.length) {
+    exportPodCSV();
+  } else {
+    exportPodSummaryCSV();
+  }
+}
+
 
 </script>
 </body>

@@ -1997,6 +1997,105 @@ def save_pod():
         return jsonify({'error': str(e)}), 500
 
 
+
+
+@app.route('/api/analytics', methods=['GET'])
+def get_analytics():
+    """
+    GET /api/analytics?period=daily|weekly|monthly|quarterly|yearly
+    Returns aggregated performance metrics grouped by period from monitoring_records.
+    """
+    try:
+        period = request.args.get('period', 'daily')
+
+        def period_expr(p):
+            if p == 'weekly':    return "strftime('%Y-W%W', plan_date)"
+            if p == 'monthly':   return "strftime('%Y-%m', plan_date)"
+            if p == 'quarterly': return "(strftime('%Y', plan_date) || '-Q' || ((CAST(strftime('%m', plan_date) AS INTEGER) - 1) / 3 + 1))"
+            if p == 'yearly':    return "strftime('%Y', plan_date)"
+            return 'plan_date'
+
+        grp = period_expr(period)
+        conn = open_db(); c = conn.cursor()
+
+        # Aggregate from monitoring_records
+        c.execute(f"""
+            SELECT
+                {grp}                                          AS period_key,
+                MIN(plan_date)                                 AS sample_date,
+                COUNT(*)                                       AS total_drops,
+                COUNT(DISTINCT truck_id)                       AS trucks,
+                COUNT(DISTINCT plan_date)                      AS days,
+                SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END) AS done_count,
+                SUM(CASE WHEN otif_status LIKE '%OTIF%' THEN 1 ELSE 0 END) AS otif_count,
+                SUM(CASE WHEN food_safety_issue != 'NONE' AND food_safety_issue IS NOT NULL THEN 1 ELSE 0 END) AS fs_issues,
+                SUM(CASE WHEN crew_issue != 'NONE' AND crew_issue IS NOT NULL THEN 1 ELSE 0 END) AS crew_issues,
+                SUM(CASE WHEN concerns IS NOT NULL AND concerns != '' AND concerns != 'NONE' THEN 1 ELSE 0 END) AS concerns_count,
+                SUM(CASE WHEN return_date IS NOT NULL AND return_date != '' THEN 1 ELSE 0 END) AS pod_returned
+            FROM monitoring_records
+            WHERE plan_date IS NOT NULL AND plan_date != ''
+            GROUP BY {grp}
+            ORDER BY {grp} DESC
+            LIMIT 60
+        """)
+        rows = c.fetchall()
+        cols = [d[0] for d in c.description]
+
+        # Also get cost/volume from route_plans grouped by period
+        c.execute(f"""
+            SELECT
+                {grp.replace('plan_date', 'plan_date')}        AS period_key,
+                SUM(CAST(json_extract(summary, '$.total_volume') AS REAL)) AS total_vol,
+                SUM(CAST(json_extract(summary, '$.total_cost')   AS REAL)) AS total_cost,
+                SUM(CAST(json_extract(summary, '$.truck_count')  AS REAL)) AS plan_trucks
+            FROM route_plans
+            WHERE plan_date IS NOT NULL AND summary IS NOT NULL AND summary != ''
+            GROUP BY {grp.replace('plan_date', 'plan_date')}
+        """)
+        cost_rows = {r[0]: {'total_vol': r[1] or 0, 'total_cost': r[2] or 0} for r in c.fetchall()}
+        conn.close()
+
+        period_labels = {
+            'daily': 'Date', 'weekly': 'Week', 'monthly': 'Month',
+            'quarterly': 'Quarter', 'yearly': 'Year'
+        }
+
+        result = []
+        for row in rows:
+            d = dict(zip(cols, row))
+            pk = d['period_key']
+            cost_data = cost_rows.get(pk, {})
+            total_vol  = cost_data.get('total_vol', 0) or 0
+            total_cost = cost_data.get('total_cost', 0) or 0
+            drops      = d['total_drops'] or 0
+            done       = d['done_count'] or 0
+            otif       = d['otif_count'] or 0
+            cpk        = round(total_cost / total_vol, 2) if total_vol > 0 else 0
+            result.append({
+                'period':         pk,
+                'label':          pk,
+                'sample_date':    d['sample_date'],
+                'trucks':         d['trucks'] or 0,
+                'drops':          drops,
+                'days':           d['days'] or 0,
+                'total_vol':      round(total_vol, 1),
+                'done_count':     done,
+                'done_pct':       round(done / drops * 100, 1) if drops else 0,
+                'otif_count':     otif,
+                'otif_pct':       round(otif / drops * 100, 1) if drops else 0,
+                'fs_issues':      d['fs_issues'] or 0,
+                'crew_issues':    d['crew_issues'] or 0,
+                'concerns':       d['concerns_count'] or 0,
+                'pod_returned':   d['pod_returned'] or 0,
+                'total_cost':     round(total_cost, 2),
+                'cost_per_kg':    cpk,
+            })
+
+        return jsonify({'rows': result, 'period': period, 'period_label': period_labels.get(period, 'Period')})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/debug/db', methods=['GET'])
 def debug_db():
     """Debug endpoint — shows row counts and sample data from key tables."""
@@ -3208,44 +3307,3 @@ def gsheets_push_plan():
              'Rate (PHP)', 'Stock Transfer']]
     for truck in trucks:
         for stop in truck.get('stops', []):
-            rows.append([
-                plan_date,
-                truck.get('truck_id', ''),
-                truck.get('truck_type', ''),
-                stop.get('wh', ''),
-                stop.get('seq', ''),
-                stop.get('customer_name', ''),
-                stop.get('shipping_address', ''),
-                stop.get('match_area', '') or stop.get('area', ''),
-                stop.get('cluster_id', ''),
-                round(float(stop.get('vol', 0) or 0), 2),
-                stop.get('doc_number', ''),
-                truck.get('trucker_code', ''),
-                truck.get('truck_rate', ''),
-                'YES' if stop.get('is_stock_transfer') else '',
-            ])
-    try:
-        svc = _get_gsheets_service()
-        tab = 'Route Plan'
-        _ensure_tab(svc, sheet_id, tab)
-        svc.spreadsheets().values().clear(
-            spreadsheetId=sheet_id, range="'" + tab + "'").execute()
-        svc.spreadsheets().values().update(
-            spreadsheetId=sheet_id,
-            range="'" + tab + "'!A1",
-            valueInputOption='USER_ENTERED',
-            body={'values': rows}
-        ).execute()
-        return jsonify({'success': True, 'rows': len(rows) - 1})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-# ── Initialise DB on every startup (safe: uses IF NOT EXISTS + migrations) ──
-try:
-    init_db()
-except Exception as _e:
-    print(f"[WARN] init_db() failed: {_e}")
-
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
