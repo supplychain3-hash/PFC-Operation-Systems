@@ -2003,56 +2003,70 @@ def save_pod():
 def get_analytics():
     """
     GET /api/analytics?period=daily|weekly|monthly|quarterly|yearly
-    Returns aggregated performance metrics grouped by period from monitoring_records.
+    Returns aggregated performance metrics.
+    Primary source: route_plans (always has data when a plan is saved).
+    Secondary (overlaid): monitoring_records (for Done%, OTIF%, issues).
     """
     try:
         period = request.args.get('period', 'daily')
 
-        def period_expr(p):
-            if p == 'weekly':    return "strftime('%Y-W%W', plan_date)"
-            if p == 'monthly':   return "strftime('%Y-%m', plan_date)"
-            if p == 'quarterly': return "(strftime('%Y', plan_date) || '-Q' || ((CAST(strftime('%m', plan_date) AS INTEGER) - 1) / 3 + 1))"
-            if p == 'yearly':    return "strftime('%Y', plan_date)"
-            return 'plan_date'
+        def period_expr(col, p):
+            if p == 'weekly':    return f"strftime('%Y-W%W', {col})"
+            if p == 'monthly':   return f"strftime('%Y-%m', {col})"
+            if p == 'quarterly': return f"(strftime('%Y', {col}) || '-Q' || ((CAST(strftime('%m', {col}) AS INTEGER) - 1) / 3 + 1))"
+            if p == 'yearly':    return f"strftime('%Y', {col})"
+            return col
 
-        grp = period_expr(period)
+        grp = period_expr('plan_date', period)
         conn = open_db(); c = conn.cursor()
 
-        # Aggregate from monitoring_records
+        # PRIMARY: aggregate from route_plans (every saved plan shows up here)
         c.execute(f"""
             SELECT
-                {grp}                                          AS period_key,
-                MIN(plan_date)                                 AS sample_date,
-                COUNT(*)                                       AS total_drops,
-                COUNT(DISTINCT truck_id)                       AS trucks,
-                COUNT(DISTINCT plan_date)                      AS days,
-                SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END) AS done_count,
-                SUM(CASE WHEN otif_status LIKE '%OTIF%' THEN 1 ELSE 0 END) AS otif_count,
+                {grp}                                                               AS period_key,
+                MIN(plan_date)                                                      AS sample_date,
+                SUM(CAST(json_extract(summary, '$.truck_count') AS REAL))           AS plan_trucks,
+                SUM(CAST(json_extract(summary, '$.total_drops') AS REAL))           AS plan_drops,
+                SUM(CAST(json_extract(summary, '$.total_volume') AS REAL))          AS total_vol,
+                SUM(CAST(json_extract(summary, '$.total_cost')   AS REAL))          AS total_cost
+            FROM route_plans
+            WHERE plan_date IS NOT NULL AND summary IS NOT NULL AND summary != ''
+            GROUP BY {grp}
+            ORDER BY {grp} DESC
+            LIMIT 60
+        """)
+        plan_rows = c.fetchall()
+        plan_cols = [d[0] for d in c.description]
+
+        # SECONDARY: aggregate from monitoring_records (overlaid when available)
+        grp_mon = period_expr('plan_date', period)
+        c.execute(f"""
+            SELECT
+                {grp_mon}                                                                   AS period_key,
+                COUNT(*)                                                                    AS total_drops,
+                COUNT(DISTINCT truck_id)                                                    AS trucks,
+                SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END)                             AS done_count,
+                SUM(CASE WHEN otif_status LIKE '%OTIF%' THEN 1 ELSE 0 END)                 AS otif_count,
                 SUM(CASE WHEN food_safety_issue != 'NONE' AND food_safety_issue IS NOT NULL THEN 1 ELSE 0 END) AS fs_issues,
                 SUM(CASE WHEN crew_issue != 'NONE' AND crew_issue IS NOT NULL THEN 1 ELSE 0 END) AS crew_issues,
                 SUM(CASE WHEN concerns IS NOT NULL AND concerns != '' AND concerns != 'NONE' THEN 1 ELSE 0 END) AS concerns_count,
                 SUM(CASE WHEN return_date IS NOT NULL AND return_date != '' THEN 1 ELSE 0 END) AS pod_returned
             FROM monitoring_records
             WHERE plan_date IS NOT NULL AND plan_date != ''
-            GROUP BY {grp}
-            ORDER BY {grp} DESC
-            LIMIT 60
+            GROUP BY {grp_mon}
         """)
-        rows = c.fetchall()
-        cols = [d[0] for d in c.description]
-
-        # Also get cost/volume from route_plans grouped by period
-        c.execute(f"""
-            SELECT
-                {grp.replace('plan_date', 'plan_date')}        AS period_key,
-                SUM(CAST(json_extract(summary, '$.total_volume') AS REAL)) AS total_vol,
-                SUM(CAST(json_extract(summary, '$.total_cost')   AS REAL)) AS total_cost,
-                SUM(CAST(json_extract(summary, '$.truck_count')  AS REAL)) AS plan_trucks
-            FROM route_plans
-            WHERE plan_date IS NOT NULL AND summary IS NOT NULL AND summary != ''
-            GROUP BY {grp.replace('plan_date', 'plan_date')}
-        """)
-        cost_rows = {r[0]: {'total_vol': r[1] or 0, 'total_cost': r[2] or 0} for r in c.fetchall()}
+        mon_map = {}
+        for r in c.fetchall():
+            mon_map[r[0]] = {
+                'total_drops':    r[1] or 0,
+                'trucks':         r[2] or 0,
+                'done_count':     r[3] or 0,
+                'otif_count':     r[4] or 0,
+                'fs_issues':      r[5] or 0,
+                'crew_issues':    r[6] or 0,
+                'concerns_count': r[7] or 0,
+                'pod_returned':   r[8] or 0,
+            }
         conn.close()
 
         period_labels = {
@@ -2061,34 +2075,44 @@ def get_analytics():
         }
 
         result = []
-        for row in rows:
-            d = dict(zip(cols, row))
+        for row in plan_rows:
+            d = dict(zip(plan_cols, row))
             pk = d['period_key']
-            cost_data = cost_rows.get(pk, {})
-            total_vol  = cost_data.get('total_vol', 0) or 0
-            total_cost = cost_data.get('total_cost', 0) or 0
-            drops      = d['total_drops'] or 0
-            done       = d['done_count'] or 0
-            otif       = d['otif_count'] or 0
-            cpk        = round(total_cost / total_vol, 2) if total_vol > 0 else 0
+            mon = mon_map.get(pk, {})
+
+            total_vol  = d['total_vol']  or 0
+            total_cost = d['total_cost'] or 0
+            plan_trucks = int(d['plan_trucks'] or 0)
+            plan_drops  = int(d['plan_drops']  or 0)
+
+            # Use monitoring counts when available, fall back to plan summary
+            drops  = mon.get('total_drops') or plan_drops
+            trucks = mon.get('trucks')       or plan_trucks
+            done   = mon.get('done_count',     0)
+            otif   = mon.get('otif_count',     0)
+            fs     = mon.get('fs_issues',      0)
+            crew   = mon.get('crew_issues',    0)
+            concerns  = mon.get('concerns_count', 0)
+            pod_ret   = mon.get('pod_returned',   0)
+
+            cpk = round(total_cost / total_vol, 2) if total_vol > 0 else 0
             result.append({
-                'period':         pk,
-                'label':          pk,
-                'sample_date':    d['sample_date'],
-                'trucks':         d['trucks'] or 0,
-                'drops':          drops,
-                'days':           d['days'] or 0,
-                'total_vol':      round(total_vol, 1),
-                'done_count':     done,
-                'done_pct':       round(done / drops * 100, 1) if drops else 0,
-                'otif_count':     otif,
-                'otif_pct':       round(otif / drops * 100, 1) if drops else 0,
-                'fs_issues':      d['fs_issues'] or 0,
-                'crew_issues':    d['crew_issues'] or 0,
-                'concerns':       d['concerns_count'] or 0,
-                'pod_returned':   d['pod_returned'] or 0,
-                'total_cost':     round(total_cost, 2),
-                'cost_per_kg':    cpk,
+                'period':       pk,
+                'label':        pk,
+                'sample_date':  d['sample_date'],
+                'trucks':       trucks,
+                'drops':        drops,
+                'total_vol':    round(total_vol, 1),
+                'done_count':   done,
+                'done_pct':     round(done / drops * 100, 1) if drops else 0,
+                'otif_count':   otif,
+                'otif_pct':     round(otif / drops * 100, 1) if drops else 0,
+                'fs_issues':    fs,
+                'crew_issues':  crew,
+                'concerns':     concerns,
+                'pod_returned': pod_ret,
+                'total_cost':   round(total_cost, 2),
+                'cost_per_kg':  cpk,
             })
 
         return jsonify({'rows': result, 'period': period, 'period_label': period_labels.get(period, 'Period')})
