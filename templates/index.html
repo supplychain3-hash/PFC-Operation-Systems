@@ -959,18 +959,46 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
   <!-- SUMMARY VIEW: period tiles + aggregated table -->
   <div id="cc-view-summary-wrap">
     <div id="cc-summary-wrap" style="margin-bottom:14px"></div>
+    <!-- Search bar for summary table -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <input type="text" id="cc-summary-search" placeholder="🔍 Search period / date…"
+        oninput="_filterCcSummary()"
+        style="flex:1;max-width:320px;padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+      <select id="cc-summary-filter" onchange="_filterCcSummary()"
+        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+        <option value="">All Periods</option>
+        <option value="issues">Has Cold Chain Issues</option>
+        <option value="crew">Has SOP Issues</option>
+        <option value="any">Has Any Issue</option>
+        <option value="clean">100% Clean</option>
+      </select>
+    </div>
     <!-- Aggregated summary table by period -->
     <div id="cc-agg-table-wrap"></div>
   </div>
 
   <!-- DETAIL VIEW: date selector + per-delivery table -->
   <div id="cc-view-detail-wrap" style="display:none">
-    <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">
+    <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <label style="font-size:.8rem;font-weight:600;color:var(--navy)">Select Date:</label>
       <select id="cc-date-filter-detail" onchange="document.getElementById('cc-date-filter').value=this.value;loadColdChain(this.value)"
         style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;min-width:160px">
         <option value="">— Select date —</option>
       </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <input type="text" id="cc-detail-search" placeholder="🔍 Search truck / customer / DO…"
+        oninput="_filterCcDetail()"
+        style="flex:1;min-width:200px;max-width:380px;padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+      <select id="cc-detail-filter" onchange="_filterCcDetail()"
+        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+        <option value="">All Records</option>
+        <option value="fs">Cold Chain Issues Only</option>
+        <option value="crew">SOP Issues Only</option>
+        <option value="any">Any Issue</option>
+        <option value="clean">Clean Only</option>
+      </select>
+      <span id="cc-detail-count" style="font-size:.75rem;color:var(--muted)"></span>
     </div>
     <div id="cc-table-wrap">
       <div class="empty-state"><div class="icon">🌡️</div><h3>Select a date to view records</h3></div>
@@ -1029,7 +1057,34 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
   </div>
 
   <!-- Historical POD summary -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+    <input type="text" id="pod-summary-search" placeholder="🔍 Search period / date…"
+      oninput="_filterPodSummary()"
+      style="flex:1;max-width:320px;padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+    <select id="pod-summary-filter" onchange="_filterPodSummary()"
+      style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+      <option value="">All Periods</option>
+      <option value="late">Has Late Returns</option>
+      <option value="pending">Has Pending</option>
+      <option value="perfect">100% On-Time</option>
+    </select>
+  </div>
   <div id="pod-summary-wrap" style="margin-bottom:14px"></div>
+
+  <!-- Per-DO detail search/filter -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+    <input type="text" id="pod-detail-search" placeholder="🔍 Search DO / customer / truck…"
+      oninput="renderPod()"
+      style="flex:1;min-width:200px;max-width:380px;padding:6px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+    <select id="pod-detail-status" onchange="renderPod()"
+      style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+      <option value="">All Status</option>
+      <option value="ON-TIME">On-Time</option>
+      <option value="LATE">Late</option>
+      <option value="PENDING">Pending</option>
+    </select>
+    <span id="pod-detail-count" style="font-size:.75rem;color:var(--muted)"></span>
+  </div>
 
   <!-- Per-DO detail table -->
   <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">
@@ -4689,11 +4744,61 @@ function loadColdChainDates() {
     }).catch(e=>showToast('Cold chain error: '+e.message,'error'));
 }
 
+// ---- Cold Chain global state for search/filter ----
+var _ccSummaryRows   = [];
+var _ccSummaryPeriod = 'daily';
+var _ccDetailRecords = [];
+
+function _filterCcSummary() {
+  var q      = ((document.getElementById('cc-summary-search')||{}).value||'').toLowerCase();
+  var filter = (document.getElementById('cc-summary-filter')||{}).value||'';
+  var rows   = _ccSummaryRows.filter(function(row) {
+    var label = (row.label||row.date||'').toLowerCase();
+    if (q && label.indexOf(q)===-1) return false;
+    if (filter==='issues'  && row.issues===0)                   return false;
+    if (filter==='crew'    && row.crew_issues===0)               return false;
+    if (filter==='any'     && row.issues===0 && row.crew_issues===0) return false;
+    if (filter==='clean'   && (row.issues>0 || row.crew_issues>0))  return false;
+    return true;
+  });
+  _renderCcSummaryTableRows(rows, _ccSummaryPeriod);
+}
+
+function _filterCcDetail() {
+  var q      = ((document.getElementById('cc-detail-search')||{}).value||'').toLowerCase();
+  var filter = (document.getElementById('cc-detail-filter')||{}).value||'';
+  var filtered = _ccDetailRecords.filter(function(r) {
+    if (q) {
+      var hay = ((r.truck_id||'')+(r.trucker_code||'')+(r.customer_name||'')+(r.do_number||'')).toLowerCase();
+      if (hay.indexOf(q)===-1) return false;
+    }
+    var hasFs   = r.food_safety_issue && r.food_safety_issue!=='NONE';
+    var hasCrew = r.crew_issue        && r.crew_issue!=='NONE';
+    if (filter==='fs'    && !hasFs)            return false;
+    if (filter==='crew'  && !hasCrew)          return false;
+    if (filter==='any'   && !hasFs && !hasCrew) return false;
+    if (filter==='clean' && (hasFs || hasCrew)) return false;
+    return true;
+  });
+  var cnt = document.getElementById('cc-detail-count');
+  if (cnt) cnt.textContent = filtered.length+' / '+_ccDetailRecords.length+' records';
+  _renderCcDetailTable(filtered);
+}
+
 function _renderCcSummaryTable(rows, period) {
+  _ccSummaryRows   = rows;
+  _ccSummaryPeriod = period;
+  // reset search/filter on fresh load
+  var si = document.getElementById('cc-summary-search'); if(si) si.value='';
+  var sf = document.getElementById('cc-summary-filter'); if(sf) sf.value='';
+  _renderCcSummaryTableRows(rows, period);
+}
+
+function _renderCcSummaryTableRows(rows, period) {
   const wrap = document.getElementById('cc-agg-table-wrap');
   if (!wrap) return;
   if (!rows.length) {
-    wrap.innerHTML='<div class="empty-state"><div class="icon">\u{1F321}️</div><h3>No data yet</h3><p>Save monitoring records first.</p></div>';
+    wrap.innerHTML='<div class="empty-state"><div class="icon">\u{1F321}️</div><h3>No data / no match</h3><p>Try clearing the search filter.</p></div>';
     return;
   }
   const periodLabel = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'}[period]||'Period';
@@ -4776,6 +4881,15 @@ function loadColdChain(date) {
 
 
 function renderColdChain(records) {
+  _ccDetailRecords = records;
+  // reset search/filter on fresh date load
+  var si = document.getElementById('cc-detail-search'); if(si) si.value='';
+  var sf = document.getElementById('cc-detail-filter'); if(sf) sf.value='';
+  var cnt = document.getElementById('cc-detail-count'); if(cnt) cnt.textContent='';
+  _renderCcDetailTable(records);
+}
+
+function _renderCcDetailTable(records) {
   const wrap = document.getElementById('cc-table-wrap');
   if (!wrap) return;
   const total      = records.length;
@@ -4886,6 +5000,22 @@ function renderColdChain(records) {
 //  POD RETURN COMPLIANCE
 // ======================================================
 let _podRecords = [];
+var _podSummaryRows   = [];
+var _podSummaryPeriod = 'daily';
+
+function _filterPodSummary() {
+  var q      = ((document.getElementById('pod-summary-search')||{}).value||'').toLowerCase();
+  var filter = (document.getElementById('pod-summary-filter')||{}).value||'';
+  var rows   = _podSummaryRows.filter(function(row) {
+    var label = (row.label||row.date||'').toLowerCase();
+    if (q && label.indexOf(q)===-1) return false;
+    if (filter==='late'    && (row.total - row.ontime - (row.total - row.returned)) <= 0) return false;
+    if (filter==='pending' && row.returned >= row.total) return false;
+    if (filter==='perfect' && row.compliance_pct < 100) return false;
+    return true;
+  });
+  _renderPodSummaryRows(rows, _podSummaryPeriod);
+}
 
 function loadPodDates() {
   const period = (document.getElementById('pod-period')||{}).value || 'daily';
@@ -4901,52 +5031,68 @@ function loadPodDates() {
       }
       // POD summary table
       fetch('/api/pod/summary?period='+period).then(r=>r.json()).then(s=>{
-        const wrap = document.getElementById('pod-summary-wrap');
-        if (!wrap) return;
-        const rows = (s.summary||[]).slice(0,20);
-        if (!rows.length) { wrap.innerHTML=''; return; }
-        const periodLabel = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'}[period]||'Period';
-        let rowsHtml = '';
-        rows.forEach(function(row) {
-          const pct    = row.compliance_pct;
-          const color  = pct>=95?'#16a34a':pct>=80?'#f59e0b':'#e53935';
-          const rowBg  = pct===100?'':pct>=80?'#fffbeb':'#fff5f5';
-          const bar    = '<div style="display:flex;align-items:center;gap:5px">'+
-            '<div style="flex:1;height:7px;background:#e5e7eb;border-radius:3px">'+
-              '<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:3px"></div>'+
-            '</div>'+
-            '<span style="font-weight:700;color:'+color+';font-size:.78rem;min-width:40px;text-align:right">'+pct+'%</span>'+
-          '</div>';
-          const viewBtn = period==='daily'
-            ? '<button onclick="document.getElementById(\'pod-date-filter\').value=\''+row.date+'\';loadPod(\''+row.date+'\')" style="background:#0d5c3a;color:#fff;border:none;border-radius:4px;padding:2px 9px;font-size:.72rem;cursor:pointer">View</button>'
-            : '';
-          rowsHtml +=
-            '<tr style="border-bottom:1px solid #e5e7eb;background:'+rowBg+'">'+
-              '<td style="padding:8px 14px;font-weight:700;color:var(--navy)">'+(row.label||row.date)+'</td>'+
-              '<td style="padding:8px 10px;text-align:center;color:var(--muted)">'+row.total+'</td>'+
-              '<td style="padding:8px 10px;text-align:center">'+row.returned+'</td>'+
-              '<td style="padding:8px 10px;text-align:center;color:#16a34a;font-weight:700">'+row.ontime+'</td>'+
-              '<td style="padding:8px 14px;min-width:160px">'+bar+'</td>'+
-              (period==='daily'?'<td style="padding:8px 10px;text-align:center">'+viewBtn+'</td>':'')+
-            '</tr>';
-        });
-        const viewTh = period==='daily'?'<th style="padding:9px 10px;text-align:center">Detail</th>':'';
-        wrap.innerHTML =
-          '<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">'+
-          '<table style="width:100%;border-collapse:collapse;font-size:.8rem">'+
-            '<thead><tr style="background:#1e293b;color:#f1f5f9">'+
-              '<th style="padding:9px 14px;text-align:left">'+periodLabel+'</th>'+
-              '<th style="padding:9px 10px;text-align:center">Deliveries</th>'+
-              '<th style="padding:9px 10px;text-align:center">Returned</th>'+
-              '<th style="padding:9px 10px;text-align:center">On-Time</th>'+
-              '<th style="padding:9px 14px;text-align:left;min-width:180px">POD Compliance</th>'+
-              viewTh+
-            '</tr></thead>'+
-            '<tbody>'+rowsHtml+'</tbody>'+
-          '</table></div>'+
-          '<p style="margin-top:6px;font-size:.71rem;color:var(--muted)">Last '+rows.length+' '+periodLabel.toLowerCase()+'s. Target: ≥95% on-time (within 2 days).</p>';
+        _podSummaryRows   = (s.summary||[]).slice(0,50);
+        _podSummaryPeriod = period;
+        var si = document.getElementById('pod-summary-search'); if(si) si.value='';
+        var sf = document.getElementById('pod-summary-filter'); if(sf) sf.value='';
+        _renderPodSummaryRows(_podSummaryRows, _podSummaryPeriod);
       }).catch(function(){});
     }).catch(function(e){ showToast('POD error: '+e.message,'error'); });
+}
+
+function _renderPodSummaryRows(rows, period) {
+  const wrap = document.getElementById('pod-summary-wrap');
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML='<p style="font-size:.8rem;color:var(--muted);padding:8px 0">No matching records. Try clearing the filter.</p>';
+    return;
+  }
+  const periodLabel = {daily:'Date',weekly:'Week',monthly:'Month',quarterly:'Quarter',yearly:'Year'}[period]||'Period';
+  let rowsHtml = '';
+  rows.forEach(function(row) {
+    const pct    = row.compliance_pct;
+    const color  = pct>=95?'#16a34a':pct>=80?'#f59e0b':'#e53935';
+    const rowBg  = pct===100?'':pct>=80?'#fffbeb':'#fff5f5';
+    const bar    = '<div style="display:flex;align-items:center;gap:5px">'+
+      '<div style="flex:1;height:7px;background:#e5e7eb;border-radius:3px">'+
+        '<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:3px"></div>'+
+      '</div>'+
+      '<span style="font-weight:700;color:'+color+';font-size:.78rem;min-width:40px;text-align:right">'+pct+'%</span>'+
+    '</div>';
+    const late    = row.returned - row.ontime;
+    const pending = row.total    - row.returned;
+    const viewBtn = period==='daily'
+      ? '<button onclick="document.getElementById(\'pod-date-filter\').value=\''+row.date+'\';loadPod(\''+row.date+'\')" style="background:#0d5c3a;color:#fff;border:none;border-radius:4px;padding:2px 9px;font-size:.72rem;cursor:pointer">View</button>'
+      : '';
+    rowsHtml +=
+      '<tr style="border-bottom:1px solid #e5e7eb;background:'+rowBg+'">'+
+        '<td style="padding:8px 14px;font-weight:700;color:var(--navy)">'+(row.label||row.date)+'</td>'+
+        '<td style="padding:8px 10px;text-align:center;color:var(--muted)">'+row.total+'</td>'+
+        '<td style="padding:8px 10px;text-align:center">'+row.returned+'</td>'+
+        '<td style="padding:8px 10px;text-align:center;color:#16a34a;font-weight:700">'+row.ontime+'</td>'+
+        '<td style="padding:8px 10px;text-align:center;color:'+(late>0?'#e53935':'var(--muted)')+';font-weight:'+(late>0?'700':'400')+'">'+late+'</td>'+
+        '<td style="padding:8px 10px;text-align:center;color:'+(pending>0?'#f59e0b':'var(--muted)')+'">'+pending+'</td>'+
+        '<td style="padding:8px 14px;min-width:160px">'+bar+'</td>'+
+        (period==='daily'?'<td style="padding:8px 10px;text-align:center">'+viewBtn+'</td>':'')+
+      '</tr>';
+  });
+  const viewTh = period==='daily'?'<th style="padding:9px 10px;text-align:center">Detail</th>':'';
+  wrap.innerHTML =
+    '<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px">'+
+    '<table style="width:100%;border-collapse:collapse;font-size:.8rem">'+
+      '<thead><tr style="background:#1e293b;color:#f1f5f9">'+
+        '<th style="padding:9px 14px;text-align:left">'+periodLabel+'</th>'+
+        '<th style="padding:9px 10px;text-align:center">Deliveries</th>'+
+        '<th style="padding:9px 10px;text-align:center">Returned</th>'+
+        '<th style="padding:9px 10px;text-align:center;color:#86efac">On-Time</th>'+
+        '<th style="padding:9px 10px;text-align:center;color:#fca5a5">Late</th>'+
+        '<th style="padding:9px 10px;text-align:center;color:#fcd34d">Pending</th>'+
+        '<th style="padding:9px 14px;text-align:left;min-width:180px">POD Compliance</th>'+
+        viewTh+
+      '</tr></thead>'+
+      '<tbody>'+rowsHtml+'</tbody>'+
+    '</table></div>'+
+    '<p style="margin-top:6px;font-size:.71rem;color:var(--muted)">'+rows.length+' '+periodLabel.toLowerCase()+'(s) shown. Target: ≥95% on-time (within 2 days).</p>';
 }
 
 function loadPod(date) {
@@ -4978,7 +5124,17 @@ function renderPod() {
     tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No monitoring records for this date. Persist monitoring first.</td></tr>';
     return;
   }
+  var q          = ((document.getElementById('pod-detail-search')||{}).value||'').toLowerCase();
+  var statusFilt = (document.getElementById('pod-detail-status')||{}).value||'';
+  var shown = 0;
   tbody.innerHTML = _podRecords.map(function(r,i){
+    if (q) {
+      var hay = ((r.do_number||'')+(r.customer_name||'')+(r.truck_id||'')).toLowerCase();
+      if (hay.indexOf(q)===-1) return '';
+    }
+    var effStatus = r.return_date ? (r.pod_status||'LATE') : 'PENDING';
+    if (statusFilt && statusFilt!==effStatus) return '';
+    shown++;
     var agingTxt='—';
     var statusBadge='<span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:2px 7px;font-size:.72rem">PENDING</span>';
     if (r.return_date) {
@@ -5008,6 +5164,8 @@ function renderPod() {
       '</td>'+
     '</tr>';
   }).join('');
+  var cnt = document.getElementById('pod-detail-count');
+  if (cnt) cnt.textContent = (q||statusFilt) ? (shown+' / '+total+' shown') : '';
 }
 
 function _updatePodAging(i) {
