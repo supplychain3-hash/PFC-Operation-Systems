@@ -3865,14 +3865,38 @@ function moveStop(ti, si, dir) {
 function renderWarehouseMarkers(){
   Object.values(whMarkers).forEach(m => { try { leafletMap.removeLayer(m); } catch(e){} });
   whMarkers = {};
+
+  // Detect warehouses that share the same coordinate and offset duplicates so
+  // each gets its own visible, clickable marker (e.g. FCSC and FGCS are the
+  // same building — without this, one marker hides the other).
+  const coordBuckets = {};
   Object.entries(warehouseData).forEach(([code,d])=>{
     if(!d.lat||!d.lng) return;
+    const key = d.lat.toFixed(6)+','+d.lng.toFixed(6);
+    (coordBuckets[key] = coordBuckets[key]||[]).push(code);
+  });
+  // Build a lookup: code → [offsetLat, offsetLng]
+  const offsets = {};
+  Object.values(coordBuckets).forEach(codes=>{
+    if(codes.length <= 1) { offsets[codes[0]] = [0,0]; return; }
+    // Spread duplicates in a small circle (~12m radius)
+    const R = 0.00011; // ~12 m in degrees
+    codes.forEach((c,i)=>{
+      const angle = (i / codes.length) * Math.PI * 2;
+      offsets[c] = [R*Math.cos(angle), R*Math.sin(angle)];
+    });
+  });
+
+  Object.entries(warehouseData).forEach(([code,d])=>{
+    if(!d.lat||!d.lng) return;
+    const [dLat,dLng] = offsets[code]||[0,0];
+    const lat = d.lat + dLat, lng = d.lng + dLng;
     const color=WH_GROUP_COLORS[d.group]||'#888';
     const icon=L.divIcon({
       html:`<div style="width:26px;height:26px;background:${color};border:3px solid #fff;border-radius:50%;box-shadow:0 2px 7px rgba(0,0,0,.38);display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="color:#fff;font-size:.55rem;font-weight:800;line-height:1">${code.slice(0,2)}</span></div>`,
       className:'', iconSize:[26,26], iconAnchor:[13,13]
     });
-    const m = L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
+    const m = L.marker([lat,lng],{icon}).addTo(leafletMap);
     m._whCode = code;
     m.bindPopup(()=>buildWhPopupContent(code,d),{maxWidth:360});
     m.on('click', ()=>isolateWarehouse(code));
@@ -5452,36 +5476,13 @@ function exportPodCSV() {
 function exportPodSummaryCSV() {
   if (!_podSummaryRows.length) { showToast('No POD summary to export.','error'); return; }
   var period = _podSummaryPeriod.charAt(0).toUpperCase()+_podSummaryPeriod.slice(1);
-  var header = [period,'Deliveries','Returned','On-Time','Late','Pending','Compliance %'];
-  var data   = [header].concat(_podSummaryRows.map(function(r){
-    var late = (r.returned||0)-(r.ontime||0);
-    var pend = (r.total||0)-(r.returned||0);
-    return [r.label||r.date, r.total, r.returned, r.ontime, late, pend, r.compliance_pct+'%'];
+  var header =
+['Period','Date','Total Drops','Returned','On-Time','Compliance %'];
+  var data = [header].concat(_podSummaryRows.map(function(r){
+    return [r.label||r.period_label||'', r.date||'', r.total||0, r.returned||0, r.ontime||0, r.compliance_pct||0];
   }));
-  _downloadCSV(data, 'PFC_POD_Summary_'+_podSummaryPeriod+'_'+new Date().toISOString().slice(0,10)+'.csv');
+  _downloadCSV(data, 'PFC_POD_Summary_'+new Date().toISOString().slice(0,10)+'.csv');
 }
-
-
-function _ccDownload() {
-  // Downloads summary or detail depending on which view is active
-  var summaryWrap = document.getElementById('cc-view-summary-wrap');
-  var isDetail = summaryWrap && summaryWrap.style.display === 'none';
-  if (isDetail) {
-    exportColdChainCSV();
-  } else {
-    exportColdChainSummaryCSV();
-  }
-}
-
-function _podDownload() {
-  // Downloads summary or detail depending on whether records are loaded
-  if (_podRecords.length) {
-    exportPodCSV();
-  } else {
-    exportPodSummaryCSV();
-  }
-}
-
 
 </script>
 </body>
