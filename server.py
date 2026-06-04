@@ -3307,3 +3307,43 @@ def gsheets_push_plan():
              'Rate (PHP)', 'Stock Transfer']]
     for truck in trucks:
         for stop in truck.get('stops', []):
+            rows.append([
+                plan_date,
+                truck.get('truck_id', ''),
+                truck.get('truck_type', ''),
+                truck.get('wh_group', ''),
+                stop.get('seq', ''),
+                stop.get('customer_name', ''),
+                stop.get('shipping_address', ''),
+                stop.get('area', ''),
+                stop.get('cluster_id', ''),
+                round(stop.get('volume', 0), 2),
+                stop.get('so_number', ''),
+                truck.get('trucker_code', ''),
+                truck.get('truck_rate', ''),
+                'Yes' if truck.get('is_stock_transfer') else 'No',
+            ])
+    try:
+        svc    = _get_gsheets_service()
+        if not svc:
+            return jsonify({'error': 'Google Sheets not connected'}), 400
+        body   = {'values': rows}
+        result = svc.spreadsheets().values().append(
+            spreadsheetId=sheet_id,
+            range='Sheet1!A1',
+            valueInputOption='USER_ENTERED',
+            insertDataOption='INSERT_ROWS',
+            body=body
+        ).execute()
+        return jsonify({'success': True, 'updated': result.get('updates', {}).get('updatedRows', 0)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+try:
+    init_db()
+except Exception as _e:
+    print(f"[WARN] init_db() failed: {_e}")
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)
