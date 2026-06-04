@@ -768,6 +768,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
       <option value="IN-TRANSIT">In-Transit</option>
       <option value="DONE">Done</option>
     </select>
+    <select id="mon-filter-trucker" onchange="filterMonitoring()"
+      style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;color:var(--navy);background:#fff">
+      <option value="">All Truckers / 3PL</option>
+    </select>
     <select id="mon-filter-cluster" onchange="filterMonitoring()"
       style="padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit;color:var(--navy);background:#fff">
       <option value="">All Clusters</option>
@@ -972,6 +976,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
         <option value="any">Has Any Issue</option>
         <option value="clean">100% Clean</option>
       </select>
+      <select id="cc-summary-trucker" onchange="_filterCcSummary()"
+        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+        <option value="">All Truckers / 3PL</option>
+      </select>
     </div>
     <!-- Aggregated summary table by period -->
     <div id="cc-agg-table-wrap"></div>
@@ -997,6 +1005,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
         <option value="crew">SOP Issues Only</option>
         <option value="any">Any Issue</option>
         <option value="clean">Clean Only</option>
+      </select>
+      <select id="cc-detail-trucker" onchange="_filterCcDetail()"
+        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+        <option value="">All Truckers / 3PL</option>
       </select>
       <span id="cc-detail-count" style="font-size:.75rem;color:var(--muted)"></span>
     </div>
@@ -1068,6 +1080,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
       <option value="pending">Has Pending</option>
       <option value="perfect">100% On-Time</option>
     </select>
+      <select id="pod-summary-trucker" onchange="_filterPodSummary()"
+        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+        <option value="">All Truckers / 3PL</option>
+      </select>
   </div>
   <div id="pod-summary-wrap" style="margin-bottom:14px"></div>
 
@@ -1083,6 +1099,10 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
       <option value="LATE">Late</option>
       <option value="PENDING">Pending</option>
     </select>
+      <select id="pod-detail-trucker" onchange="renderPod()"
+        style="padding:5px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:.8rem;font-family:inherit">
+        <option value="">All Truckers / 3PL</option>
+      </select>
     <span id="pod-detail-count" style="font-size:.75rem;color:var(--muted)"></span>
   </div>
 
@@ -4190,10 +4210,11 @@ function renderMonitoring() {
     const xferBadge  = r.is_stock_transfer?'<span style="font-size:.58rem;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;font-weight:700">XFER</span>':'';
     return `<tr data-mon-idx="${i}" style="border-left:3px solid ${truckColor}"
       data-truck="${r.truck_id||''}"
+      data-trucker="${r.trucker_code||''}"
       data-status="${r.status||''}"
       data-cluster="${r.cluster_id||''}"
       data-concerns="${r.concerns||'NONE'}"
-      data-search="${((r.customer_name||'')+(r.shipping_address||'')).toLowerCase()}">
+      data-search="${((r.customer_name||'')+(r.shipping_address||'')+(r.trucker_code||'')).toLowerCase()}">
       <td><span style="background:${truckColor};color:#fff;border-radius:4px;padding:2px 7px;font-weight:700;font-size:.7rem">${r.truck_id}</span></td>
       <td style="text-align:center;font-weight:700">${r.seq}</td>
       <td style="text-align:center;font-size:.68rem;color:var(--muted)">${doneFrac}/${totalFrac}</td>
@@ -4256,13 +4277,20 @@ function renderMonitoring() {
 
 function _populateMonFilterDropdowns() {
   const trucks   = [...new Set(monData.map(r=>r.truck_id).filter(Boolean))].sort();
+  const truckers = [...new Set(monData.map(r=>r.trucker_code).filter(Boolean))].sort();
   const clusters = [...new Set(monData.map(r=>r.cluster_id).filter(Boolean))].sort();
-  const truckSel = document.getElementById('mon-filter-truck');
+  const truckSel   = document.getElementById('mon-filter-truck');
+  const truckerSel = document.getElementById('mon-filter-trucker');
   const clusterSel = document.getElementById('mon-filter-cluster');
   if (truckSel) {
     const prev = truckSel.value;
     truckSel.innerHTML = '<option value="">All Trucks</option>' +
       trucks.map(t=>`<option value="${t}"${t===prev?' selected':''}>${t}</option>`).join('');
+  }
+  if (truckerSel) {
+    const prev = truckerSel.value;
+    truckerSel.innerHTML = '<option value="">All Truckers / 3PL</option>' +
+      truckers.map(t=>`<option value="${t}"${t===prev?' selected':''}>${t}</option>`).join('');
   }
   if (clusterSel) {
     const prev = clusterSel.value;
@@ -4274,6 +4302,7 @@ function _populateMonFilterDropdowns() {
 function filterMonitoring() {
   const search   = (document.getElementById('mon-search')?.value||'').toLowerCase().trim();
   const truck    = document.getElementById('mon-filter-truck')?.value||'';
+  const trucker  = document.getElementById('mon-filter-trucker')?.value||'';
   const status   = document.getElementById('mon-filter-status')?.value||'';
   const cluster  = document.getElementById('mon-filter-cluster')?.value||'';
   const concerns = document.getElementById('mon-filter-concerns')?.value||'';
@@ -4284,6 +4313,7 @@ function filterMonitoring() {
     const match =
       (!search   || (tr.dataset.search||'').includes(search)) &&
       (!truck    || tr.dataset.truck === truck) &&
+      (!trucker  || tr.dataset.trucker === trucker) &&
       (!status   || tr.dataset.status === status) &&
       (!cluster  || tr.dataset.cluster === cluster) &&
       (!concerns || tr.dataset.concerns === concerns);
@@ -4293,13 +4323,13 @@ function filterMonitoring() {
   const countEl = document.getElementById('mon-filter-count');
   const total = rows.length;
   if (countEl) {
-    const hasFilter = search||truck||status||cluster||concerns;
+    const hasFilter = search||truck||trucker||status||cluster||concerns;
     countEl.textContent = hasFilter ? `Showing ${shown} of ${total} drops` : `${total} drops`;
   }
 }
 
 function clearMonFilters() {
-  ['mon-search','mon-filter-truck','mon-filter-status','mon-filter-cluster','mon-filter-concerns'].forEach(id=>{
+  ['mon-search','mon-filter-truck','mon-filter-trucker','mon-filter-status','mon-filter-cluster','mon-filter-concerns'].forEach(id=>{
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -4750,32 +4780,36 @@ var _ccSummaryPeriod = 'daily';
 var _ccDetailRecords = [];
 
 function _filterCcSummary() {
-  var q      = ((document.getElementById('cc-summary-search')||{}).value||'').toLowerCase();
-  var filter = (document.getElementById('cc-summary-filter')||{}).value||'';
-  var rows   = _ccSummaryRows.filter(function(row) {
+  var q       = ((document.getElementById('cc-summary-search')||{}).value||'').toLowerCase();
+  var filter  = (document.getElementById('cc-summary-filter')||{}).value||'';
+  var trucker = (document.getElementById('cc-summary-trucker')||{}).value||'';
+  var rows    = _ccSummaryRows.filter(function(row) {
     var label = (row.label||row.date||'').toLowerCase();
     if (q && label.indexOf(q)===-1) return false;
-    if (filter==='issues'  && row.issues===0)                   return false;
-    if (filter==='crew'    && row.crew_issues===0)               return false;
+    if (trucker && (row.trucker_code||'') !== trucker) return false;
+    if (filter==='issues'  && row.issues===0)                       return false;
+    if (filter==='crew'    && row.crew_issues===0)                   return false;
     if (filter==='any'     && row.issues===0 && row.crew_issues===0) return false;
-    if (filter==='clean'   && (row.issues>0 || row.crew_issues>0))  return false;
+    if (filter==='clean'   && (row.issues>0 || row.crew_issues>0))   return false;
     return true;
   });
   _renderCcSummaryTableRows(rows, _ccSummaryPeriod);
 }
 
 function _filterCcDetail() {
-  var q      = ((document.getElementById('cc-detail-search')||{}).value||'').toLowerCase();
-  var filter = (document.getElementById('cc-detail-filter')||{}).value||'';
+  var q       = ((document.getElementById('cc-detail-search')||{}).value||'').toLowerCase();
+  var filter  = (document.getElementById('cc-detail-filter')||{}).value||'';
+  var trucker = (document.getElementById('cc-detail-trucker')||{}).value||'';
   var filtered = _ccDetailRecords.filter(function(r) {
+    if (trucker && (r.trucker_code||'') !== trucker) return false;
     if (q) {
       var hay = ((r.truck_id||'')+(r.trucker_code||'')+(r.customer_name||'')+(r.do_number||'')).toLowerCase();
       if (hay.indexOf(q)===-1) return false;
     }
     var hasFs   = r.food_safety_issue && r.food_safety_issue!=='NONE';
     var hasCrew = r.crew_issue        && r.crew_issue!=='NONE';
-    if (filter==='fs'    && !hasFs)            return false;
-    if (filter==='crew'  && !hasCrew)          return false;
+    if (filter==='fs'    && !hasFs)             return false;
+    if (filter==='crew'  && !hasCrew)           return false;
     if (filter==='any'   && !hasFs && !hasCrew) return false;
     if (filter==='clean' && (hasFs || hasCrew)) return false;
     return true;
@@ -4791,6 +4825,11 @@ function _renderCcSummaryTable(rows, period) {
   // reset search/filter on fresh load
   var si = document.getElementById('cc-summary-search'); if(si) si.value='';
   var sf = document.getElementById('cc-summary-filter'); if(sf) sf.value='';
+  var st = document.getElementById('cc-summary-trucker'); if(st) {
+    var truckers = [...new Set(rows.map(function(r){return r.trucker_code||'';}).filter(Boolean))].sort();
+    st.innerHTML = '<option value="">All Truckers / 3PL</option>' +
+      truckers.map(function(t){return '<option value="'+t+'">'+t+'</option>';}).join('');
+  }
   _renderCcSummaryTableRows(rows, period);
 }
 
@@ -4886,6 +4925,11 @@ function renderColdChain(records) {
   var si = document.getElementById('cc-detail-search'); if(si) si.value='';
   var sf = document.getElementById('cc-detail-filter'); if(sf) sf.value='';
   var cnt = document.getElementById('cc-detail-count'); if(cnt) cnt.textContent='';
+  var st = document.getElementById('cc-detail-trucker'); if(st) {
+    var truckers = [...new Set(records.map(function(r){return r.trucker_code||'';}).filter(Boolean))].sort();
+    st.innerHTML = '<option value="">All Truckers / 3PL</option>' +
+      truckers.map(function(t){return '<option value="'+t+'">'+t+'</option>';}).join('');
+  }
   _renderCcDetailTable(records);
 }
 
@@ -5004,11 +5048,13 @@ var _podSummaryRows   = [];
 var _podSummaryPeriod = 'daily';
 
 function _filterPodSummary() {
-  var q      = ((document.getElementById('pod-summary-search')||{}).value||'').toLowerCase();
-  var filter = (document.getElementById('pod-summary-filter')||{}).value||'';
-  var rows   = _podSummaryRows.filter(function(row) {
+  var q       = ((document.getElementById('pod-summary-search')||{}).value||'').toLowerCase();
+  var filter  = (document.getElementById('pod-summary-filter')||{}).value||'';
+  var trucker = (document.getElementById('pod-summary-trucker')||{}).value||'';
+  var rows    = _podSummaryRows.filter(function(row) {
     var label = (row.label||row.date||'').toLowerCase();
     if (q && label.indexOf(q)===-1) return false;
+    if (trucker && (row.trucker_code||'') !== trucker) return false;
     if (filter==='late'    && (row.total - row.ontime - (row.total - row.returned)) <= 0) return false;
     if (filter==='pending' && row.returned >= row.total) return false;
     if (filter==='perfect' && row.compliance_pct < 100) return false;
@@ -5035,6 +5081,11 @@ function loadPodDates() {
         _podSummaryPeriod = period;
         var si = document.getElementById('pod-summary-search'); if(si) si.value='';
         var sf = document.getElementById('pod-summary-filter'); if(sf) sf.value='';
+        var st = document.getElementById('pod-summary-trucker'); if(st) {
+          var truckers = [...new Set(_podSummaryRows.map(function(r){return r.trucker_code||'';}).filter(Boolean))].sort();
+          st.innerHTML = '<option value="">All Truckers / 3PL</option>' +
+            truckers.map(function(t){return '<option value="'+t+'">'+t+'</option>';}).join('');
+        }
         _renderPodSummaryRows(_podSummaryRows, _podSummaryPeriod);
       }).catch(function(){});
     }).catch(function(e){ showToast('POD error: '+e.message,'error'); });
@@ -5100,7 +5151,15 @@ function loadPod(date) {
   const tbody = document.getElementById('pod-tbody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Loading…</td></tr>';
   fetch('/api/pod?date='+encodeURIComponent(date))
-    .then(r=>r.json()).then(d=>{ _podRecords = d.records||[]; renderPod(); })
+    .then(r=>r.json()).then(d=>{
+      _podRecords = d.records||[];
+      var st = document.getElementById('pod-detail-trucker'); if(st) {
+        var truckers = [...new Set(_podRecords.map(function(r){return r.trucker_code||r.truck_id||'';}).filter(Boolean))].sort();
+        st.innerHTML = '<option value="">All Truckers / 3PL</option>' +
+          truckers.map(function(t){return '<option value="'+t+'">'+t+'</option>';}).join('');
+      }
+      renderPod();
+    })
     .catch(e=>showToast('Load error: '+e.message,'error'));
 }
 
@@ -5124,12 +5183,14 @@ function renderPod() {
     tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted)">No monitoring records for this date. Persist monitoring first.</td></tr>';
     return;
   }
-  var q          = ((document.getElementById('pod-detail-search')||{}).value||'').toLowerCase();
-  var statusFilt = (document.getElementById('pod-detail-status')||{}).value||'';
+  var q           = ((document.getElementById('pod-detail-search')||{}).value||'').toLowerCase();
+  var statusFilt  = (document.getElementById('pod-detail-status')||{}).value||'';
+  var truckerFilt = (document.getElementById('pod-detail-trucker')||{}).value||'';
   var shown = 0;
   tbody.innerHTML = _podRecords.map(function(r,i){
+    if (truckerFilt && (r.trucker_code||r.truck_id||'') !== truckerFilt) return '';
     if (q) {
-      var hay = ((r.do_number||'')+(r.customer_name||'')+(r.truck_id||'')).toLowerCase();
+      var hay = ((r.do_number||'')+(r.customer_name||'')+(r.truck_id||'')+(r.trucker_code||'')).toLowerCase();
       if (hay.indexOf(q)===-1) return '';
     }
     var effStatus = r.return_date ? (r.pod_status||'LATE') : 'PENDING';
@@ -5165,7 +5226,7 @@ function renderPod() {
     '</tr>';
   }).join('');
   var cnt = document.getElementById('pod-detail-count');
-  if (cnt) cnt.textContent = (q||statusFilt) ? (shown+' / '+total+' shown') : '';
+  if (cnt) cnt.textContent = (q||statusFilt||truckerFilt) ? (shown+' / '+total+' shown') : '';
 }
 
 function _updatePodAging(i) {
