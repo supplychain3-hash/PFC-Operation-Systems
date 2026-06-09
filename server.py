@@ -355,20 +355,33 @@ def get_router_temp(suffix: str, router: str = 'default') -> str:
 
 # ── Shared live working plan helpers ────────────────────────────────────────
 def get_working_plan(plan_date: str):
-    """Read the shared live plan for a date from the DB.  Returns (trucks, updated_by, updated_at)."""
+    """Read the shared live plan for a date from the DB.
+    Returns (trucks, unrouted_stops, updated_by, updated_at).
+    Handles both old format (plain trucks array) and new format ({trucks, unrouted_stops})."""
     try:
         conn = open_db(); c = conn.cursor()
         c.execute('SELECT data, updated_by, updated_at FROM working_plans WHERE plan_date=?', (plan_date,))
         row = c.fetchone(); conn.close()
-        if not row: return None, '', ''
-        return json.loads(row[0]), row[1] or '', row[2] or ''
+        if not row: return None, [], '', ''
+        parsed = json.loads(row[0])
+        if isinstance(parsed, list):                     # legacy format
+            trucks, unrouted = parsed, []
+        else:                                            # new format
+            trucks   = parsed.get('trucks', [])
+            unrouted = parsed.get('unrouted_stops', [])
+        return trucks, unrouted, row[1] or '', row[2] or ''
     except Exception:
-        return None, '', ''
+        return None, [], '', ''
 
 
-def set_working_plan(plan_date: str, trucks: list, updated_by: str = ''):
-    """Write / update the shared live plan for a date in the DB."""
+def set_working_plan(plan_date: str, trucks: list, updated_by: str = '', unrouted_stops=None):
+    """Write / update the shared live plan for a date in the DB.
+    Stores both trucks and unrouted_stops so all browsers stay in sync."""
     try:
+        payload = json.dumps(
+            {'trucks': trucks, 'unrouted_stops': unrouted_stops or []},
+            default=str
+        )
         conn = open_db(); c = conn.cursor()
         c.execute('''INSERT INTO working_plans (plan_date, data, updated_by, updated_at)
                      VALUES (?, ?, ?, datetime('now','localtime'))
@@ -376,7 +389,7 @@ def set_working_plan(plan_date: str, trucks: list, updated_by: str = ''):
                          data       = excluded.data,
                          updated_by = excluded.updated_by,
                          updated_at = datetime('now','localtime')''',
-                  (plan_date, json.dumps(trucks, default=str), updated_by))
+                  (plan_date, payload, updated_by))
         conn.commit(); conn.close()
     except Exception as ex:
         print(f'[WARN] set_working_plan failed: {ex}')
@@ -1144,8 +1157,8 @@ def run_routing():
         trucks, floated = run_routing_engine(df)
         with open(temp_plan, 'w') as fp:
             json.dump(trucks, fp, default=str)
-        # ── Write to shared live plan so all browsers see the new plan ──
-        set_working_plan(plan_date, trucks, router)
+        # ── Write to shared live plan — include floated stops so all browsers see unrouted basket ──
+        set_working_plan(plan_date, trucks, router, floated)
         total_drops = sum(len(t['stops']) for t in trucks)
         avg_util    = (sum(t['util_pct'] for t in trucks) / len(trucks)) if trucks else 0
         total_vol   = sum(t['acc_weight'] for t in trucks)
@@ -1208,11 +1221,12 @@ def update_plan():
                 s['add_drop_fee'] = SETTINGS['add_drop_fee'] if seq > SETTINGS['add_drop_threshold_25mt'] else 0
             else:
                 s['add_drop_fee'] = 0
+    unrouted = data.get('unrouted_stops', [])
     with open(temp_plan, 'w') as fp:
         json.dump(data['trucks'], fp, default=str)
     version = os.path.getmtime(temp_plan)
-    # ── Broadcast to all other browsers via shared live plan ──
-    set_working_plan(plan_date, data['trucks'], router)
+    # ── Broadcast to all other browsers via shared live plan (includes unrouted basket) ──
+    set_working_plan(plan_date, data['trucks'], router, unrouted)
     return jsonify({'success': True, 'trucks': data['trucks'], 'version': version})
 
 
@@ -1228,7 +1242,9 @@ def get_plan_state():
         if not row:
             return jsonify({'version': None, 'exists': False, 'updated_by': '', 'updated_at': ''})
         trucks = []
-        try: trucks = json.loads(row[2])
+        try:
+            parsed = json.loads(row[2])
+            trucks = parsed if isinstance(parsed, list) else parsed.get('trucks', [])
         except Exception: pass
         return jsonify({
             'version':     row[0],
@@ -1246,11 +1262,11 @@ def get_plan_state():
 def get_working_plan_endpoint():
     """Return the full shared live plan for a date.  Called when a browser needs to sync."""
     plan_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
-    trucks, updated_by, updated_at = get_working_plan(plan_date)
+    trucks, unrouted, updated_by, updated_at = get_working_plan(plan_date)
     if trucks is None:
-        return jsonify({'trucks': [], 'updated_by': '', 'updated_at': '', 'exists': False})
-    return jsonify({'trucks': trucks, 'updated_by': updated_by,
-                    'updated_at': updated_at, 'exists': True})
+        return jsonify({'trucks': [], 'unrouted_stops': [], 'updated_by': '', 'updated_at': '', 'exists': False})
+    return jsonify({'trucks': trucks, 'unrouted_stops': unrouted,
+                    'updated_by': updated_by, 'updated_at': updated_at, 'exists': True})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -3386,20 +3402,17 @@ def _gdrive_upload_plan_excel(trucks, plan_date, plan_name):
     except Exception:
         pass
     return created.get('webViewLink')
-
-
 @app.route('/api/gdrive/config', methods=['GET'])
 def gdrive_get_config():
-    creds_ok = os.path.exists(GOOGLE_TOKEN_PATH)
-    cfg_path = os.path.join(os.path.dirname(__file__), 'gdrive_config.json')
+    creds_ok  = os.path.exists(GOOGLE_TOKEN_PATH)
     folder_id = ''
-    if os.path.exists(cfg_path):
-        try:
-
+    cfg_path  = os.path.join(os.path.dirname(__file__), 'gdrive_config.json')
+    try:
+        if os.path.exists(cfg_path):
             with open(cfg_path) as fp:
                 folder_id = json.load(fp).get('folder_id') or ''
-        except Exception:
-            pass
+    except Exception:
+        pass
     return jsonify({'creds_ok': creds_ok, 'folder_id': folder_id})
 
 @app.route('/api/gdrive/config', methods=['POST'])

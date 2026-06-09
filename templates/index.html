@@ -1823,6 +1823,8 @@ function runRouting() {
       document.getElementById('page-plan').classList.add('active');
       document.querySelectorAll('.nav-btn')[1].classList.add('active');
       renderPlan();
+      // Immediately persist the unrouted basket (floated stops) so other planners see it
+      autosave();
       setTimeout(()=>leafletMap&&leafletMap.invalidateSize(),250);
     })
     .catch(e=>{ btn.disabled=false; btn.innerHTML='&#x25B6; Generate Route Plan'; showToast('Error: '+e.message,'error'); });
@@ -2006,6 +2008,14 @@ function renderPlan() {
           <label>Rated Cap (KG)</label>
           <input type="number" min="1" value="${truck.rated_cap||truck.truck_cap||''}"
             oninput="updateRatedCap(${ti},this.value)"/>
+        </div>
+        <div>
+          <label>&#x1F3ED; Pickup Warehouse (CSW)</label>
+          <select style="width:100%;border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:.78rem;color:var(--navy);background:#fff"
+            onchange="changePickupWH(${ti},this.value)">
+            <option value="">— select WH —</option>
+            ${Object.keys(warehouseData).map(wh=>`<option value="${wh}"${truck.pickup_wh===wh?' selected':''}>${wh} — ${warehouseData[wh].name||wh}</option>`).join('')}
+          </select>
         </div>
         <div>
           <label>&#x1F4CD; Billed Area (last mile)</label>
@@ -2605,28 +2615,40 @@ function renderUnrouted() {
   const truckOptions = currentPlan.map((t, ti) =>
     `<option value="${ti}">${t.truck_id} (${t.truck_type} · ${t.acc_weight.toLocaleString()} kg)</option>`
   ).join('');
+  const whOptions = Object.keys(warehouseData).map(wh =>
+    `<option value="${wh}">${wh}</option>`
+  ).join('');
   listEl.innerHTML = unroutedStops.map((stop, idx) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border:1px solid #fde68a;border-radius:7px;margin-bottom:5px">
-      <div style="flex:1;min-width:0">
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:8px;background:#fff;border:1px solid #fde68a;border-radius:7px;margin-bottom:6px;flex-wrap:wrap">
+      <div style="flex:1;min-width:120px">
         <div style="font-weight:700;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${stop.customer_name}">
           ${stop.is_stock_transfer ? '<span style="font-size:.58rem;background:#dbeafe;color:#1e40af;border-radius:3px;padding:1px 4px;margin-right:3px;font-weight:700">XFER</span>' : ''}
-          ${stop._floated ? '<span style="font-size:.58rem;background:#fef9c3;color:#92400e;border:1px solid #f59e0b;border-radius:3px;padding:1px 4px;margin-right:3px;font-weight:700">🏢 '+stop.wh+'</span>' : ''}
           ${stop.customer_name}
         </div>
-        <div style="font-size:.72rem;color:#92400e">${stop.match_area||stop.area||'—'} · ${stop.wh||''} · ${(stop.vol||0).toLocaleString()} kg
+        <div style="font-size:.72rem;color:#92400e;margin-top:2px">${stop.match_area||stop.area||'—'} · ${(stop.vol||0).toLocaleString()} kg
           ${stop._from_truck ? `<span style="color:#b45309"> (from ${stop._from_truck})</span>` : ''}
         </div>
+        <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
+          <span style="font-size:.68rem;color:#6b7280;white-space:nowrap">📦 WH:</span>
+          <select style="font-size:.72rem;border:1px solid #d1d5db;border-radius:4px;padding:2px 5px;color:var(--navy);background:#f9fafb"
+            onchange="changeUnroutedWH(${idx}, this.value)">
+            <option value="">— set WH —</option>
+            ${whOptions.replace(`value="${stop.wh||''}"`, `value="${stop.wh||''}" selected`)}
+          </select>
+        </div>
       </div>
-      <select id="ur-sel-${idx}" style="font-size:.75rem;border:1px solid #fde68a;border-radius:5px;padding:3px 6px;color:var(--navy)">
-        <option value="">— pick truck —</option>
-        ${truckOptions}
-      </select>
-      <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:.75rem;cursor:pointer"
-        onclick="addUnroutedToTruck(${idx}, parseInt(document.getElementById('ur-sel-${idx}').value))">
-        ➕ Add
-      </button>
-      <button style="background:none;border:none;color:#9ca3af;font-size:1rem;cursor:pointer;padding:2px 4px" title="Discard"
-        onclick="discardUnrouted(${idx})">✕</button>
+      <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+        <select id="ur-sel-${idx}" style="font-size:.75rem;border:1px solid #fde68a;border-radius:5px;padding:3px 6px;color:var(--navy)">
+          <option value="">— pick truck —</option>
+          ${truckOptions}
+        </select>
+        <button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:.75rem;cursor:pointer"
+          onclick="addUnroutedToTruck(${idx}, parseInt(document.getElementById('ur-sel-${idx}').value))">
+          ➕ Add
+        </button>
+        <button style="background:none;border:none;color:#9ca3af;font-size:1rem;cursor:pointer;padding:2px 4px" title="Discard"
+          onclick="discardUnrouted(${idx})">✕</button>
+      </div>
     </div>`).join('');
 }
 
@@ -2650,8 +2672,19 @@ function addUnroutedToTruck(stopIdx, ti) {
 
 function discardUnrouted(stopIdx) {
   const stop = unroutedStops.splice(stopIdx, 1)[0];
+  autosave();
   renderUnrouted();
   showToast((stop ? stop.customer_name : 'Stop') + ' discarded', 'success');
+}
+
+function changeUnroutedWH(idx, wh) {
+  if (!wh || !unroutedStops[idx]) return;
+  unroutedStops[idx].wh       = wh;
+  unroutedStops[idx].wh_group = (warehouseData[wh] && warehouseData[wh].group) || wh;
+  autosave();
+  // Re-render to reflect change without resetting dropdowns fully
+  const infoEl = document.querySelector(`#unrouted-list > div:nth-child(${idx+1}) .ur-wh-lbl`);
+  if (infoEl) infoEl.textContent = wh;
 }
 
 // ── Merge trucks ─────────────────────────────────────────────────────────────
@@ -2723,6 +2756,21 @@ function doMerge(srcTi, dstTi) {
   autosave();
   renderPlan();
   showToast(`Merged into ${dst.truck_id} · ${combinedKg.toLocaleString()} kg · ${dst.stops.length} stops`, 'success');
+}
+
+function changePickupWH(ti, wh) {
+  if (!wh) return;
+  const truck = currentPlan[ti];
+  truck.pickup_wh = wh;
+  // Keep all_whs consistent — ensure new primary WH is included
+  const existing = truck.all_whs || [];
+  if (!existing.includes(wh)) existing.unshift(wh);
+  else { existing.splice(existing.indexOf(wh), 1); existing.unshift(wh); }
+  truck.all_whs = existing;
+  truck.wh_group = (warehouseData[wh] && warehouseData[wh].group) || wh;
+  autosave();
+  renderPlan();
+  showToast('Pickup WH set to ' + wh, 'success');
 }
 
 function changeTruckType(ti, newLabel) {
@@ -3415,7 +3463,7 @@ function autosave() {
   _autosaveTimer = setTimeout(()=>{
     const url = '/api/update-plan?router='+encodeURIComponent(currentRouter)
               + '&date='+encodeURIComponent(currentDeliveryDate);
-    fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trucks:currentPlan})})
+    fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trucks:currentPlan, unrouted_stops:unroutedStops})})
     .then(r=>r.json()).then(d=>{
       if(d.trucks){currentPlan=d.trucks; updatePlanKPIs();}
       if(d.version){ _myPlanVersion = d.version; }
@@ -3475,12 +3523,17 @@ function pollCollab() {
       }
       // Someone else changed the plan — but don't overwrite if user is actively editing
       if (Date.now() - _lastEditTime < 4000) return;
-      // Fetch and apply the full shared plan
+      // Fetch and apply the full shared plan (trucks + unrouted basket)
       fetch('/api/working-plan?date=' + encodeURIComponent(date))
         .then(r => r.json())
         .then(data => {
           if (!data.trucks || !data.trucks.length) return;
           currentPlan = data.trucks;
+          // Sync unrouted basket from other planner
+          if (Array.isArray(data.unrouted_stops)) {
+            unroutedStops = data.unrouted_stops;
+            renderUnrouted();
+          }
           renderPlan();
           const who = d.updated_by || 'another planner';
           showToast('🔄 Plan updated by ' + who, 'info');
@@ -5440,52 +5493,42 @@ function exportMonitoringFromData() {
 
 function exportColdChainCSV() {
   if (!_ccDetailRecords.length) { showToast('No cold chain data to export.','error'); return; }
-  var header = ['Date','Truck','Trucking Name','Truck Type','DO Number',
-                'Customer/Consignee','Cold Chain Issue','FS Detail','SOP Compliance','SOP Detail'];
+  var header = ['Date','Truck','Trucking Name','Truck Type','DO Number','Customer/Consignee',
+                'Food Safety Issue','FS Detail','Crew / SOP Issue','Crew Detail'];
   var data = [header].concat(_ccDetailRecords.map(function(r){
     return [r.plan_date||'', r.truck_id||'', r.trucker_code||'', r.truck_type||'',
             r.do_number||'', r.customer_name||'',
-            r.food_safety_issue||'NONE', r.food_safety_detail||'',
-            r.crew_issue||'NONE', r.crew_detail||''];
+            r.food_safety_issue||'', r.food_safety_detail||'',
+            r.crew_issue||'', r.crew_detail||''];
   }));
   _downloadCSV(data, 'PFC_ColdChain_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
-function exportColdChainSummaryCSV() {
-  if (!_ccSummaryRows.length) { showToast('No summary data to export.','error'); return; }
-  var period = _ccSummaryPeriod.charAt(0).toUpperCase()+_ccSummaryPeriod.slice(1);
-  var header = [period,'Deliveries','Cold Chain %','FS Issues','FS Clean','SOP %','SOP Issues','SOP Clean'];
-  var data   = [header].concat(_ccSummaryRows.map(function(r){
-    return [r.label||r.date, r.total, r.compliance_pct+'%', r.issues, r.ok,
-            r.crew_pct+'%', r.crew_issues, r.crew_ok];
-  }));
-  _downloadCSV(data, 'PFC_ColdChain_Summary_'+_ccSummaryPeriod+'_'+new Date().toISOString().slice(0,10)+'.csv');
-}
-
 function exportPodCSV() {
   if (!_podRecords.length) { showToast('No POD data to export.','error'); return; }
-  var header = ['Plan Date','DO Number','Customer/Consignee','Truck','Trucking Name',
-                'Return Date','Days Aging','Status','Remarks'];
+  var header = ['DO Number','Customer/Consignee','Truck','Plan Date',
+                'Return Date','Aging (days)','Status','Remarks'];
   var data = [header].concat(_podRecords.map(function(r){
-    return [r.plan_date||'', r.do_number||'', r.customer_name||'',
-            r.truck_id||'', r.trucker_code||'', r.return_date||'',
-            r.days_aging!==null&&r.days_aging!==undefined?r.days_aging:'',
-            r.pod_status||'PENDING', r.pod_remarks||''];
+    var effStatus = r.return_date ? (r.pod_status||'LATE') : 'PENDING';
+    return [r.do_number||'', r.customer_name||'', r.truck_id||'',
+            r.plan_date||'', r.return_date||'',
+            r.days_aging!=null ? r.days_aging : '',
+            effStatus, r.pod_remarks||''];
   }));
   _downloadCSV(data, 'PFC_POD_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
 function exportPodSummaryCSV() {
-  if (!_podSummaryRows.length) { showToast('No POD summary to export.','error'); return; }
-  var period = _podSummaryPeriod.charAt(0).toUpperCase()+_podSummaryPeriod.slice(1);
-  var header =
-['Period','Date','Total Drops','Returned','On-Time','Compliance %'];
+  if (!_podSummaryRows.length) { showToast('No POD summary data to export.','error'); return; }
+  var header = ['Period','Total Deliveries','Returned','On-Time','Late','Pending','Compliance %'];
   var data = [header].concat(_podSummaryRows.map(function(r){
-    return [r.label||r.period_label||'', r.date||'', r.total||0, r.returned||0, r.ontime||0, r.compliance_pct||0];
+    var late    = r.returned - r.ontime;
+    var pending = r.total    - r.returned;
+    return [r.label||r.date||'', r.total||0, r.returned||0,
+            r.ontime||0, late||0, pending||0, r.compliance_pct||0];
   }));
   _downloadCSV(data, 'PFC_POD_Summary_'+new Date().toISOString().slice(0,10)+'.csv');
 }
-
 </script>
 </body>
 </html>
