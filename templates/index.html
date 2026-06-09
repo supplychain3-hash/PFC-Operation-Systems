@@ -3292,6 +3292,9 @@ function applyCoordEdit() {
   if (newName) stop.customer_name    = newName;
   if (newAddr) stop.shipping_address = newAddr;
 
+  // Push to working_plans DB so other planners see the change via pollCollab
+  autosave();
+
   // Persist to server (updates temp plan + address cache)
   fetch('/api/update-stop-coord', {
     method: 'POST',
@@ -5516,6 +5519,42 @@ function exportMonitoringFromData() {
 }
 
 function exportColdChainCSV() {
+  if (!_ccDetailRecords.length) { showToast('No cold chain data to export.','error'); return; }
+  var header = ['Date','Truck','Trucking Name','Truck Type','DO Number','Customer/Consignee',
+                'Food Safety Issue','FS Detail','Crew / SOP Issue','Crew Detail'];
+  var data = [header].concat(_ccDetailRecords.map(function(r){
+    return [r.plan_date||'', r.truck_id||'', r.trucker_code||'', r.truck_type||'',
+            r.do_number||'', r.customer_name||'',
+            r.food_safety_issue||'', r.food_safety_detail||'',
+            r.crew_issue||'', r.crew_detail||''];
+  }));
+  _downloadCSV(data, 'PFC_ColdChain_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportPodCSV() {
+  if (!_podRecords.length) { showToast('No POD data to export.','error'); return; }
+  var header = ['DO Number','Customer/Consignee','Truck','Plan Date',
+                'Return Date','Aging (days)','Status','Remarks'];
+  var data = [header].concat(_podRecords.map(function(r){
+    var effStatus = r.return_date ? (r.pod_status||'LATE') : 'PENDING';
+    return [r.do_number||'', r.customer_name||'', r.truck_id||'',
+            r.plan_date||'', r.return_date||'',
+            r.days_aging!=null ? r.days_aging : '',
+            effStatus, r.pod_remarks||''];
+  }));
+  _downloadCSV(data, 'PFC_POD_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportPodSummaryCSV() {
+  if (!_podSummaryRows.length) { showToast('No POD summary data to export.','error'); return; }
+  var header = ['Period','Total Deliveries','Returned','On-Time','Late','Pending','Compliance %'];
+  var data = [header].concat(_podSummaryRows.map(function(r){
+    var late    = r.returned - r.ontime;
+    var pending = r.total    - r.returned;
+    return [r.label||r.date||'', r.total||0, r.returned||0,
+            r.ontime||0, late||0, pending||0, r.compliance_pct||0];
+  }));
+  _downloadCSV(data, function exportColdChainCSV() {
   if (!_ccDetailRecords.length) { showToast('No cold chain data to export.','error'); return; }
   var header = ['Date','Truck','Trucking Name','Truck Type','DO Number','Customer/Consignee',
                 'Food Safety Issue','FS Detail','Crew / SOP Issue','Crew Detail'];
