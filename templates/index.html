@@ -239,7 +239,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .drag-handle{cursor:grab;color:#c5cfe0;font-size:.95rem;text-align:center;line-height:1}
 .drag-handle:active{cursor:grabbing}
 .seq-bubble{width:21px;height:21px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;font-size:.63rem;font-weight:800;flex-shrink:0}
+  justify-content:center;font-size:.63rem;font-weight:800;flex-shrink:0;cursor:pointer;
+  transition:box-shadow .15s}
+.seq-bubble:hover{box-shadow:0 0 0 2px #94a3b8}
+.seq-input{width:21px;height:21px;border-radius:50%;border:2px solid #1e3a5f;outline:none;
+  text-align:center;font-size:.63rem;font-weight:800;padding:0;background:#fff;
+  color:#1e3a5f;flex-shrink:0;cursor:text}
 .stop-main{min-width:0}
 .stop-cust{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--navy)}
 .stop-sub{font-size:.65rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2141,7 +2146,9 @@ function renderPlan() {
               <span style="font-size:.8rem;cursor:grab;color:#c5cfe0">⠿</span>
               <span style="font-size:.5rem;cursor:pointer;color:#94a3b8;padding:1px 3px" onclick="event.stopPropagation();moveStop(${ti},${si},+1)" title="Move down">▼</span>
             </span>
-            <div class="seq-bubble" style="${seqStyle}">${stop.seq}</div>
+            <div class="seq-bubble" style="${seqStyle}"
+              title="Click to change drop sequence"
+              onclick="event.stopPropagation();startSeqEdit(this,${ti},${si},${stop.seq})">${stop.seq}</div>
             <div class="stop-main">
               <div class="stop-cust" title="${stop.customer_name}">${isMerged?'📦 ':''}${stop.customer_name}${xferBadge}</div>
               <div class="stop-sub">${stop.match_area||stop.area||''} &middot; <b>${stop.cluster_id}</b>${feeTag}</div>
@@ -3065,6 +3072,50 @@ function changeStopWH(ti, si, wh) {
   autosave();
   renderPlan();
   if (wh) showToast('Stop WH set to ' + wh, 'success');
+}
+
+function startSeqEdit(bubbleEl, ti, si, currentSeq) {
+  // Replace the bubble with a small input for manual seq entry
+  const inp = document.createElement('input');
+  inp.type = 'number';
+  inp.min = 1;
+  inp.className = 'seq-input';
+  inp.value = currentSeq;
+  inp.title = 'Enter drop number, then press Enter';
+  bubbleEl.replaceWith(inp);
+  inp.focus();
+  inp.select();
+
+  function commit() {
+    const val = parseInt(inp.value, 10);
+    inp.replaceWith(bubbleEl); // restore bubble regardless
+    if (!isNaN(val) && val !== currentSeq) {
+      resequenceByInput(ti, si, val);
+    }
+  }
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { inp.replaceWith(bubbleEl); }
+  });
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('click', e => e.stopPropagation());
+}
+
+function resequenceByInput(ti, si, newSeq) {
+  const truck = currentPlan[ti];
+  if (!truck || !truck.stops || !truck.stops.length) return;
+  const stops = truck.stops;
+  const total = stops.length;
+  // Clamp to valid range
+  const target = Math.max(1, Math.min(newSeq, total));
+  // Remove the stop from its current position
+  const [moved] = stops.splice(si, 1);
+  // Insert at target position (0-indexed)
+  stops.splice(target - 1, 0, moved);
+  // Renumber seq 1,2,3...
+  stops.forEach((s, i) => { s.seq = i + 1; });
+  autosave();
+  renderPlan();
 }
 
 function changeTruckType(ti, newLabel) {
