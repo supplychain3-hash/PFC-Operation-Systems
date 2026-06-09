@@ -347,9 +347,10 @@ def serialise_row(row_dict: dict) -> dict:
     return out
 
 def get_router_temp(suffix: str, router: str = 'default') -> str:
-    """Return path to router-specific temp JSON file."""
+    """Return path to router-specific temp JSON file.
+    Uses _DATA_DIR so files survive server restarts on persistent-disk deployments."""
     safe = re.sub(r'[^a-zA-Z0-9_-]', '_', str(router).lower().strip() or 'default')
-    return os.path.join(tempfile.gettempdir(), f'pfc_{suffix}_{safe}.json')
+    return os.path.join(_DATA_DIR, f'pfc_{suffix}_{safe}.json')
 
 
 # ── Shared live working plan helpers ────────────────────────────────────────

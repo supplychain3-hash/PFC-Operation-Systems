@@ -610,8 +610,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
 
 <!-- ══════════════ ROUTE PLAN ══════════════ -->
 <div id="shared-plan-banner">
-  <span class="banner-msg" id="shared-plan-msg">📋 New plan available</span>
-  <button class="banner-load" onclick="loadSharedPlan()">Merge into My Plan</button>
+  <span class="banner-msg" id="shared-plan-msg">📋 Plan updated by teammate — auto-synced</span>
   <button class="banner-dismiss" onclick="dismissSharedBanner()" title="Dismiss">✕</button>
 </div>
 
@@ -655,6 +654,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
   <div class="btn-row">
     <button class="btn btn-outline btn-sm" onclick="addEmptyTruck()" style="border-color:#43a047;color:#43a047">&#x2795; Add Truck</button>
     <button class="btn btn-primary btn-sm" onclick="savePlanToday()" id="save-plan-btn" title="Save today's route plan to History">💾 Save Plan</button>
+    <span id="last-saved-by" style="font-size:.72rem;color:var(--muted);white-space:nowrap"></span>
     <button class="btn btn-outline btn-sm" onclick="document.getElementById('merge-file-input').click()"
       style="border-color:#0891b2;color:#0891b2" title="Import new orders and add them to this plan">
       &#x2B; Import &amp; Add Orders</button>
@@ -2551,49 +2551,30 @@ function savePlanToday() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
   const today = currentDeliveryDate;
 
-  // Step 1: silently merge any trucks already saved by other planners for this
-  // date so the save always writes the full team plan, not just this planner's slice.
-  function _doSave() {
-    fetch('/api/save-plan?router=' + encodeURIComponent(currentRouter), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ date: today, created_by: currentRouter })
-    }).then(r => r.json()).then(d => {
-      if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
-      if (d.error) { showToast('Save failed: ' + d.error, 'error'); return; }
-      if (d.drive_url) {
-        showToast(
-          'Plan saved ✔ — <a href="' + d.drive_url + '" target="_blank" ' +
-          'style="color:#fff;text-decoration:underline;font-weight:600;">Open in Drive ↗</a>',
-          'success', 6000
-        );
-      } else {
-        showToast('Plan saved → ' + (d.plan_name || 'History'), 'success');
-      }
-    }).catch(e => {
-      if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
-      showToast('Save error: ' + e.message, 'error');
-    });
-  }
-
-  // Merge other planners' trucks into local plan before saving
-  fetch('/api/date-plans/' + encodeURIComponent(today))
-    .then(r => r.json())
-    .then(data => {
-      if (data.trucks && data.trucks.length) {
-        const localIds = new Set(currentPlan.map(t => t.truck_id));
-        data.trucks.forEach(t => {
-          if (t.truck_id && !localIds.has(t.truck_id)) {
-            currentPlan.push(t);
-            localIds.add(t.truck_id);
-          }
-        });
-        // Push merged plan to server temp file before saving to DB
-        autosave();
-      }
-      _doSave();
-    })
-    .catch(() => _doSave()); // if merge fails, save what we have
+  fetch('/api/save-plan?router=' + encodeURIComponent(currentRouter), {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ date: today, created_by: currentRouter })
+  }).then(r => r.json()).then(d => {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
+    if (d.error) { showToast('Save failed: ' + d.error, 'error'); return; }
+    // Show who saved last
+    const lbl = document.getElementById('last-saved-by');
+    const now  = new Date().toLocaleTimeString('en-PH', {hour:'2-digit', minute:'2-digit'});
+    if (lbl) lbl.textContent = 'Last saved by ' + currentRouter + ' at ' + now;
+    if (d.drive_url) {
+      showToast(
+        'Plan saved ✔ — <a href="' + d.drive_url + '" target="_blank" ' +
+        'style="color:#fff;text-decoration:underline;font-weight:600;">Open in Drive ↗</a>',
+        'success', 6000
+      );
+    } else {
+      showToast('Plan saved → ' + (d.plan_name || 'History'), 'success');
+    }
+  }).catch(e => {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
+    showToast('Save error: ' + e.message, 'error');
+  });
 }
 
 // ── Unrouted basket ──────────────────────────────────────────────────────────
@@ -3078,53 +3059,14 @@ function _pollSharedPlan() {
         const by   = meta.created_by || 'another user';
         const tc   = meta.truck_count || '?';
         const dr   = meta.total_drops || '?';
-        const msg  = `📋 New plan saved by <b>${by}</b> — ${tc} trucks, ${dr} drops`;
+        const msg  = `📋 Plan saved by <b>${by}</b> — ${tc} trucks, ${dr} drops`;
         document.getElementById('shared-plan-msg').innerHTML = msg;
         document.getElementById('shared-plan-banner').style.display = 'flex';
-        // Logistics Tower users: auto-load without asking
-        if (role === 'tower') {
-          loadSharedPlan();
-        }
+        // Auto-dismiss after 5 s — live sync already applied the changes
+        setTimeout(dismissSharedBanner, 5000);
       }
     })
     .catch(() => {}); // fail silently — server may be restarting
-}
-
-function loadSharedPlan() {
-  if (!_pendingSharedPlanId) return;
-  const id   = _pendingSharedPlanId;
-  const date = currentDeliveryDate;
-
-  // Fetch the MERGED plan for the date (all planners' trucks combined)
-  // rather than just the one plan_id — this way nothing local is wiped.
-  fetch(`/api/date-plans/${encodeURIComponent(date)}`)
-    .then(r => r.json())
-    .then(data => {
-      if (!data.trucks || !data.trucks.length) return;
-      // Merge: keep all local trucks, add any truck_id not already present
-      const localIds = new Set(currentPlan.map(t => t.truck_id));
-      let added = 0;
-      data.trucks.forEach(t => {
-        if (t.truck_id && !localIds.has(t.truck_id)) {
-          currentPlan.push(t);
-          localIds.add(t.truck_id);
-          added++;
-        }
-      });
-      _knownLatestPlanId   = id;
-      _knownLatestPlanAt   = null;
-      _pendingSharedPlanId = null;
-      startCollab(date);
-      renderPlan();
-      dismissSharedBanner();
-      const planners = (data.planners || []).join(', ');
-      showToast(`Merged ${added} truck(s) from team plan (${planners})`, 'success');
-      const planBtn = document.querySelector('.nav-btn[onclick*="plan"]');
-      if (planBtn && !document.getElementById('page-plan').classList.contains('active')) {
-        planBtn.click();
-      }
-    })
-    .catch(() => showToast('Could not merge shared plan', 'error'));
 }
 
 function dismissSharedBanner() {
