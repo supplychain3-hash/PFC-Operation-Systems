@@ -3394,105 +3394,28 @@ def gdrive_get_config():
     folder_id = ''
     if os.path.exists(cfg_path):
         try:
+
             with open(cfg_path) as fp:
-                folder_id = json.load(fp).get('folder_id', '')
+                folder_id = json.load(fp).get('folder_id') or ''
         except Exception:
             pass
     return jsonify({'creds_ok': creds_ok, 'folder_id': folder_id})
 
-
 @app.route('/api/gdrive/config', methods=['POST'])
-def gdrive_save_config():
-    data = request.get_json() or {}
+def gdrive_set_config():
+    data = request.get_json(silent=True) or {}
     folder_id = (data.get('folder_id') or '').strip()
     cfg_path = os.path.join(os.path.dirname(__file__), 'gdrive_config.json')
-    with open(cfg_path, 'w') as fp:
-        json.dump({'folder_id': folder_id}, fp)
-    return jsonify({'success': True})
-
-
-@app.route('/api/gsheets/config', methods=['GET'])
-def gsheets_config():
-    creds_ok = os.path.exists(GOOGLE_TOKEN_PATH)
-    cfg_path = os.path.join(os.path.dirname(__file__), 'gsheets_config.json')
-    cfg = {}
-    if os.path.exists(cfg_path):
-        try:
-            with open(cfg_path) as fp:
-                cfg = json.load(fp)
-        except Exception:
-            pass
-    return jsonify({'creds_ok': creds_ok, 'sheet_id': cfg.get('sheet_id', '')})
-
-
-@app.route('/api/gsheets/config', methods=['POST'])
-def gsheets_save_config():
-    data = request.get_json() or {}
-    sheet_id = (data.get('sheet_id') or '').strip()
-    cfg_path = os.path.join(os.path.dirname(__file__), 'gsheets_config.json')
-    with open(cfg_path, 'w') as fp:
-        json.dump({'sheet_id': sheet_id}, fp)
-    return jsonify({'success': True})
-
-
-
-
-
-@app.route('/api/gsheets/push-plan', methods=['POST'])
-def gsheets_push_plan():
-    data      = request.get_json() or {}
-    sheet_id  = (data.get('sheet_id') or '').strip()
-    router    = (data.get('router') or 'default').strip()
-    plan_date = data.get('plan_date') or datetime.now().strftime('%Y-%m-%d')
-    if not sheet_id:
-        return jsonify({'error': 'sheet_id is required'}), 400
-    temp_plan = get_router_temp('plan', router)
-    if not os.path.exists(temp_plan):
-        return jsonify({'error': 'No plan loaded'}), 400
-    with open(temp_plan) as fp:
-        trucks = json.load(fp)
-    rows = [['Date', 'Truck ID', 'Truck Type', 'WH', 'Seq', 'Customer', 'Address',
-             'Area', 'Cluster', 'Volume (KG)', 'SO Number', 'Trucker',
-             'Rate (PHP)', 'Stock Transfer']]
-    for truck in trucks:
-        for stop in truck.get('stops', []):
-            rows.append([
-                plan_date,
-                truck.get('truck_id', ''),
-                truck.get('truck_type', ''),
-                truck.get('wh_group', ''),
-                stop.get('seq', ''),
-                stop.get('customer_name', ''),
-                stop.get('shipping_address', ''),
-                stop.get('area', ''),
-                stop.get('cluster_id', ''),
-                round(stop.get('volume', 0), 2),
-                stop.get('so_number', ''),
-                truck.get('trucker_code', ''),
-                truck.get('truck_rate', ''),
-                'Yes' if truck.get('is_stock_transfer') else 'No',
-            ])
     try:
-        svc    = _get_gsheets_service()
-        if not svc:
-            return jsonify({'error': 'Google Sheets not connected'}), 400
-        body   = {'values': rows}
-        result = svc.spreadsheets().values().append(
-            spreadsheetId=sheet_id,
-            range='Sheet1!A1',
-            valueInputOption='USER_ENTERED',
-            insertDataOption='INSERT_ROWS',
-            body=body
-        ).execute()
-        return jsonify({'success': True, 'updated': result.get('updates', {}).get('updatedRows', 0)})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        with open(cfg_path, 'w') as fp:
+            json.dump({'folder_id': folder_id}, fp)
+        return jsonify({'success': True})
+    except Exception as ex:
+        return jsonify({'success': False, 'error': str(ex)}), 500
 
-
-try:
-    init_db()
-except Exception as _e:
-    print(f"[WARN] init_db() failed: {_e}")
+# ── Bootstrap ───────────────────────────────────────────────────────────────
+init_db()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)

@@ -5547,24 +5547,3 @@ function exportPodSummaryCSV() {
 </script>
 </body>
 </html>
-ar header = ['DO Number','Customer/Consignee','Truck ID','Trucker','Plan Date','Return Date','Aging (days)','POD Status','Remarks'];
-  var data = [header].concat(_podRecords.map(function(r){
-    return [r.do_number||'', r.customer_name||'', r.truck_id||'', r.trucker_code||'',
-            r.plan_date||'', r.return_date||'', r.days_aging!=null?r.days_aging:'',
-            r.return_date?(r.pod_status||'LATE'):'PENDING', r.pod_remarks||''];
-  }));
-  _downloadCSV(data, 'PFC_POD_'+new Date().toISOString().slice(0,10)+'.csv');
-}
-
-function exportPodSummaryCSV() {
-  if (!_podSummaryRows.length) { showToast('No POD summary data to export.','error'); return; }
-  var period = (_podSummaryPeriod||'daily').charAt(0).toUpperCase()+(_podSummaryPeriod||'daily').slice(1);
-  var header = [period,'Date','Total Drops','Returned','On-Time','Compliance %'];
-  var data = [header].concat(_podSummaryRows.map(function(r){
-    return [r.label||r.period_label||'', r.date||'', r.total||0, r.returned||0, r.ontime||0, r.compliance_pct||0];
-  }));
-  _downloadCSV(data, 'PFC_POD_Summary_'+new Date().toISOString().slice(0,10)+'.csv');
-}
-</script>
-</body>
-</html>
