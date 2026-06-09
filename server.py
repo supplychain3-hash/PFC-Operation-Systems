@@ -1065,6 +1065,19 @@ def init_db():
         updated_at  TEXT DEFAULT (datetime('now','localtime'))
     )''')
 
+    c.execute('''CREATE TABLE IF NOT EXISTS client_notes (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_name    TEXT NOT NULL,
+        shipping_address TEXT NOT NULL,
+        note_type        TEXT DEFAULT 'general',
+        note             TEXT NOT NULL,
+        max_truck_size   TEXT DEFAULT '',
+        early_receiving  INTEGER DEFAULT 0,
+        created_by       TEXT DEFAULT '',
+        created_at       TEXT DEFAULT (datetime('now','localtime')),
+        active           INTEGER DEFAULT 1
+    )''')
+
     conn.commit()
     conn.close()
 
@@ -2135,6 +2148,123 @@ def save_pod():
         return jsonify({'error': str(e)}), 500
 
 
+
+# ─────────────────────────────────────────────────────────────
+#  CLIENT NOTES — per-client constraint log
+# ─────────────────────────────────────────────────────────────
+@app.route('/api/client-notes', methods=['GET'])
+def get_client_notes():
+    """GET /api/client-notes?customer_name=&shipping_address="""
+    cn = request.args.get('customer_name', '').strip()
+    sa = request.args.get('shipping_address', '').strip()
+    if not cn or not sa:
+        return jsonify({'notes': []})
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('''SELECT id, note_type, note, max_truck_size, early_receiving,
+                            created_by, created_at
+                     FROM client_notes
+                     WHERE customer_name=? AND shipping_address=? AND active=1
+                     ORDER BY created_at DESC''', (cn, sa))
+        rows = c.fetchall(); conn.close()
+        notes = [{'id':r[0],'note_type':r[1],'note':r[2],'max_truck_size':r[3],
+                  'early_receiving':bool(r[4]),'created_by':r[5],'created_at':r[6]}
+                 for r in rows]
+        return jsonify({'notes': notes})
+    except Exception as e:
+        return jsonify({'notes': [], 'error': str(e)})
+
+
+@app.route('/api/client-notes/batch', methods=['POST'])
+def get_client_notes_batch():
+    """POST body: {pairs:[{customer_name, shipping_address},...]}
+    Returns dict keyed by 'customer_name|||shipping_address'."""
+    data = request.get_json(silent=True) or {}
+    pairs = data.get('pairs', [])
+    if not pairs:
+        return jsonify({'notes': {}})
+    try:
+        conn = open_db(); c = conn.cursor()
+        result = {}
+        for pair in pairs:
+            cn = (pair.get('customer_name') or '').strip()
+            sa = (pair.get('shipping_address') or '').strip()
+            if not cn or not sa:
+                continue
+            key = cn + '|||' + sa
+            c.execute('''SELECT id, note_type, note, max_truck_size, early_receiving,
+                                created_by, created_at
+                         FROM client_notes
+                         WHERE customer_name=? AND shipping_address=? AND active=1
+                         ORDER BY created_at DESC''', (cn, sa))
+            rows = c.fetchall()
+            if rows:
+                result[key] = [{'id':r[0],'note_type':r[1],'note':r[2],
+                                 'max_truck_size':r[3],'early_receiving':bool(r[4]),
+                                 'created_by':r[5],'created_at':r[6]} for r in rows]
+        conn.close()
+        return jsonify({'notes': result})
+    except Exception as e:
+        return jsonify({'notes': {}, 'error': str(e)})
+
+
+@app.route('/api/client-notes', methods=['POST'])
+def add_client_note():
+    """POST body: {customer_name, shipping_address, note_type, note,
+                   max_truck_size, early_receiving, created_by}"""
+    data = request.get_json(silent=True) or {}
+    cn   = (data.get('customer_name') or '').strip()
+    sa   = (data.get('shipping_address') or '').strip()
+    note = (data.get('note') or '').strip()
+    if not cn or not sa or not note:
+        return jsonify({'error': 'customer_name, shipping_address and note are required'}), 400
+    note_type      = (data.get('note_type') or 'general').strip()
+    max_truck_size = (data.get('max_truck_size') or '').strip().upper()
+    early_receiving = 1 if data.get('early_receiving') else 0
+    created_by     = (data.get('created_by') or '').strip()
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('''INSERT INTO client_notes
+                     (customer_name, shipping_address, note_type, note,
+                      max_truck_size, early_receiving, created_by)
+                     VALUES (?,?,?,?,?,?,?)''',
+                  (cn, sa, note_type, note, max_truck_size, early_receiving, created_by))
+        note_id = c.lastrowid
+        conn.commit(); conn.close()
+        return jsonify({'success': True, 'id': note_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/client-notes/<int:note_id>', methods=['DELETE'])
+def delete_client_note(note_id):
+    """Soft-delete a note (sets active=0)."""
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('UPDATE client_notes SET active=0 WHERE id=?', (note_id,))
+        conn.commit(); conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/client-notes/all', methods=['GET'])
+def get_all_client_notes():
+    """GET /api/client-notes/all — full list for Client Notes tab."""
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('''SELECT id, customer_name, shipping_address, note_type, note,
+                            max_truck_size, early_receiving, created_by, created_at
+                     FROM client_notes WHERE active=1
+                     ORDER BY customer_name, shipping_address, created_at DESC''')
+        rows = c.fetchall(); conn.close()
+        notes = [{'id':r[0],'customer_name':r[1],'shipping_address':r[2],
+                  'note_type':r[3],'note':r[4],'max_truck_size':r[5],
+                  'early_receiving':bool(r[6]),'created_by':r[7],'created_at':r[8]}
+                 for r in rows]
+        return jsonify({'notes': notes})
+    except Exception as e:
+        return jsonify({'notes': [], 'error': str(e)})
 
 
 @app.route('/api/analytics', methods=['GET'])

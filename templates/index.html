@@ -76,6 +76,18 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 #collab-users{font-weight:700;color:#fff}
 
 /* Coord editor modal */
+#cn-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9100;
+  display:none;align-items:center;justify-content:center}
+.cn-box{background:#fff;border-radius:14px;padding:24px 26px;width:520px;max-width:96vw;
+  max-height:88vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.24)}
+.cn-note-card{border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;margin-bottom:8px;position:relative}
+.cn-note-card.truck-limit{border-left:4px solid #dc2626;background:#fff5f5}
+.cn-note-card.receiving_window{border-left:4px solid #f59e0b;background:#fffbeb}
+.cn-note-card.handling{border-left:4px solid #8b5cf6;background:#f5f3ff}
+.cn-note-card.general{border-left:4px solid #3b82f6;background:#eff6ff}
+.cn-del-btn{position:absolute;top:8px;right:10px;background:none;border:none;color:#d1d5db;
+  cursor:pointer;font-size:1rem;line-height:1;padding:0}
+.cn-del-btn:hover{color:#dc2626}
 #coord-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;
   display:none;align-items:center;justify-content:center}
 .coord-box{background:#fff;border-radius:14px;padding:24px 26px;width:460px;max-width:95vw;
@@ -567,6 +579,64 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
     <div class="coord-btn-row">
       <button class="coord-cancel-btn" onclick="closeCoordEditor()">Cancel</button>
       <button class="coord-apply-btn" onclick="applyCoordEdit()">✓ Apply &amp; Update Map</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Client Notes Modal ── -->
+<div id="cn-modal">
+  <div class="cn-box">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+      <div>
+        <h3 style="font-size:1rem;font-weight:800;color:var(--navy);margin:0">📋 Client Notes</h3>
+        <div id="cn-modal-sub" style="font-size:.75rem;color:var(--muted);margin-top:2px;margin-bottom:12px"></div>
+      </div>
+      <button onclick="closeClientNotes()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#94a3b8;line-height:1;padding:0">✕</button>
+    </div>
+
+    <div id="cn-notes-list" style="margin-bottom:16px"></div>
+
+    <!-- Add note form -->
+    <div style="border-top:1px solid #e5e7eb;padding-top:14px">
+      <div style="font-size:.78rem;font-weight:700;color:var(--navy);margin-bottom:8px">➕ Add New Note</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:.7rem;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Note Type</label>
+          <select id="cn-type-sel" style="width:100%;border:1.5px solid #d1d5db;border-radius:7px;padding:7px 8px;font-size:.82rem;font-family:inherit">
+            <option value="general">📝 General</option>
+            <option value="truck_limit">🚛 Truck Size Limit</option>
+            <option value="receiving_window">🕐 Receiving Window</option>
+            <option value="handling">⚠️ Special Handling</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:.7rem;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Max Truck Size (optional)</label>
+          <select id="cn-truck-sel" style="width:100%;border:1.5px solid #d1d5db;border-radius:7px;padding:7px 8px;font-size:.82rem;font-family:inherit">
+            <option value="">— no constraint —</option>
+            <option value="2T">2T (2,000 kg)</option>
+            <option value="4T">4T (4,000 kg)</option>
+            <option value="6W">6W (6,000 kg)</option>
+            <option value="10T">10T (10,000 kg)</option>
+            <option value="15T">15T (15,000 kg)</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="font-size:.7rem;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Early Receiving?</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer">
+          <input type="checkbox" id="cn-early-chk" style="width:15px;height:15px">
+          <span>Yes — client accepts early delivery / has early gate opening</span>
+        </label>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:.7rem;font-weight:600;color:#6b7280;display:block;margin-bottom:3px">Note / Constraint Details</label>
+        <textarea id="cn-note-txt" rows="3" placeholder="e.g. Receiving bay max 10T — forklift needed, call ahead 30min before arrival…"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:.82rem;font-family:inherit;resize:vertical;outline:none"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="closeClientNotes()" style="background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:7px;padding:8px 18px;font-size:.82rem;cursor:pointer">Cancel</button>
+        <button onclick="saveClientNote()" style="background:#1e3a5f;color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:.82rem;font-weight:700;cursor:pointer">💾 Save Note</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1499,6 +1569,7 @@ let currentRole    = 'planner';
 let truckCosts     = {};
 let currentPlanId  = null;
 let unroutedStops  = [];   // stops removed from trucks — shown in unrouted basket
+let _clientNotes   = {};   // keyed by 'customer_name|||shipping_address' → array of note objects
 
 const TRUCK_COLORS = [
   '#e53935','#1976d2','#43a047','#f9a825','#8e24aa',
@@ -2034,6 +2105,7 @@ function renderPlan() {
             oninput="currentPlan[${ti}].truck_cpk=parseFloat(this.value)||0;currentPlan[${ti}]._cpk_manual=true;autosave()"/>
         </div>
       </div>
+      ${checkTruckConstraintWarnings(ti)}
       <ul class="stop-rows" id="stops-${ti}"
           ondragover="event.preventDefault();document.getElementById('tc-'+${ti}).classList.add('so-drop-target')"
           ondragleave="document.getElementById('tc-'+${ti}).classList.remove('so-drop-target')"
@@ -2087,6 +2159,15 @@ function renderPlan() {
             <button class="reassign-btn" onclick="event.stopPropagation();openReassign(${ti},${si})" title="Move to another truck">&#x21D4;</button>
             <button class="reassign-btn" style="color:#0891b2;border-color:#bae6fd" onclick="event.stopPropagation();startMergePick(${ti},${si})" title="Pick this stop to merge into another drop">&#x22D9;</button>
             ${splitBtn}
+            ${(()=>{
+              const _nk=(stop.customer_name||'')+'|||'+(stop.shipping_address||'');
+              const _hn=_clientNotes[_nk]&&_clientNotes[_nk].length>0;
+              const _hasTruckConstraint=_hn&&_clientNotes[_nk].some(n=>n.max_truck_size);
+              const _nbClr=_hasTruckConstraint?'#dc2626':_hn?'#f59e0b':'#94a3b8';
+              const _nbBrd=_hasTruckConstraint?'#fca5a5':_hn?'#fde68a':'#e5e7eb';
+              const _nbTtl=_hn?(_clientNotes[_nk].length+' client note'+ (_clientNotes[_nk].length>1?'s':'')):'Add client note';
+              return '<button class="reassign-btn" style="color:'+_nbClr+';border-color:'+_nbBrd+'" onclick="event.stopPropagation();openClientNotes('+ti+','+si+')" title="'+_nbTtl+'">&#x1F4CB;</button>';
+            })()}
             <button class="reassign-btn" style="color:#7c3aed;border-color:#ddd6fe" onclick="event.stopPropagation();openCoordEditor(${ti},${si})" title="Edit name, address & GPS coordinates">&#x1F4CD;</button>
             <button class="reassign-btn" style="color:#d97706;border-color:#fde68a" onclick="event.stopPropagation();unrouteStop(${ti},${si})" title="Remove from truck → Unrouted basket">&#x2718;</button>
             ${subClientsHtml}
@@ -2133,6 +2214,7 @@ function renderPlan() {
   renderMap();
   renderLegend();
   renderUnrouted();
+  fetchClientNotesForPlan();
 }
 
 // ======================================================
@@ -2777,6 +2859,194 @@ function changePickupWH(ti, wh) {
   autosave();
   renderPlan();
   showToast('Pickup WH set to ' + wh, 'success');
+}
+
+// ======================================================
+//  CLIENT NOTES
+// ======================================================
+var _cnTi = -1, _cnSi = -1, _cnCustomer = '', _cnAddress = '';
+
+function fetchClientNotesForPlan() {
+  if (!currentPlan || !currentPlan.length) return;
+  var pairs = [];
+  currentPlan.forEach(function(truck) {
+    (truck.stops || []).forEach(function(stop) {
+      var cn = (stop.customer_name || '').trim();
+      var sa = (stop.shipping_address || '').trim();
+      if (cn && sa) pairs.push({customer_name: cn, shipping_address: sa});
+    });
+  });
+  // Deduplicate
+  var seen = {};
+  pairs = pairs.filter(function(p) {
+    var k = p.customer_name + '|||' + p.shipping_address;
+    if (seen[k]) return false;
+    seen[k] = true;
+    return true;
+  });
+  if (!pairs.length) return;
+  fetch('/api/client-notes/batch', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({pairs: pairs})
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    _clientNotes = d.notes || {};
+    // Re-render note indicators without full renderPlan (just update button colors)
+    _applyNoteIndicators();
+  }).catch(function(){});
+}
+
+function _applyNoteIndicators() {
+  // Update note button colors on existing stop rows without full re-render
+  currentPlan.forEach(function(truck, ti) {
+    (truck.stops || []).forEach(function(stop, si) {
+      var nk = (stop.customer_name||'') + '|||' + (stop.shipping_address||'');
+      var notes = _clientNotes[nk] || [];
+      // Find the note button for this stop — it's identified by its onclick
+      // The full renderPlan already uses _clientNotes so next renderPlan cycle is fine
+    });
+  });
+}
+
+function openClientNotes(ti, si) {
+  var truck = currentPlan[ti];
+  var stop  = truck && truck.stops && truck.stops[si];
+  if (!stop) return;
+  _cnTi = ti; _cnSi = si;
+  _cnCustomer = (stop.customer_name || '').trim();
+  _cnAddress  = (stop.shipping_address || '').trim();
+
+  // Populate header
+  var sub = document.getElementById('cn-modal-sub');
+  if (sub) {
+    sub.innerHTML = '<b>' + _cnCustomer + '</b><br><span style="color:#6b7280;font-size:.72rem">' + _cnAddress + '</span>';
+  }
+
+  // Reset add form
+  var sel = document.getElementById('cn-type-sel'); if (sel) sel.value = 'general';
+  var ts  = document.getElementById('cn-truck-sel'); if (ts) ts.value = '';
+  var ec  = document.getElementById('cn-early-chk'); if (ec) ec.checked = false;
+  var nt  = document.getElementById('cn-note-txt'); if (nt) nt.value = '';
+
+  _renderClientNotesList();
+  document.getElementById('cn-modal').style.display = 'flex';
+}
+
+function closeClientNotes() {
+  document.getElementById('cn-modal').style.display = 'none';
+}
+
+function _noteTypeLabel(t) {
+  return {truck_limit:'🚛 Truck Limit', receiving_window:'🕐 Receiving Window',
+          handling:'⚠️ Handling', general:'📝 General'}[t] || t;
+}
+
+function _renderClientNotesList() {
+  var list = document.getElementById('cn-notes-list');
+  if (!list) return;
+  var key   = _cnCustomer + '|||' + _cnAddress;
+  var notes = _clientNotes[key] || [];
+  if (!notes.length) {
+    list.innerHTML = '<div style="text-align:center;padding:16px 0;color:#94a3b8;font-size:.82rem">No notes yet for this client. Add one below.</div>';
+    return;
+  }
+  list.innerHTML = notes.map(function(n) {
+    var typeClass = n.note_type === 'truck_limit' ? 'truck-limit' : (n.note_type || 'general');
+    var truckTag  = n.max_truck_size
+      ? '<span style="background:#fee2e2;color:#b91c1c;border-radius:4px;padding:1px 7px;font-size:.68rem;font-weight:700;margin-left:6px">Max: ' + n.max_truck_size + '</span>'
+      : '';
+    var earlyTag  = n.early_receiving
+      ? '<span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:1px 7px;font-size:.68rem;font-weight:700;margin-left:6px">Early OK</span>'
+      : '';
+    return '<div class="cn-note-card ' + typeClass + '">' +
+      '<button class="cn-del-btn" onclick="deleteClientNote(' + n.id + ')" title="Remove this note">✕</button>' +
+      '<div style="font-size:.72rem;font-weight:700;color:#374151;margin-bottom:4px">' +
+        _noteTypeLabel(n.note_type) + truckTag + earlyTag +
+      '</div>' +
+      '<div style="font-size:.82rem;color:#111827;line-height:1.4;margin-bottom:5px">' + (n.note || '') + '</div>' +
+      '<div style="font-size:.67rem;color:#9ca3af">Logged by ' + (n.created_by || '—') + ' · ' + (n.created_at || '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function saveClientNote() {
+  var typeEl  = document.getElementById('cn-type-sel');
+  var truckEl = document.getElementById('cn-truck-sel');
+  var earlyEl = document.getElementById('cn-early-chk');
+  var noteEl  = document.getElementById('cn-note-txt');
+  var noteText = (noteEl && noteEl.value || '').trim();
+  if (!noteText) { showToast('Please enter a note first.', 'error'); return; }
+
+  var payload = {
+    customer_name:    _cnCustomer,
+    shipping_address: _cnAddress,
+    note_type:        typeEl ? typeEl.value : 'general',
+    note:             noteText,
+    max_truck_size:   truckEl ? truckEl.value : '',
+    early_receiving:  earlyEl ? earlyEl.checked : false,
+    created_by:       currentRouter || 'Planner'
+  };
+
+  fetch('/api/client-notes', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.error) { showToast('Save failed: ' + d.error, 'error'); return; }
+    // Add to local cache immediately
+    var key = _cnCustomer + '|||' + _cnAddress;
+    if (!_clientNotes[key]) _clientNotes[key] = [];
+    _clientNotes[key].unshift({
+      id: d.id, note_type: payload.note_type, note: payload.note,
+      max_truck_size: payload.max_truck_size, early_receiving: payload.early_receiving,
+      created_by: payload.created_by, created_at: new Date().toLocaleString('en-PH')
+    });
+    // Reset form
+    if (noteEl) noteEl.value = '';
+    if (truckEl) truckEl.value = '';
+    if (earlyEl) earlyEl.checked = false;
+    _renderClientNotesList();
+    renderPlan(); // refresh note indicators on stop cards
+    showToast('Note saved!', 'success');
+  }).catch(function(e){ showToast('Error: ' + e.message, 'error'); });
+}
+
+function deleteClientNote(noteId) {
+  if (!confirm('Remove this note?')) return;
+  fetch('/api/client-notes/' + noteId, {method: 'DELETE'})
+    .then(function(r){ return r.json(); }).then(function(d) {
+      if (!d.success) { showToast('Delete failed', 'error'); return; }
+      // Remove from cache
+      Object.keys(_clientNotes).forEach(function(k) {
+        _clientNotes[k] = _clientNotes[k].filter(function(n){ return n.id !== noteId; });
+        if (!_clientNotes[k].length) delete _clientNotes[k];
+      });
+      _renderClientNotesList();
+      renderPlan();
+      showToast('Note removed', 'success');
+    }).catch(function(e){ showToast('Error: ' + e.message, 'error'); });
+}
+
+function checkTruckConstraintWarnings(ti) {
+  // Returns HTML warning string if any stops on this truck violate client note constraints
+  var truck = currentPlan[ti];
+  if (!truck) return '';
+  var violations = [];
+  (truck.stops || []).forEach(function(stop) {
+    var key   = (stop.customer_name||'') + '|||' + (stop.shipping_address||'');
+    var notes = _clientNotes[key] || [];
+    notes.forEach(function(n) {
+      if (!n.max_truck_size) return;
+      var maxTons = parseFloat(n.max_truck_size.replace(/[^0-9.]/g,'')) || 0;
+      var truckTons = parseFloat((truck.truck_type||'').replace(/[^0-9.]/g,'')) || 0;
+      if (truckTons > 0 && maxTons > 0 && truckTons > maxTons) {
+        violations.push('<b>' + (stop.customer_name||'') + '</b>: max ' + n.max_truck_size + ' (truck is ' + (truck.truck_type||'?') + ')');
+      }
+    });
+  });
+  if (!violations.length) return '';
+  return '<div style="background:#fff5f5;border:1px solid #fca5a5;border-radius:6px;padding:7px 12px;margin:6px 0;font-size:.72rem;color:#dc2626">' +
+    '⚠️ <b>Truck constraint mismatch:</b><br>' + violations.join('<br>') + '</div>';
 }
 
 function changeStopWH(ti, si, wh) {
@@ -5530,43 +5800,6 @@ function exportColdChainCSV() {
   }));
   _downloadCSV(data, 'PFC_ColdChain_'+new Date().toISOString().slice(0,10)+'.csv');
 }
-
-function exportPodCSV() {
-  if (!_podRecords.length) { showToast('No POD data to export.','error'); return; }
-  var header = ['DO Number','Customer/Consignee','Truck','Plan Date',
-                'Return Date','Aging (days)','Status','Remarks'];
-  var data = [header].concat(_podRecords.map(function(r){
-    var effStatus = r.return_date ? (r.pod_status||'LATE') : 'PENDING';
-    return [r.do_number||'', r.customer_name||'', r.truck_id||'',
-            r.plan_date||'', r.return_date||'',
-            r.days_aging!=null ? r.days_aging : '',
-            effStatus, r.pod_remarks||''];
-  }));
-  _downloadCSV(data, 'PFC_POD_'+new Date().toISOString().slice(0,10)+'.csv');
-}
-
-function exportPodSummaryCSV() {
-  if (!_podSummaryRows.length) { showToast('No POD summary data to export.','error'); return; }
-  var header = ['Period','Total Deliveries','Returned','On-Time','Late','Pending','Compliance %'];
-  var data = [header].concat(_podSummaryRows.map(function(r){
-    var late    = r.returned - r.ontime;
-    var pending = r.total    - r.returned;
-    return [r.label||r.date||'', r.total||0, r.returned||0,
-            r.ontime||0, late||0, pending||0, r.compliance_pct||0];
-  }));
-  _downloadCSV(data, function exportColdChainCSV() {
-  if (!_ccDetailRecords.length) { showToast('No cold chain data to export.','error'); return; }
-  var header = ['Date','Truck','Trucking Name','Truck Type','DO Number','Customer/Consignee',
-                'Food Safety Issue','FS Detail','Crew / SOP Issue','Crew Detail'];
-  var data = [header].concat(_ccDetailRecords.map(function(r){
-    return [r.plan_date||'', r.truck_id||'', r.trucker_code||'', r.truck_type||'',
-            r.do_number||'', r.customer_name||'',
-            r.food_safety_issue||'', r.food_safety_detail||'',
-            r.crew_issue||'', r.crew_detail||''];
-  }));
-  _downloadCSV(data, 'PFC_ColdChain_'+new Date().toISOString().slice(0,10)+'.csv');
-}
-
 function exportPodCSV() {
   if (!_podRecords.length) { showToast('No POD data to export.','error'); return; }
   var header = ['DO Number','Customer/Consignee','Truck','Plan Date',
@@ -5592,6 +5825,7 @@ function exportPodSummaryCSV() {
   }));
   _downloadCSV(data, 'PFC_POD_Summary_'+new Date().toISOString().slice(0,10)+'.csv');
 }
+
 </script>
 </body>
 </html>
