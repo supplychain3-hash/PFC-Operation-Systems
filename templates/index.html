@@ -233,6 +233,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .stop-sub{font-size:.65rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vol-tag{background:var(--light);border-radius:4px;padding:1px 5px;font-weight:700;font-size:.68rem;text-align:right;white-space:nowrap}
 .wh-tag{font-size:.62rem;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wh-tag-sel{font-size:.62rem;color:var(--navy);border:1px solid #cbd5e1;border-radius:4px;padding:1px 3px;background:#f8fafc;min-width:52px;max-width:68px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .reassign-btn{background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;
   color:var(--muted);font-size:.68rem;padding:2px 4px;transition:all .15s;text-align:center}
 .reassign-btn:hover{border-color:var(--blue);color:var(--blue)}
@@ -2077,7 +2078,12 @@ function renderPlan() {
               ${stop.vol.toLocaleString(undefined,{maximumFractionDigits:0})} kg
               ${stopRows.length>0?`<span class="so-vol-toggle">${uniqueSOs.length||1} SO &#x25BE;</span>`:''}
             </div>
-            <div class="wh-tag">${stop.wh||''}</div>
+            <select class="wh-tag-sel" title="Pickup WH / CSW for this stop"
+              onclick="event.stopPropagation()"
+              onchange="event.stopPropagation();changeStopWH(${ti},${si},this.value)">
+              <option value="">${stop.wh ? '' : '— WH —'}</option>
+              ${Object.keys(warehouseData).map(wh=>`<option value="${wh}"${stop.wh===wh?' selected':''}>${wh}</option>`).join('')}
+            </select>
             <button class="reassign-btn" onclick="event.stopPropagation();openReassign(${ti},${si})" title="Move to another truck">&#x21D4;</button>
             <button class="reassign-btn" style="color:#0891b2;border-color:#bae6fd" onclick="event.stopPropagation();startMergePick(${ti},${si})" title="Pick this stop to merge into another drop">&#x22D9;</button>
             ${splitBtn}
@@ -2771,6 +2777,24 @@ function changePickupWH(ti, wh) {
   autosave();
   renderPlan();
   showToast('Pickup WH set to ' + wh, 'success');
+}
+
+function changeStopWH(ti, si, wh) {
+  const stop = currentPlan[ti] && currentPlan[ti].stops && currentPlan[ti].stops[si];
+  if (!stop) return;
+  stop.wh       = wh || stop.wh;
+  stop.wh_group = wh ? ((warehouseData[wh] && warehouseData[wh].group) || wh) : stop.wh_group;
+  // If the truck has no pickup_wh yet, also set it from this stop
+  if (wh && !currentPlan[ti].pickup_wh) {
+    currentPlan[ti].pickup_wh = wh;
+    const existing = currentPlan[ti].all_whs || [];
+    if (!existing.includes(wh)) existing.unshift(wh);
+    currentPlan[ti].all_whs = existing;
+    currentPlan[ti].wh_group = (warehouseData[wh] && warehouseData[wh].group) || wh;
+  }
+  autosave();
+  renderPlan();
+  if (wh) showToast('Stop WH set to ' + wh, 'success');
 }
 
 function changeTruckType(ti, newLabel) {
