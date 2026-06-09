@@ -351,6 +351,36 @@ def get_router_temp(suffix: str, router: str = 'default') -> str:
     safe = re.sub(r'[^a-zA-Z0-9_-]', '_', str(router).lower().strip() or 'default')
     return os.path.join(tempfile.gettempdir(), f'pfc_{suffix}_{safe}.json')
 
+
+# ── Shared live working plan helpers ────────────────────────────────────────
+def get_working_plan(plan_date: str):
+    """Read the shared live plan for a date from the DB.  Returns (trucks, updated_by, updated_at)."""
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('SELECT data, updated_by, updated_at FROM working_plans WHERE plan_date=?', (plan_date,))
+        row = c.fetchone(); conn.close()
+        if not row: return None, '', ''
+        return json.loads(row[0]), row[1] or '', row[2] or ''
+    except Exception:
+        return None, '', ''
+
+
+def set_working_plan(plan_date: str, trucks: list, updated_by: str = ''):
+    """Write / update the shared live plan for a date in the DB."""
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('''INSERT INTO working_plans (plan_date, data, updated_by, updated_at)
+                     VALUES (?, ?, ?, datetime('now','localtime'))
+                     ON CONFLICT(plan_date) DO UPDATE SET
+                         data       = excluded.data,
+                         updated_by = excluded.updated_by,
+                         updated_at = datetime('now','localtime')''',
+                  (plan_date, json.dumps(trucks, default=str), updated_by))
+        conn.commit(); conn.close()
+    except Exception as ex:
+        print(f'[WARN] set_working_plan failed: {ex}')
+# ────────────────────────────────────────────────────────────────────────────
+
 # ─────────────────────────────────────────────────────────────
 #  TSP: NEAREST-NEIGHBOR STOP SEQUENCING
 # ─────────────────────────────────────────────────────────────
@@ -892,6 +922,15 @@ def init_db():
         c.execute("ALTER TABLE route_plans ADD COLUMN created_by TEXT DEFAULT ''")
     except Exception:
         pass
+
+    # ── Shared live working plan (one row per date, all planners share it) ──
+    c.execute('''CREATE TABLE IF NOT EXISTS working_plans (
+        plan_date  TEXT PRIMARY KEY,
+        data       TEXT NOT NULL,
+        updated_by TEXT DEFAULT '',
+        updated_at TEXT DEFAULT (datetime('now','localtime'))
+    )''')
+    # ────────────────────────────────────────────────────────────────────────
     # Migration: add shipping_address to monitoring_records if missing
     try:
         c.execute("ALTER TABLE monitoring_records ADD COLUMN shipping_address TEXT DEFAULT ''")
@@ -1090,7 +1129,8 @@ def upload_file():
 
 @app.route('/api/run-routing', methods=['POST'])
 def run_routing():
-    router = request.args.get('router', 'default')
+    router    = request.args.get('router', 'default')
+    plan_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
     temp_orders = get_router_temp('orders', router)
     temp_plan   = get_router_temp('plan', router)
     if not os.path.exists(temp_orders):
@@ -1103,6 +1143,8 @@ def run_routing():
         trucks, floated = run_routing_engine(df)
         with open(temp_plan, 'w') as fp:
             json.dump(trucks, fp, default=str)
+        # ── Write to shared live plan so all browsers see the new plan ──
+        set_working_plan(plan_date, trucks, router)
         total_drops = sum(len(t['stops']) for t in trucks)
         avg_util    = (sum(t['util_pct'] for t in trucks) / len(trucks)) if trucks else 0
         total_vol   = sum(t['acc_weight'] for t in trucks)
@@ -1121,7 +1163,16 @@ def run_routing():
 @app.route('/api/get-plan', methods=['GET'])
 def get_plan():
     router    = request.args.get('router', 'default')
+    plan_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
     temp_plan = get_router_temp('plan', router)
+    # Prefer shared working plan (authoritative) over local temp file
+    trucks, _, _ = get_working_plan(plan_date)
+    if trucks is not None:
+        # Keep temp file in sync so other endpoints that read it work correctly
+        with open(temp_plan, 'w') as fp:
+            json.dump(trucks, fp, default=str)
+        return jsonify({'success': True, 'trucks': trucks})
+    # Fall back to local temp file if no shared plan yet
     if not os.path.exists(temp_plan):
         return jsonify({'success': False, 'trucks': []})
     with open(temp_plan) as fp:
@@ -1132,6 +1183,7 @@ def get_plan():
 @app.route('/api/update-plan', methods=['POST'])
 def update_plan():
     router    = request.args.get('router', 'default')
+    plan_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
     temp_plan = get_router_temp('plan', router)
     data      = request.get_json()
     if not data or 'trucks' not in data:
@@ -1158,28 +1210,46 @@ def update_plan():
     with open(temp_plan, 'w') as fp:
         json.dump(data['trucks'], fp, default=str)
     version = os.path.getmtime(temp_plan)
+    # ── Broadcast to all other browsers via shared live plan ──
+    set_working_plan(plan_date, data['trucks'], router)
     return jsonify({'success': True, 'trucks': data['trucks'], 'version': version})
 
 
 @app.route('/api/plan-state', methods=['GET'])
 def get_plan_state():
-    """Lightweight collab poll — returns the mtime version of the current temp plan."""
-    router    = request.args.get('router', 'default')
-    temp_plan = get_router_temp('plan', router)
-    if not os.path.exists(temp_plan):
-        return jsonify({'version': 0, 'exists': False})
-    version = os.path.getmtime(temp_plan)
+    """Lightweight collab poll — checks shared working_plans table for the given date.
+    Returns updated_at timestamp and who last changed it so browsers can auto-apply."""
+    plan_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
     try:
-        with open(temp_plan) as fp:
-            trucks = json.load(fp)
+        conn = open_db(); c = conn.cursor()
+        c.execute('SELECT updated_at, updated_by, data FROM working_plans WHERE plan_date=?', (plan_date,))
+        row = c.fetchone(); conn.close()
+        if not row:
+            return jsonify({'version': None, 'exists': False, 'updated_by': '', 'updated_at': ''})
+        trucks = []
+        try: trucks = json.loads(row[2])
+        except Exception: pass
         return jsonify({
-            'version':     version,
+            'version':     row[0],
+            'updated_at':  row[0],
+            'updated_by':  row[1] or '',
             'exists':      True,
             'truck_count': len(trucks),
             'total_stops': sum(len(t.get('stops', [])) for t in trucks),
         })
-    except Exception:
-        return jsonify({'version': version, 'exists': True})
+    except Exception as e:
+        return jsonify({'version': None, 'exists': False, 'updated_by': '', 'error': str(e)})
+
+
+@app.route('/api/working-plan', methods=['GET'])
+def get_working_plan_endpoint():
+    """Return the full shared live plan for a date.  Called when a browser needs to sync."""
+    plan_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    trucks, updated_by, updated_at = get_working_plan(plan_date)
+    if trucks is None:
+        return jsonify({'trucks': [], 'updated_by': '', 'updated_at': '', 'exists': False})
+    return jsonify({'trucks': trucks, 'updated_by': updated_by,
+                    'updated_at': updated_at, 'exists': True})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1554,6 +1624,29 @@ def save_plan():
             trucks = json.load(fp)
         if not trucks:
             return jsonify({'error': 'Plan is empty — no trucks to save'}), 400
+
+        # ── Collaborative merge ──────────────────────────────────────────
+        # Before saving, pull in trucks from other planners for the same
+        # date so that every Save produces the full team plan, not just
+        # this planner's slice.
+        conn_m = open_db(); cm = conn_m.cursor()
+        cm.execute('''SELECT created_by, data FROM route_plans
+                      WHERE plan_date=? AND created_by != ?
+                      ORDER BY created_at ASC''', (plan_date, created_by))
+        other_rows = cm.fetchall(); conn_m.close()
+
+        my_ids = {t.get('truck_id', '') for t in trucks}
+        for _, other_data in other_rows:
+            try:
+                for ot in json.loads(other_data):
+                    tid = ot.get('truck_id', '')
+                    if tid and tid not in my_ids:
+                        trucks.append(ot)
+                        my_ids.add(tid)
+            except Exception:
+                pass
+        # ────────────────────────────────────────────────────────────────
+
         def safe_float(v):
             try: return float(v or 0)
             except Exception: return 0.0
@@ -1635,6 +1728,34 @@ def latest_plan_meta():
         'truck_count':  summary.get('truck_count', 0),
         'total_drops':  summary.get('total_drops', 0),
     })
+
+
+@app.route('/api/date-plans/<date>', methods=['GET'])
+def get_date_plans(date):
+    """Return all trucks from ALL planners' saved plans for a given date, merged by truck_id.
+    Used by the frontend to do collaborative merge-on-load rather than destructive replace."""
+    try:
+        conn = open_db(); c = conn.cursor()
+        c.execute('''SELECT created_by, data, created_at
+                     FROM route_plans WHERE plan_date=?
+                     ORDER BY created_at ASC''', (date,))
+        rows = c.fetchall(); conn.close()
+        # Merge: later saves for the same truck_id win (most recent edit wins)
+        merged = {}
+        planners = set()
+        for created_by, data_json, _ in rows:
+            try:
+                trucks = json.loads(data_json)
+                planners.add(created_by or 'unknown')
+                for t in trucks:
+                    tid = t.get('truck_id', '')
+                    if tid:
+                        merged[tid] = dict(t, _saved_by=created_by or '')
+            except Exception:
+                pass
+        return jsonify({'trucks': list(merged.values()), 'planners': sorted(planners), 'date': date})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/history/<int:plan_id>', methods=['GET'])
@@ -2714,6 +2835,10 @@ def merge_orders():
 
         with open(temp_plan, 'w') as fp:
             json.dump(updated_plan, fp, default=str)
+        # ── Broadcast merged plan to all browsers ──
+        merge_router = request.args.get('router', 'default')
+        merge_date   = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+        set_working_plan(merge_date, updated_plan, merge_router)
 
         return jsonify({
             'trucks':     updated_plan,

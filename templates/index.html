@@ -611,7 +611,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
 <!-- ══════════════ ROUTE PLAN ══════════════ -->
 <div id="shared-plan-banner">
   <span class="banner-msg" id="shared-plan-msg">📋 New plan available</span>
-  <button class="banner-load" onclick="loadSharedPlan()">Load New Plan</button>
+  <button class="banner-load" onclick="loadSharedPlan()">Merge into My Plan</button>
   <button class="banner-dismiss" onclick="dismissSharedBanner()" title="Dismiss">✕</button>
 </div>
 
@@ -1541,7 +1541,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const h = document.getElementById('login-wake-hint'); if(h) h.style.display='none';
     if (d.authenticated) {
       applyUser(d.display, d.role);
-      fetch('/api/get-plan?router=' + encodeURIComponent(currentRouter))
+      fetch('/api/get-plan?router=' + encodeURIComponent(currentRouter) + '&date=' + encodeURIComponent(currentDeliveryDate))
         .then(r=>r.json()).then(pd=>{
           if (pd.success && pd.trucks.length) {
             currentPlan = pd.trucks;
@@ -1588,7 +1588,7 @@ function doLogin() {
       document.getElementById('login-overlay').style.display = 'none';
       document.getElementById('login-password').value = '';
       applyUser(d.display, d.role);
-      fetch('/api/get-plan?router=' + encodeURIComponent(currentRouter))
+      fetch('/api/get-plan?router=' + encodeURIComponent(currentRouter) + '&date=' + encodeURIComponent(currentDeliveryDate))
         .then(r => r.json()).then(pd => {
           if (pd.success && pd.trucks.length) {
             currentPlan = pd.trucks; renderPlan();
@@ -1776,7 +1776,7 @@ function runRouting() {
   btn.innerHTML = '&#x23F3; Generating...';
   st.textContent = 'Resolving delivery addresses & building route plan… (first run may take ~1 min while addresses are geocoded; instant on re-run)';
   st.style.color = 'var(--orange)';
-  fetch('/api/run-routing?router='+encodeURIComponent(currentRouter), {method:'POST'})
+  fetch('/api/run-routing?router='+encodeURIComponent(currentRouter)+'&date='+encodeURIComponent(currentDeliveryDate), {method:'POST'})
     .then(r=>r.json()).then(d=>{
       btn.disabled = false;
       btn.innerHTML = '&#x25B6; Generate Route Plan';
@@ -2550,26 +2550,50 @@ function savePlanToday() {
   const btn = document.getElementById('save-plan-btn');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Saving…'; }
   const today = currentDeliveryDate;
-  fetch('/api/save-plan?router=' + encodeURIComponent(currentRouter), {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ date: today, created_by: currentRouter })
-  }).then(r => r.json()).then(d => {
-    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
-    if (d.error) { showToast('Save failed: ' + d.error, 'error'); return; }
-    if (d.drive_url) {
-      showToast(
-        'Plan saved ✔ — <a href="' + d.drive_url + '" target="_blank" ' +
-        'style="color:#fff;text-decoration:underline;font-weight:600;">Open in Drive ↗</a>',
-        'success', 6000
-      );
-    } else {
-      showToast('Plan saved → ' + (d.plan_name || 'History'), 'success');
-    }
-  }).catch(e => {
-    if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
-    showToast('Save error: ' + e.message, 'error');
-  });
+
+  // Step 1: silently merge any trucks already saved by other planners for this
+  // date so the save always writes the full team plan, not just this planner's slice.
+  function _doSave() {
+    fetch('/api/save-plan?router=' + encodeURIComponent(currentRouter), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ date: today, created_by: currentRouter })
+    }).then(r => r.json()).then(d => {
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
+      if (d.error) { showToast('Save failed: ' + d.error, 'error'); return; }
+      if (d.drive_url) {
+        showToast(
+          'Plan saved ✔ — <a href="' + d.drive_url + '" target="_blank" ' +
+          'style="color:#fff;text-decoration:underline;font-weight:600;">Open in Drive ↗</a>',
+          'success', 6000
+        );
+      } else {
+        showToast('Plan saved → ' + (d.plan_name || 'History'), 'success');
+      }
+    }).catch(e => {
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Save Plan'; }
+      showToast('Save error: ' + e.message, 'error');
+    });
+  }
+
+  // Merge other planners' trucks into local plan before saving
+  fetch('/api/date-plans/' + encodeURIComponent(today))
+    .then(r => r.json())
+    .then(data => {
+      if (data.trucks && data.trucks.length) {
+        const localIds = new Set(currentPlan.map(t => t.truck_id));
+        data.trucks.forEach(t => {
+          if (t.truck_id && !localIds.has(t.truck_id)) {
+            currentPlan.push(t);
+            localIds.add(t.truck_id);
+          }
+        });
+        // Push merged plan to server temp file before saving to DB
+        autosave();
+      }
+      _doSave();
+    })
+    .catch(() => _doSave()); // if merge fails, save what we have
 }
 
 // ── Unrouted basket ──────────────────────────────────────────────────────────
@@ -3068,27 +3092,39 @@ function _pollSharedPlan() {
 
 function loadSharedPlan() {
   if (!_pendingSharedPlanId) return;
-  const id = _pendingSharedPlanId;
-  fetch(`/api/history/${id}?router=${encodeURIComponent(currentRouter)}`)
+  const id   = _pendingSharedPlanId;
+  const date = currentDeliveryDate;
+
+  // Fetch the MERGED plan for the date (all planners' trucks combined)
+  // rather than just the one plan_id — this way nothing local is wiped.
+  fetch(`/api/date-plans/${encodeURIComponent(date)}`)
     .then(r => r.json())
     .then(data => {
-      if (data.trucks && data.trucks.length) {
-        currentPlan = data.trucks;
-        _knownLatestPlanId  = id;
-        _knownLatestPlanAt  = data.created_at || _knownLatestPlanAt;
-        _pendingSharedPlanId = null;
-        startCollab(data.plan_date || currentDeliveryDate);
-        renderPlan();
-        dismissSharedBanner();
-        showToast(`Plan loaded — saved by ${data.created_by || 'team'}`, 'success');
-        // Switch to plan tab if on another tab
-        const planBtn = document.querySelector('.nav-btn[onclick*="plan"]');
-        if (planBtn && !document.getElementById('page-plan').classList.contains('active')) {
-          planBtn.click();
+      if (!data.trucks || !data.trucks.length) return;
+      // Merge: keep all local trucks, add any truck_id not already present
+      const localIds = new Set(currentPlan.map(t => t.truck_id));
+      let added = 0;
+      data.trucks.forEach(t => {
+        if (t.truck_id && !localIds.has(t.truck_id)) {
+          currentPlan.push(t);
+          localIds.add(t.truck_id);
+          added++;
         }
+      });
+      _knownLatestPlanId   = id;
+      _knownLatestPlanAt   = null;
+      _pendingSharedPlanId = null;
+      startCollab(date);
+      renderPlan();
+      dismissSharedBanner();
+      const planners = (data.planners || []).join(', ');
+      showToast(`Merged ${added} truck(s) from team plan (${planners})`, 'success');
+      const planBtn = document.querySelector('.nav-btn[onclick*="plan"]');
+      if (planBtn && !document.getElementById('page-plan').classList.contains('active')) {
+        planBtn.click();
       }
     })
-    .catch(() => showToast('Could not load shared plan', 'error'));
+    .catch(() => showToast('Could not merge shared plan', 'error'));
 }
 
 function dismissSharedBanner() {
@@ -3429,15 +3465,20 @@ function updateRatedCap(ti,val){
 let _autosaveTimer = null;
 let _myPlanVersion  = 0;    // mtime of the plan version WE last wrote
 let _lastEditTime   = 0;    // timestamp of user's last edit action
+let _myLastWriteAt  = '';   // updated_at value WE last wrote (skip own updates in poll)
+let _lastKnownSharedVersion = null; // last updated_at seen from working_plans
 function autosave() {
   _lastEditTime = Date.now();
   clearTimeout(_autosaveTimer);
   _autosaveTimer = setTimeout(()=>{
-    fetch('/api/update-plan?router='+encodeURIComponent(currentRouter),
-      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trucks:currentPlan})})
+    const url = '/api/update-plan?router='+encodeURIComponent(currentRouter)
+              + '&date='+encodeURIComponent(currentDeliveryDate);
+    fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({trucks:currentPlan})})
     .then(r=>r.json()).then(d=>{
       if(d.trucks){currentPlan=d.trucks; updatePlanKPIs();}
-      if(d.version){ _myPlanVersion = d.version; }  // record our version so poller won't re-pull it
+      if(d.version){ _myPlanVersion = d.version; }
+      // Record when WE last wrote so the live-sync poller knows to skip our own update
+      _myLastWriteAt = new Date().toISOString().slice(0,19);
     });
     collabPush();
   }, 400);
@@ -3446,14 +3487,16 @@ function autosave() {
 // savePlanToday() is defined in TRUCK MANAGEMENT section below
 
 // ======================================================
-//  REAL-TIME COLLABORATION
+//  REAL-TIME COLLABORATION  (DB-backed shared live plan)
 // ======================================================
 function startCollab(collabId) {
-  _collabId     = collabId || currentDeliveryDate;
-  _collabMyName = currentRouter || 'user';
-  _collabVersion = 0;
+  _collabId              = collabId || currentDeliveryDate;
+  _collabMyName          = currentRouter || 'user';
+  _collabVersion         = 0;
+  _lastKnownSharedVersion = null; // reset so we re-register on next poll
   stopCollab();
-  _collabInterval   = setInterval(pollCollab, 4000);
+  // Poll the shared DB plan every 3 s — fast enough to feel live
+  _collabInterval   = setInterval(pollCollab, 3000);
   _collabHbInterval = setInterval(collabHeartbeat, 8000);
   collabHeartbeat();
   const bar = document.getElementById('collab-bar');
@@ -3464,30 +3507,47 @@ function stopCollab() {
   if (_collabHbInterval) { clearInterval(_collabHbInterval); _collabHbInterval = null; }
 }
 function collabPush() {
-  if (!_collabId || !currentPlan.length) return;
-  _setSyncLabel('Syncing…');
-  fetch('/api/collab/push', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({collab_id:_collabId, trucks:currentPlan, by:_collabMyName})
-  }).then(r=>r.json()).then(d=>{
-    if (d.version) _collabVersion = d.version;
-    _setSyncLabel('Synced ✓');
-    setTimeout(()=>_setSyncLabel(''), 2000);
-  }).catch(()=>{});
+  // No-op: autosave() already writes to the shared working_plans table via
+  // update-plan, so there's nothing extra to push.  Keep the function stub so
+  // existing call-sites don't error.
 }
 function pollCollab() {
-  if (!_collabId) return;
-  const url = '/api/collab/poll?collab_id='+encodeURIComponent(_collabId)+'&since='+_collabVersion;
-  fetch(url).then(r=>r.json()).then(d=>{
-    if (!d.updated) return;
-    if (d.by === _collabMyName) { _collabVersion = d.version; return; }
-    _collabVersion = d.version;
-    currentPlan = d.trucks;
-    renderPlan();
-    showToast('🔄 Plan updated by ' + d.by, 'info');
-    _setSyncLabel('Updated by ' + d.by);
-    setTimeout(()=>_setSyncLabel(''), 3500);
-  }).catch(()=>{});
+  // Poll the shared working_plans table for this date.
+  // If someone else changed the plan since we last checked, auto-apply it.
+  const date = currentDeliveryDate;
+  fetch('/api/plan-state?date=' + encodeURIComponent(date))
+    .then(r => r.json())
+    .then(d => {
+      if (!d.exists || !d.version) return;
+      // First run — just register the current version, don't apply
+      if (_lastKnownSharedVersion === null) {
+        _lastKnownSharedVersion = d.version;
+        return;
+      }
+      if (d.version === _lastKnownSharedVersion) return; // nothing changed
+      _lastKnownSharedVersion = d.version;
+      // Skip if WE just wrote this version (avoid re-applying our own save)
+      if (d.updated_by === currentRouter) {
+        _setSyncLabel('Synced ✓'); setTimeout(()=>_setSyncLabel(''), 2000);
+        return;
+      }
+      // Someone else changed the plan — but don't overwrite if user is actively editing
+      if (Date.now() - _lastEditTime < 4000) return;
+      // Fetch and apply the full shared plan
+      fetch('/api/working-plan?date=' + encodeURIComponent(date))
+        .then(r => r.json())
+        .then(data => {
+          if (!data.trucks || !data.trucks.length) return;
+          currentPlan = data.trucks;
+          renderPlan();
+          const who = d.updated_by || 'another planner';
+          showToast('🔄 Plan updated by ' + who, 'info');
+          _setSyncLabel('Updated by ' + who);
+          setTimeout(() => _setSyncLabel(''), 3500);
+        })
+        .catch(() => {});
+    })
+    .catch(() => {}); // fail silently — server may be restarting
 }
 function collabHeartbeat() {
   if (!_collabId) return;
@@ -5484,6 +5544,27 @@ function exportPodSummaryCSV() {
   _downloadCSV(data, 'PFC_POD_Summary_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
+</script>
+</body>
+</html>
+ar header = ['DO Number','Customer/Consignee','Truck ID','Trucker','Plan Date','Return Date','Aging (days)','POD Status','Remarks'];
+  var data = [header].concat(_podRecords.map(function(r){
+    return [r.do_number||'', r.customer_name||'', r.truck_id||'', r.trucker_code||'',
+            r.plan_date||'', r.return_date||'', r.days_aging!=null?r.days_aging:'',
+            r.return_date?(r.pod_status||'LATE'):'PENDING', r.pod_remarks||''];
+  }));
+  _downloadCSV(data, 'PFC_POD_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function exportPodSummaryCSV() {
+  if (!_podSummaryRows.length) { showToast('No POD summary data to export.','error'); return; }
+  var period = (_podSummaryPeriod||'daily').charAt(0).toUpperCase()+(_podSummaryPeriod||'daily').slice(1);
+  var header = [period,'Date','Total Drops','Returned','On-Time','Compliance %'];
+  var data = [header].concat(_podSummaryRows.map(function(r){
+    return [r.label||r.period_label||'', r.date||'', r.total||0, r.returned||0, r.ontime||0, r.compliance_pct||0];
+  }));
+  _downloadCSV(data, 'PFC_POD_Summary_'+new Date().toISOString().slice(0,10)+'.csv');
+}
 </script>
 </body>
 </html>
