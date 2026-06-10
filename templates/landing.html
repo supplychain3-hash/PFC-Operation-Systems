@@ -73,35 +73,11 @@ body::before{
   margin-bottom:52px;
   position:relative;z-index:1;
 }
-.logo-wrap{
-  display:flex;align-items:center;justify-content:center;
-  gap:22px;margin-bottom:20px;
-}
-.logo-svg{
-  flex-shrink:0;
-}
-.logo-text{
-  text-align:left;
-}
-.logo-text-premier{
-  font-size:38px;font-weight:900;
-  color:#fff;
-  letter-spacing:2px;
-  line-height:1;
-  text-transform:uppercase;
-}
-.logo-text-foodchoice{
-  font-size:13.5px;font-weight:600;
-  color:rgba(255,255,255,.45);
-  letter-spacing:5px;
-  text-transform:uppercase;
-  margin-top:4px;
-}
 .brand-sub{
   font-size:11px;font-weight:500;
-  color:rgba(255,255,255,.28);
+  color:rgba(255,255,255,.35);
   letter-spacing:3px;text-transform:uppercase;
-  margin-top:14px;
+  margin-top:10px;
 }
 
 /* ── Department tiles ──────────────────────────────────────── */
@@ -311,26 +287,10 @@ body::before{
 
 <!-- Brand -->
 <div class="brand">
-  <div class="logo-wrap">
-    <!-- PFC chevron mark — SVG recreation -->
-    <svg class="logo-svg" width="72" height="80" viewBox="0 0 72 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- Orange chevron (top) -->
-      <path d="M6 0 L36 20 L66 0 L72 6 L36 28 L0 6 Z" fill="#E55B2D"/>
-      <!-- Orange diamond cutout -->
-      <rect x="30" y="6" width="12" height="12" rx="1" transform="rotate(45 36 12)" fill="#0f1e3d"/>
-      <!-- Red chevron (middle) -->
-      <path d="M6 20 L36 40 L66 20 L72 26 L36 48 L0 26 Z" fill="#C0272D"/>
-      <!-- Red diamond cutout -->
-      <rect x="30" y="26" width="12" height="12" rx="1" transform="rotate(45 36 32)" fill="#0f1e3d"/>
-      <!-- Navy chevron (bottom) -->
-      <path d="M10 46 L36 62 L62 46 L68 52 L36 70 L4 52 Z" fill="#1B2D5B"/>
-    </svg>
-    <div class="logo-text">
-      <div class="logo-text-premier">Premier</div>
-      <div class="logo-text-foodchoice">Food Choice</div>
-    </div>
-  </div>
-  <div class="brand-sub">Operating System &nbsp;·&nbsp; v2.0</div>
+  <!-- Real PFC logo — white bg removed via mix-blend-mode -->
+  <img src="/static/pfc-logo.png" alt="Premier Food Choice"
+       style="display:block;margin:0 auto 8px;height:110px;width:auto;mix-blend-mode:screen;"/>
+  <div class="brand-sub" style="font-size:14px;letter-spacing:4px;">Operating System</div>
 </div>
 
 <!-- Department tiles -->
@@ -358,14 +318,7 @@ body::before{
   <div class="modal">
     <button class="modal-back" onclick="closeLogin()">&#8592; Back</button>
     <div class="modal-brand">
-      <!-- Mini chevron logo -->
-      <svg class="modal-logo-mini" width="32" height="36" viewBox="0 0 72 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M6 0 L36 20 L66 0 L72 6 L36 28 L0 6 Z" fill="#E55B2D"/>
-        <rect x="30" y="6" width="12" height="12" rx="1" transform="rotate(45 36 12)" fill="#fff"/>
-        <path d="M6 20 L36 40 L66 20 L72 26 L36 48 L0 26 Z" fill="#C0272D"/>
-        <rect x="30" y="26" width="12" height="12" rx="1" transform="rotate(45 36 32)" fill="#fff"/>
-        <path d="M10 46 L36 62 L62 46 L68 52 L36 70 L4 52 Z" fill="#1B2D5B"/>
-      </svg>
+      <img src="/static/pfc-logo.png" alt="PFC" style="height:36px;width:auto;"/>
       <div>
         <div class="modal-dept-title" id="modal-title">Route Planning</div>
         <div class="modal-dept-sub" id="modal-sub">Planners &amp; Logistics Tower</div>
