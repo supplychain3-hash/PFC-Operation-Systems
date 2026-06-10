@@ -5,251 +5,367 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>PFC Operating System</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --navy:#0d2748;
-  --navy2:#1a3a5c;
-  --blue:#2563eb;
-  --blue2:#3b82f6;
-  --green:#16a34a;
-  --amber:#d97706;
+  --orange:#E55B2D;
+  --orange2:#f07040;
+  --red:#C0272D;
+  --red2:#d93030;
+  --navy:#1B2D5B;
+  --navy2:#243a72;
+  --navy3:#0f1e3d;
+  --gray:#6B7280;
   --white:#ffffff;
-  --bg:#f1f5f9;
-  --card:#ffffff;
-  --text:#1e293b;
-  --t2:#64748b;
   --r12:12px;
   --r8:8px;
-  --shadow:0 4px 24px rgba(13,39,72,.13);
-  --shadow-lg:0 16px 48px rgba(13,39,72,.18);
+  --shadow-lg:0 20px 60px rgba(0,0,0,.35);
 }
 body{
   font-family:'Inter',system-ui,sans-serif;
-  background:var(--navy);
+  background:var(--navy3);
   min-height:100vh;
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  padding:24px;
+  padding:32px 24px;
   position:relative;
   overflow:hidden;
 }
 
-/* Background decoration */
+/* ── Background layers ─────────────────────────────────────── */
+.bg-glow{
+  position:fixed;pointer-events:none;
+  border-radius:50%;filter:blur(80px);opacity:.18;
+}
+.bg-glow-1{
+  width:700px;height:700px;
+  background:var(--orange);
+  top:-200px;right:-200px;
+}
+.bg-glow-2{
+  width:600px;height:600px;
+  background:var(--red);
+  bottom:-250px;left:-200px;
+}
+.bg-glow-3{
+  width:400px;height:400px;
+  background:var(--navy2);
+  top:40%;left:40%;
+  opacity:.25;
+}
+/* Subtle grid overlay */
 body::before{
   content:'';
-  position:fixed;
-  top:-200px;right:-200px;
-  width:600px;height:600px;
-  background:radial-gradient(circle,rgba(37,99,235,.25) 0%,transparent 70%);
-  pointer-events:none;
-}
-body::after{
-  content:'';
-  position:fixed;
-  bottom:-200px;left:-200px;
-  width:500px;height:500px;
-  background:radial-gradient(circle,rgba(22,163,74,.15) 0%,transparent 70%);
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:60px 60px;
   pointer-events:none;
 }
 
-/* Brand */
+/* ── Brand section ─────────────────────────────────────────── */
 .brand{
   text-align:center;
-  margin-bottom:48px;
+  margin-bottom:52px;
   position:relative;z-index:1;
 }
-.brand-mark{
-  width:64px;height:64px;
-  background:linear-gradient(135deg,var(--blue2),#1d4ed8);
-  border-radius:18px;
+.logo-wrap{
   display:flex;align-items:center;justify-content:center;
-  font-size:20px;font-weight:800;color:#fff;
-  margin:0 auto 16px;
-  box-shadow:0 8px 24px rgba(37,99,235,.4);
+  gap:22px;margin-bottom:20px;
 }
-.brand-name{
-  font-size:28px;font-weight:800;color:#fff;
-  letter-spacing:-.5px;margin-bottom:4px;
+.logo-svg{
+  flex-shrink:0;
+}
+.logo-text{
+  text-align:left;
+}
+.logo-text-premier{
+  font-size:38px;font-weight:900;
+  color:#fff;
+  letter-spacing:2px;
+  line-height:1;
+  text-transform:uppercase;
+}
+.logo-text-foodchoice{
+  font-size:13.5px;font-weight:600;
+  color:rgba(255,255,255,.45);
+  letter-spacing:5px;
+  text-transform:uppercase;
+  margin-top:4px;
 }
 .brand-sub{
-  font-size:13px;font-weight:500;
-  color:rgba(255,255,255,.5);
-  letter-spacing:.5px;text-transform:uppercase;
+  font-size:11px;font-weight:500;
+  color:rgba(255,255,255,.28);
+  letter-spacing:3px;text-transform:uppercase;
+  margin-top:14px;
 }
 
-/* Department tiles */
+/* ── Department tiles ──────────────────────────────────────── */
 .tiles{
-  display:flex;gap:20px;
+  display:flex;gap:22px;
   position:relative;z-index:1;
   flex-wrap:wrap;justify-content:center;
 }
 .tile{
-  background:rgba(255,255,255,.06);
-  border:1.5px solid rgba(255,255,255,.12);
-  border-radius:20px;
-  padding:36px 40px;
-  width:280px;
+  background:rgba(255,255,255,.055);
+  border:1.5px solid rgba(255,255,255,.09);
+  border-radius:22px;
+  padding:38px 42px;
+  width:290px;
   cursor:pointer;
-  transition:all .2s ease;
+  transition:all .22s ease;
   text-align:center;
-  backdrop-filter:blur(8px);
+  backdrop-filter:blur(12px);
+  position:relative;
+  overflow:hidden;
 }
+.tile::before{
+  content:'';
+  position:absolute;inset:0;
+  border-radius:22px;
+  opacity:0;
+  transition:opacity .22s;
+}
+.tile-routing::before{background:linear-gradient(135deg,rgba(229,91,45,.12),rgba(192,39,45,.08));}
+.tile-onboarding::before{background:linear-gradient(135deg,rgba(27,45,91,.3),rgba(36,58,114,.2));}
+
 .tile:hover{
-  background:rgba(255,255,255,.11);
-  border-color:rgba(255,255,255,.25);
-  transform:translateY(-4px);
-  box-shadow:0 20px 48px rgba(0,0,0,.3);
+  border-color:rgba(255,255,255,.2);
+  transform:translateY(-5px);
+  box-shadow:0 24px 56px rgba(0,0,0,.35);
 }
-.tile-icon{
-  font-size:40px;margin-bottom:16px;
-  display:block;
+.tile:hover::before{opacity:1;}
+
+/* Accent bar at top of tile */
+.tile-accent{
+  position:absolute;top:0;left:0;right:0;
+  height:3px;border-radius:22px 22px 0 0;
+  opacity:0;transition:opacity .22s;
+}
+.tile:hover .tile-accent{opacity:1;}
+.tile-routing .tile-accent{background:linear-gradient(90deg,var(--orange),var(--red));}
+.tile-onboarding .tile-accent{background:linear-gradient(90deg,var(--navy2),var(--orange));}
+
+.tile-icon-wrap{
+  width:64px;height:64px;
+  border-radius:18px;
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 18px;
+  font-size:26px;
+  position:relative;
+}
+.tile-routing .tile-icon-wrap{
+  background:linear-gradient(135deg,rgba(229,91,45,.25),rgba(192,39,45,.2));
+  border:1px solid rgba(229,91,45,.3);
+}
+.tile-onboarding .tile-icon-wrap{
+  background:linear-gradient(135deg,rgba(27,45,91,.5),rgba(36,58,114,.4));
+  border:1px solid rgba(100,130,210,.25);
 }
 .tile-title{
-  font-size:18px;font-weight:700;color:#fff;
+  font-size:17px;font-weight:700;color:#fff;
   margin-bottom:8px;letter-spacing:-.2px;
 }
 .tile-desc{
-  font-size:12px;color:rgba(255,255,255,.5);
-  line-height:1.5;
+  font-size:11.5px;color:rgba(255,255,255,.42);
+  line-height:1.6;
 }
 .tile-btn{
-  margin-top:20px;
+  margin-top:22px;
   display:inline-flex;align-items:center;gap:6px;
+  border-radius:10px;
+  padding:9px 20px;
+  font-size:12px;font-weight:600;
+  font-family:'Inter',sans-serif;
+  transition:all .18s;
+  border:none;cursor:pointer;
+}
+.tile-routing .tile-btn{
+  background:linear-gradient(135deg,var(--orange),var(--red));
+  color:#fff;
+  box-shadow:0 4px 16px rgba(229,91,45,.3);
+}
+.tile-routing:hover .tile-btn{
+  box-shadow:0 6px 20px rgba(229,91,45,.45);
+  transform:translateY(-1px);
+}
+.tile-onboarding .tile-btn{
   background:rgba(255,255,255,.1);
   border:1px solid rgba(255,255,255,.15);
-  border-radius:8px;
-  padding:7px 16px;
-  font-size:12px;font-weight:600;color:rgba(255,255,255,.8);
-  font-family:'Inter',sans-serif;
-  transition:all .15s;
+  color:rgba(255,255,255,.8);
 }
-.tile:hover .tile-btn{
+.tile-onboarding:hover .tile-btn{
   background:rgba(255,255,255,.18);
   color:#fff;
 }
 
-/* Login modal */
+/* ── Login modal ───────────────────────────────────────────── */
 .overlay{
   display:none;
   position:fixed;inset:0;
-  background:rgba(0,0,0,.6);
-  backdrop-filter:blur(4px);
+  background:rgba(0,0,0,.65);
+  backdrop-filter:blur(6px);
   z-index:100;
   align-items:center;justify-content:center;
 }
 .overlay.show{display:flex}
 .modal{
   background:#fff;
-  border-radius:20px;
-  padding:36px;
-  width:100%;max-width:380px;
+  border-radius:22px;
+  padding:38px;
+  width:100%;max-width:390px;
   box-shadow:var(--shadow-lg);
   position:relative;
-  animation:slideUp .2s ease;
+  animation:slideUp .22s ease;
 }
 @keyframes slideUp{
-  from{opacity:0;transform:translateY(16px)}
+  from{opacity:0;transform:translateY(18px)}
   to{opacity:1;transform:translateY(0)}
 }
 .modal-back{
-  position:absolute;top:16px;left:16px;
+  position:absolute;top:18px;left:18px;
   background:none;border:none;
-  font-size:13px;color:var(--t2);
-  cursor:pointer;padding:4px 8px;border-radius:6px;
-  font-family:'Inter',sans-serif;
+  font-size:12px;color:var(--gray);
+  cursor:pointer;padding:5px 9px;border-radius:7px;
+  font-family:'Inter',sans-serif;font-weight:500;
   display:flex;align-items:center;gap:4px;
   transition:background .15s;
 }
 .modal-back:hover{background:#f1f5f9}
-.modal-dept{
+
+/* Mini logo in modal header */
+.modal-brand{
   display:flex;align-items:center;gap:10px;
-  margin-bottom:24px;padding-top:8px;
+  margin-bottom:22px;padding-top:6px;
 }
-.modal-dept-icon{font-size:28px}
+.modal-logo-mini{flex-shrink:0;}
 .modal-dept-title{
-  font-size:17px;font-weight:700;color:var(--navy);
+  font-size:16px;font-weight:800;color:var(--navy3);
   letter-spacing:-.3px;
 }
-.modal-dept-sub{font-size:11px;color:var(--t2);margin-top:2px}
+.modal-dept-sub{font-size:11px;color:var(--gray);margin-top:2px;font-weight:500;}
+
 .field-label{
-  font-size:12px;font-weight:600;color:var(--t2);
-  margin-bottom:6px;display:block;
+  font-size:11.5px;font-weight:600;color:var(--gray);
+  margin-bottom:6px;display:block;letter-spacing:.2px;text-transform:uppercase;
 }
 .field-input{
   width:100%;
-  padding:10px 13px;
+  padding:11px 14px;
   border:1.5px solid #e2e8f0;
   border-radius:var(--r8);
   font-size:14px;font-family:'Inter',sans-serif;
-  color:var(--text);
-  transition:border-color .15s;
+  color:#1e293b;
+  transition:border-color .15s,box-shadow .15s;
   outline:none;
   margin-bottom:14px;
 }
-.field-input:focus{border-color:var(--blue2)}
+.field-input:focus{
+  border-color:var(--orange);
+  box-shadow:0 0 0 3px rgba(229,91,45,.1);
+}
 .login-btn{
-  width:100%;padding:11px;
-  background:var(--navy);
+  width:100%;padding:12px;
+  background:linear-gradient(135deg,var(--orange),var(--red));
   border:none;border-radius:var(--r8);
-  color:#fff;font-size:14px;font-weight:600;
+  color:#fff;font-size:14px;font-weight:700;
   font-family:'Inter',sans-serif;
   cursor:pointer;
-  transition:background .15s;
+  transition:all .15s;
+  letter-spacing:.2px;
+  box-shadow:0 4px 16px rgba(229,91,45,.3);
   margin-top:4px;
 }
-.login-btn:hover{background:var(--navy2)}
-.login-btn:disabled{opacity:.6;cursor:not-allowed}
+.login-btn:hover{
+  box-shadow:0 6px 20px rgba(229,91,45,.45);
+  transform:translateY(-1px);
+}
+.login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;}
 .login-error{
   display:none;
   background:#fef2f2;border:1px solid #fecaca;
   border-radius:var(--r8);padding:9px 12px;
   font-size:12px;color:#dc2626;margin-top:12px;
+  line-height:1.5;
 }
 .login-error.show{display:block}
 
-/* Footer */
+/* ── Footer ────────────────────────────────────────────────── */
 .footer{
   position:fixed;bottom:20px;
-  font-size:11px;color:rgba(255,255,255,.25);
-  z-index:1;
+  font-size:11px;color:rgba(255,255,255,.2);
+  z-index:1;letter-spacing:.5px;
 }
 </style>
 </head>
 <body>
 
+<!-- Background glows -->
+<div class="bg-glow bg-glow-1"></div>
+<div class="bg-glow bg-glow-2"></div>
+<div class="bg-glow bg-glow-3"></div>
+
+<!-- Brand -->
 <div class="brand">
-  <div class="brand-mark">PFC</div>
-  <div class="brand-name">Premier Food Choice</div>
-  <div class="brand-sub">Operating System</div>
+  <div class="logo-wrap">
+    <!-- PFC chevron mark — SVG recreation -->
+    <svg class="logo-svg" width="72" height="80" viewBox="0 0 72 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Orange chevron (top) -->
+      <path d="M6 0 L36 20 L66 0 L72 6 L36 28 L0 6 Z" fill="#E55B2D"/>
+      <!-- Orange diamond cutout -->
+      <rect x="30" y="6" width="12" height="12" rx="1" transform="rotate(45 36 12)" fill="#0f1e3d"/>
+      <!-- Red chevron (middle) -->
+      <path d="M6 20 L36 40 L66 20 L72 26 L36 48 L0 26 Z" fill="#C0272D"/>
+      <!-- Red diamond cutout -->
+      <rect x="30" y="26" width="12" height="12" rx="1" transform="rotate(45 36 32)" fill="#0f1e3d"/>
+      <!-- Navy chevron (bottom) -->
+      <path d="M10 46 L36 62 L62 46 L68 52 L36 70 L4 52 Z" fill="#1B2D5B"/>
+    </svg>
+    <div class="logo-text">
+      <div class="logo-text-premier">Premier</div>
+      <div class="logo-text-foodchoice">Food Choice</div>
+    </div>
+  </div>
+  <div class="brand-sub">Operating System &nbsp;·&nbsp; v2.0</div>
 </div>
 
+<!-- Department tiles -->
 <div class="tiles">
-  <div class="tile" onclick="openLogin('routing')">
-    <span class="tile-icon">🚚</span>
+  <div class="tile tile-routing" onclick="openLogin('routing')">
+    <div class="tile-accent"></div>
+    <div class="tile-icon-wrap">🚚</div>
     <div class="tile-title">Route Planning</div>
     <div class="tile-desc">Operations team<br>Planners &amp; Logistics Tower</div>
     <div class="tile-btn">Sign In &rarr;</div>
   </div>
-  <div class="tile" onclick="openLogin('onboarding')">
-    <span class="tile-icon">📋</span>
+  <div class="tile tile-onboarding" onclick="openLogin('onboarding')">
+    <div class="tile-accent"></div>
+    <div class="tile-icon-wrap">📋</div>
     <div class="tile-title">Client Onboarding</div>
     <div class="tile-desc">Sales &middot; Accounting<br>Supervisors</div>
     <div class="tile-btn">Sign In &rarr;</div>
   </div>
 </div>
 
-<div class="footer">Premier Food Choice &copy; 2026</div>
+<div class="footer">Premier Food Choice &copy; 2026 &nbsp;&nbsp;|&nbsp;&nbsp; All rights reserved</div>
 
 <!-- Login Modal -->
 <div class="overlay" id="login-overlay">
   <div class="modal">
     <button class="modal-back" onclick="closeLogin()">&#8592; Back</button>
-    <div class="modal-dept">
-      <div class="modal-dept-icon" id="modal-icon">🚚</div>
+    <div class="modal-brand">
+      <!-- Mini chevron logo -->
+      <svg class="modal-logo-mini" width="32" height="36" viewBox="0 0 72 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M6 0 L36 20 L66 0 L72 6 L36 28 L0 6 Z" fill="#E55B2D"/>
+        <rect x="30" y="6" width="12" height="12" rx="1" transform="rotate(45 36 12)" fill="#fff"/>
+        <path d="M6 20 L36 40 L66 20 L72 26 L36 48 L0 26 Z" fill="#C0272D"/>
+        <rect x="30" y="26" width="12" height="12" rx="1" transform="rotate(45 36 32)" fill="#fff"/>
+        <path d="M10 46 L36 62 L62 46 L68 52 L36 70 L4 52 Z" fill="#1B2D5B"/>
+      </svg>
       <div>
         <div class="modal-dept-title" id="modal-title">Route Planning</div>
         <div class="modal-dept-sub" id="modal-sub">Planners &amp; Logistics Tower</div>
@@ -275,14 +391,13 @@ body::after{
 var _dept = 'routing';
 
 var DEPT_META = {
-  routing:    { icon:'🚚', title:'Route Planning',    sub:'Planners & Logistics Tower',     roles:['planner','tower'],                    dest:'/routing' },
-  onboarding: { icon:'📋', title:'Client Onboarding', sub:'Sales · Accounting · Supervisors', roles:['sales','accounting','supervisor'],    dest:'/onboarding' }
+  routing:    { title:'Route Planning',    sub:'Planners & Logistics Tower',      roles:['planner','tower'],                 dest:'/routing' },
+  onboarding: { title:'Client Onboarding', sub:'Sales · Accounting · Supervisors', roles:['sales','accounting','supervisor'], dest:'/onboarding' }
 };
 
 function openLogin(dept) {
   _dept = dept;
   var m = DEPT_META[dept];
-  document.getElementById('modal-icon').textContent  = m.icon;
   document.getElementById('modal-title').textContent = m.title;
   document.getElementById('modal-sub').textContent   = m.sub;
   document.getElementById('login-username').value = '';
@@ -298,7 +413,6 @@ function closeLogin() {
   document.getElementById('login-overlay').className = 'overlay';
 }
 
-// Close overlay on backdrop click
 document.getElementById('login-overlay').addEventListener('click', function(e) {
   if (e.target === this) closeLogin();
 });
@@ -332,11 +446,9 @@ function doLogin() {
     clearTimeout(wakeTimer);
     btn.disabled = false;
     btn.textContent = 'Sign In →';
-
     if (d.ok) {
       var m = DEPT_META[_dept];
       if (m.roles.indexOf(d.role) === -1) {
-        // Wrong department tile
         var correctDept = (d.role === 'planner' || d.role === 'tower') ? 'Route Planning' : 'Client Onboarding';
         errEl.textContent = 'This account belongs to the ' + correctDept + ' department. Please go back and select the correct system.';
         errEl.className = 'login-error show';
@@ -360,7 +472,7 @@ function doLogin() {
   });
 }
 
-// Check if already logged in — redirect to correct system
+// Auto-redirect if already logged in
 fetch('/api/me').then(function(r){ return r.json(); }).then(function(d) {
   if (d.authenticated) {
     var role = d.role;
