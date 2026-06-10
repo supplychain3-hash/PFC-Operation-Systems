@@ -482,7 +482,7 @@ input.mon-inp:focus,select.mon-sel:focus{outline:none;border-color:var(--orange)
 <div id="login-overlay" style="display:flex;position:fixed;inset:0;z-index:9999;background:rgba(10,25,48,0.97);align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:14px;padding:42px 38px;width:390px;max-width:95vw;box-shadow:0 8px 48px rgba(0,0,0,.55);text-align:center">
     <div style="font-size:2.5rem;margin-bottom:6px">&#x1F69A;</div>
-    <div style="font-size:1.4rem;font-weight:700;color:#0d2748;margin-bottom:4px">PFC Logistics System</div>
+    <div style="font-size:1.4rem;font-weight:700;color:#0d2748;margin-bottom:4px">PFC Operating System</div>
     <div style="font-size:.85rem;color:#888;margin-bottom:14px">Sign in to access the routing system</div>
     <div id="login-wake-hint" style="font-size:.75rem;color:#f59e0b;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:7px 11px;margin-bottom:16px;display:none">
       ⏳ Server is waking up from sleep — this can take up to 60 seconds on first load. Please wait…
@@ -5876,12 +5876,4 @@ function exportPodSummaryCSV() {
   var data = [header].concat(_podSummaryRows.map(function(r){
     var late    = r.returned - r.ontime;
     var pending = r.total    - r.returned;
-    return [r.label||r.date||'', r.total||0, r.returned||0,
-            r.ontime||0, late||0, pending||0, r.compliance_pct||0];
-  }));
-  _downloadCSV(data, 'PFC_POD_Summary_'+new Date().toISOString().slice(0,10)+'.csv');
-}
-
-</script>
-</body>
-</html>
+    return [r.label||r.date||'', r
