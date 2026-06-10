@@ -317,10 +317,7 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--s2)}
   </div>
   <div class="topbar-r">
     <div class="pill-live"><div class="ldot"></div>System Live</div>
-    <!-- GDrive button removed -->
-    <button onclick="NOOP" style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:var(--r8);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.18)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">
-      ⚙ Google Drive &amp; Sheet Setup
-    </button>
+
     <div class="uchip">
       <div class="uav" id="user-av">?</div>
       <div><div class="uname" id="user-name">Loading…</div><div class="urole" id="user-role"></div></div>
@@ -328,34 +325,6 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--s2)}
     <button onclick="doLogout()" style="padding:5px 12px;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:var(--r8);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif">Sign Out</button>
   </div>
 </header>
-
-
-    <div class="backend-info">
-      <div class="backend-label">Google Sheet</div>
-      <div class="backend-value" id="be-sheet-val">Not connected</div>
-    </div>
-    <span class="backend-status bs-no" id="be-sheet-st">—</span>
-  </div>
-  <div class="backend-card">
-    <div class="backend-icon" style="background:#F0FDF4">📂</div>
-    <div class="backend-info">
-      <div class="backend-label">Google Drive folder</div>
-      <div class="backend-value" id="be-drive-val">Not connected</div>
-    </div>
-    <span class="backend-status bs-no" id="be-drive-st">—</span>
-  </div>
-  <div class="backend-card">
-    <div class="backend-icon" style="background:#F5F3FF">📄</div>
-    <div class="backend-info">
-      <div class="backend-label">Documents uploaded this session</div>
-      <div class="backend-value" id="be-docs-val">0 files</div>
-    </div>
-    <span class="backend-status bs-no" id="be-docs-st">—</span>
-  </div>
-  <div style="display:flex;align-items:center;padding:0 16px">
-    <button class="btn btn-gh btn-sm" onclick="toggleSettings()">⚙ Settings</button>
-  </div>
-</div>
 <!-- NAVBAR -->
 <nav class="navbar">
   <div class="ntab on" onclick="showTab('dashboard')">📊 Dashboard</div>
@@ -629,7 +598,7 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--s2)}
     <div class="card">
       <div class="shd"><div class="snb">7</div><div><div class="st">Document Upload</div><div class="ss">Attach all accreditation requirements — 6 required + optional supporting documents</div></div></div>
       <div class="info-b amber"><span>⚠️</span><span><strong>Minimum accreditation requirements:</strong> CIS, SEC/DTI Registration, Mayor's Permit, BIR Form 2303, FDA LTO, and Government ID. Files are stored in localStorage until approval.</span></div>
-      <div class="info-b blue"><span>📂</span><span><strong>Google Drive backend:</strong> When you approve a client and Google Sheet sync is active, all documents are automatically uploaded to <strong>My Drive / PFC Client Documents / [REG_ID — Client Name]</strong>. The folder URL will appear in your Google Sheet under the <em>Drive Folder URL</em> column — copy it to the 📁 Documents button in the Approval Queue to link it directly.</span></div>
+      
       <div class="doc-list" id="doc-list"></div>
     </div>
   </div>
@@ -784,7 +753,7 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--s2)}
 </div></div>
 <div class="modal-bg" id="update-modal"><div class="mbox wide">
   <div class="mtitle">Update client information</div>
-  <div class="msub">Apply changes to client record. All updates are logged with timestamp and synced to Google Sheet.</div>
+  <div class="msub">Apply changes to client record. All updates are logged with timestamp.</div>
   <input type="hidden" id="upd-id">
   <div style="background:var(--lnavy);border-radius:var(--r8);padding:9px 14px;margin-bottom:14px">
     <div style="font-size:13px;font-weight:600;color:var(--navy)" id="upd-name">—</div>
@@ -865,24 +834,6 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--s2)}
       </div>
       <button class="btn btn-gh btn-sm" onclick="document.getElementById('docs-modal').classList.remove('on')">✕ Close</button>
     </div>
-    <!-- Drive Folder Link -->
-    <div style="background:var(--lg);border:1px solid var(--bg2);border-radius:var(--r10);padding:14px 16px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.3px">📂 Google Drive Folder</div>
-        <span class="pill ok" id="docs-drive-status" style="font-size:10px">Not synced yet</span>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" id="docs-drive-url" placeholder="Paste Google Drive folder URL here after syncing to Sheet..."
-          style="flex:1;padding:9px 12px;border:1.5px solid var(--bg2);border-radius:var(--r8);font-family:'Inter',sans-serif;font-size:12px;outline:none;color:var(--text);background:#fff">
-        <button class="btn btn-g btn-sm" onclick="saveDriveFolderUrl()">Save URL</button>
-        <a id="docs-drive-open" href="#" target="_blank" style="display:none">
-          <button class="btn btn-t btn-sm" type="button">🔗 Open in Drive</button>
-        </a>
-      </div>
-      <div style="font-size:10px;color:var(--green);margin-top:7px;line-height:1.5">
-        After approving this client, go to your Google Sheet → the <strong>Drive Folder URL</strong> column contains the link. Copy and paste it here. The folder contains all uploaded accreditation documents.
-      </div>
-    </div>
     <!-- Documents List -->
     <div>
       <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px">Attached documents</div>
@@ -896,104 +847,6 @@ tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--s2)}
 </div>
 
 
-<!-- ══ GOOGLE DRIVE & SHEET SETUP MODAL ════════════════════════════════════ -->
-<div class="modal-bg" id="setup-modal">
-  <div class="mbox" style="max-width:580px">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-      <div style="width:44px;height:44px;border-radius:var(--r10);background:linear-gradient(135deg,#1a73e8,#0d9488);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">⚙</div>
-      <div>
-        <div class="mtitle" style="margin-bottom:0">Google Drive & Sheet Setup</div>
-        <div style="font-size:12px;color:var(--t3);margin-top:3px">Connect once — files go to Drive automatically, clients appear in your Sheet</div>
-      </div>
-    </div>
-
-    <!-- STATUS INDICATORS -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
-      <div id="setup-sheet-card" style="padding:12px 14px;border-radius:var(--r10);border:1.5px solid var(--border);background:var(--s2)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="font-size:18px">📊</span>
-          <span style="font-size:11px;font-weight:700;color:var(--t2)">Google Sheet</span>
-          <span id="setup-sheet-pill" style="margin-left:auto;font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--s3);color:var(--t3)">Not connected</span>
-        </div>
-        <div id="setup-sheet-info" style="font-size:11px;color:var(--t3)">Approved clients will be written here automatically</div>
-        <a id="setup-sheet-link" href="#" target="_blank" style="display:none;font-size:11px;color:var(--blue2);text-decoration:none;margin-top:4px;display:none">🔗 Open Google Sheet</a>
-      </div>
-      <div id="setup-drive-card" style="padding:12px 14px;border-radius:var(--r10);border:1.5px solid var(--border);background:var(--s2)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <span style="font-size:18px">📂</span>
-          <span style="font-size:11px;font-weight:700;color:var(--t2)">Google Drive</span>
-          <span id="setup-drive-pill" style="margin-left:auto;font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--s3);color:var(--t3)">Not connected</span>
-        </div>
-        <div id="setup-drive-info" style="font-size:11px;color:var(--t3)">Uploaded documents go here, organized per client</div>
-        <a id="setup-drive-link" href="#" target="_blank" style="display:none;font-size:11px;color:var(--blue2);text-decoration:none;margin-top:4px">🔗 Open Drive folder</a>
-      </div>
-    </div>
-
-    <!-- STEP BY STEP INSTRUCTIONS -->
-    <div style="background:var(--lnavy);border-radius:var(--r10);padding:16px;margin-bottom:18px">
-      <div style="font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:12px">One-time setup — 5 minutes</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
-          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
-          <div>Go to <a href="https://sheets.google.com" target="_blank" style="color:var(--blue2)">sheets.google.com</a> → create a new blank spreadsheet → name it <strong>PFC Onboarding</strong></div>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
-          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
-          <div>Inside that Sheet → click <strong>Extensions</strong> → <strong>Apps Script</strong> → delete all code → paste the entire <strong>PFC_GoogleAppsScript_v3.js</strong> file → click Save</div>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
-          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
-          <div>Click <strong>Deploy → New deployment</strong> → Type: <strong>Web App</strong> → Execute as: <strong>Me</strong> → Who has access: <strong>Anyone within Premier Food Choice International Corp.</strong> → click <strong>Deploy</strong> → Authorize with your PFC Google account</div>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
-          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">4</div>
-          <div>Copy the <strong>Web App URL</strong> → paste it below → click <strong>Verify in browser →</strong> to open it in a new tab</div>
-        </div>
-        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
-          <div style="width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">5</div>
-          <div>From the JSON response that opens, copy the <strong>driveRootUrl</strong> and <strong>sheetUrl</strong> values → paste them in the fields below → click <strong>Save & activate</strong></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- URL INPUT -->
-    <div style="margin-bottom:16px">
-      <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Web App URL</div>
-      <div style="font-size:11px;color:var(--amber);background:var(--la);border:1px solid var(--ba);border-radius:var(--r6);padding:7px 11px;margin-bottom:8px;display:flex;align-items:flex-start;gap:6px">
-        <span>⚠️</span>
-        <span><strong>Note:</strong> Because this is a local HTML file, the browser cannot auto-test your connection. Click <strong>Verify in browser →</strong> to open your Web App URL in a new tab — if it shows <em>status: ok</em> JSON, it works. Data uploads happen silently in the background.</span>
-      </div>
-      <div style="display:flex;gap:8px">
-        <input type="text" id="setup-url-input" placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
-          style="flex:1;padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--r8);font-family:'Inter',sans-serif;font-size:12px;outline:none;color:var(--text)"
-          oninput="this.style.borderColor='var(--border)'"
-          value="">
-        <button class="btn btn-n" onclick="connectBackend()" id="setup-connect-btn">Verify in browser →</button>
-      </div>
-      <div id="setup-test-result" style="font-size:11px;margin-top:8px;min-height:16px;color:var(--t3)">Paste your Web App URL above then click Connect & test</div>
-    </div>
-
-    <!-- Drive + Sheet URL fields -->
-    
-
-    <!-- Step 5: paste URLs from JSON -->
-    <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r10);padding:12px;margin-bottom:12px">
-      <div style="font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Step 5 — Paste these from the JSON tab</div>
-      <div style="margin-bottom:8px">
-        <div style="font-size:10px;color:var(--t3);margin-bottom:3px">📊 sheetUrl → Google Sheet link</div>
-        <input type="text" id="setup-sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r6);font-family:'Inter',sans-serif;font-size:11px;outline:none;color:var(--text)">
-      </div>
-      <div>
-        <div style="font-size:10px;color:var(--t3);margin-bottom:3px">📂 driveRootUrl → Drive folder link</div>
-        <input type="text" id="setup-drive-url-input" placeholder="https://drive.google.com/drive/folders/..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r6);font-family:'Inter',sans-serif;font-size:11px;outline:none;color:var(--text)">
-      </div>
-    </div>
-    <div style="display:flex;gap:10px">
-      <button class="btn btn-gh" style="flex:1" onclick="document.getElementById('setup-modal').classList.remove('on')">Close</button>
-      <button class="btn btn-g" style="flex:1" id="setup-save-btn" onclick="finalizeSetup()">✓ Save & activate</button>
-    </div>
-  </div>
-</div>
 
 <div class="toast" id="toast"><span id="toast-msg"></span></div>
 

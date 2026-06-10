@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>PFC Operating System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0d2748;
+  --navy2:#1a3a5c;
+  --blue:#2563eb;
+  --blue2:#3b82f6;
+  --green:#16a34a;
+  --amber:#d97706;
+  --white:#ffffff;
+  --bg:#f1f5f9;
+  --card:#ffffff;
+  --text:#1e293b;
+  --t2:#64748b;
+  --r12:12px;
+  --r8:8px;
+  --shadow:0 4px 24px rgba(13,39,72,.13);
+  --shadow-lg:0 16px 48px rgba(13,39,72,.18);
+}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:var(--navy);
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  position:relative;
+  overflow:hidden;
+}
+
+/* Background decoration */
+body::before{
+  content:'';
+  position:fixed;
+  top:-200px;right:-200px;
+  width:600px;height:600px;
+  background:radial-gradient(circle,rgba(37,99,235,.25) 0%,transparent 70%);
+  pointer-events:none;
+}
+body::after{
+  content:'';
+  position:fixed;
+  bottom:-200px;left:-200px;
+  width:500px;height:500px;
+  background:radial-gradient(circle,rgba(22,163,74,.15) 0%,transparent 70%);
+  pointer-events:none;
+}
+
+/* Brand */
+.brand{
+  text-align:center;
+  margin-bottom:48px;
+  position:relative;z-index:1;
+}
+.brand-mark{
+  width:64px;height:64px;
+  background:linear-gradient(135deg,var(--blue2),#1d4ed8);
+  border-radius:18px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;font-weight:800;color:#fff;
+  margin:0 auto 16px;
+  box-shadow:0 8px 24px rgba(37,99,235,.4);
+}
+.brand-name{
+  font-size:28px;font-weight:800;color:#fff;
+  letter-spacing:-.5px;margin-bottom:4px;
+}
+.brand-sub{
+  font-size:13px;font-weight:500;
+  color:rgba(255,255,255,.5);
+  letter-spacing:.5px;text-transform:uppercase;
+}
+
+/* Department tiles */
+.tiles{
+  display:flex;gap:20px;
+  position:relative;z-index:1;
+  flex-wrap:wrap;justify-content:center;
+}
+.tile{
+  background:rgba(255,255,255,.06);
+  border:1.5px solid rgba(255,255,255,.12);
+  border-radius:20px;
+  padding:36px 40px;
+  width:280px;
+  cursor:pointer;
+  transition:all .2s ease;
+  text-align:center;
+  backdrop-filter:blur(8px);
+}
+.tile:hover{
+  background:rgba(255,255,255,.11);
+  border-color:rgba(255,255,255,.25);
+  transform:translateY(-4px);
+  box-shadow:0 20px 48px rgba(0,0,0,.3);
+}
+.tile-icon{
+  font-size:40px;margin-bottom:16px;
+  display:block;
+}
+.tile-title{
+  font-size:18px;font-weight:700;color:#fff;
+  margin-bottom:8px;letter-spacing:-.2px;
+}
+.tile-desc{
+  font-size:12px;color:rgba(255,255,255,.5);
+  line-height:1.5;
+}
+.tile-btn{
+  margin-top:20px;
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:8px;
+  padding:7px 16px;
+  font-size:12px;font-weight:600;color:rgba(255,255,255,.8);
+  font-family:'Inter',sans-serif;
+  transition:all .15s;
+}
+.tile:hover .tile-btn{
+  background:rgba(255,255,255,.18);
+  color:#fff;
+}
+
+/* Login modal */
+.overlay{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.6);
+  backdrop-filter:blur(4px);
+  z-index:100;
+  align-items:center;justify-content:center;
+}
+.overlay.show{display:flex}
+.modal{
+  background:#fff;
+  border-radius:20px;
+  padding:36px;
+  width:100%;max-width:380px;
+  box-shadow:var(--shadow-lg);
+  position:relative;
+  animation:slideUp .2s ease;
+}
+@keyframes slideUp{
+  from{opacity:0;transform:translateY(16px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.modal-back{
+  position:absolute;top:16px;left:16px;
+  background:none;border:none;
+  font-size:13px;color:var(--t2);
+  cursor:pointer;padding:4px 8px;border-radius:6px;
+  font-family:'Inter',sans-serif;
+  display:flex;align-items:center;gap:4px;
+  transition:background .15s;
+}
+.modal-back:hover{background:#f1f5f9}
+.modal-dept{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:24px;padding-top:8px;
+}
+.modal-dept-icon{font-size:28px}
+.modal-dept-title{
+  font-size:17px;font-weight:700;color:var(--navy);
+  letter-spacing:-.3px;
+}
+.modal-dept-sub{font-size:11px;color:var(--t2);margin-top:2px}
+.field-label{
+  font-size:12px;font-weight:600;color:var(--t2);
+  margin-bottom:6px;display:block;
+}
+.field-input{
+  width:100%;
+  padding:10px 13px;
+  border:1.5px solid #e2e8f0;
+  border-radius:var(--r8);
+  font-size:14px;font-family:'Inter',sans-serif;
+  color:var(--text);
+  transition:border-color .15s;
+  outline:none;
+  margin-bottom:14px;
+}
+.field-input:focus{border-color:var(--blue2)}
+.login-btn{
+  width:100%;padding:11px;
+  background:var(--navy);
+  border:none;border-radius:var(--r8);
+  color:#fff;font-size:14px;font-weight:600;
+  font-family:'Inter',sans-serif;
+  cursor:pointer;
+  transition:background .15s;
+  margin-top:4px;
+}
+.login-btn:hover{background:var(--navy2)}
+.login-btn:disabled{opacity:.6;cursor:not-allowed}
+.login-error{
+  display:none;
+  background:#fef2f2;border:1px solid #fecaca;
+  border-radius:var(--r8);padding:9px 12px;
+  font-size:12px;color:#dc2626;margin-top:12px;
+}
+.login-error.show{display:block}
+
+/* Footer */
+.footer{
+  position:fixed;bottom:20px;
+  font-size:11px;color:rgba(255,255,255,.25);
+  z-index:1;
+}
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <div class="brand-mark">PFC</div>
+  <div class="brand-name">Premier Food Choice</div>
+  <div class="brand-sub">Operating System</div>
+</div>
+
+<div class="tiles">
+  <div class="tile" onclick="openLogin('routing')">
+    <span class="tile-icon">🚚</span>
+    <div class="tile-title">Route Planning</div>
+    <div class="tile-desc">Operations team<br>Planners &amp; Logistics Tower</div>
+    <div class="tile-btn">Sign In &rarr;</div>
+  </div>
+  <div class="tile" onclick="openLogin('onboarding')">
+    <span class="tile-icon">📋</span>
+    <div class="tile-title">Client Onboarding</div>
+    <div class="tile-desc">Sales &middot; Accounting<br>Supervisors</div>
+    <div class="tile-btn">Sign In &rarr;</div>
+  </div>
+</div>
+
+<div class="footer">Premier Food Choice &copy; 2026</div>
+
+<!-- Login Modal -->
+<div class="overlay" id="login-overlay">
+  <div class="modal">
+    <button class="modal-back" onclick="closeLogin()">&#8592; Back</button>
+    <div class="modal-dept">
+      <div class="modal-dept-icon" id="modal-icon">🚚</div>
+      <div>
+        <div class="modal-dept-title" id="modal-title">Route Planning</div>
+        <div class="modal-dept-sub" id="modal-sub">Planners &amp; Logistics Tower</div>
+      </div>
+    </div>
+
+    <label class="field-label">Username</label>
+    <input class="field-input" type="text" id="login-username"
+           placeholder="Enter your username"
+           onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()"/>
+
+    <label class="field-label">Password</label>
+    <input class="field-input" type="password" id="login-password"
+           placeholder="Enter your password"
+           onkeydown="if(event.key==='Enter')doLogin()"/>
+
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In &rarr;</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<script>
+var _dept = 'routing';
+
+var DEPT_META = {
+  routing:    { icon:'🚚', title:'Route Planning',    sub:'Planners & Logistics Tower',     roles:['planner','tower'],                    dest:'/routing' },
+  onboarding: { icon:'📋', title:'Client Onboarding', sub:'Sales · Accounting · Supervisors', roles:['sales','accounting','supervisor'],    dest:'/onboarding' }
+};
+
+function openLogin(dept) {
+  _dept = dept;
+  var m = DEPT_META[dept];
+  document.getElementById('modal-icon').textContent  = m.icon;
+  document.getElementById('modal-title').textContent = m.title;
+  document.getElementById('modal-sub').textContent   = m.sub;
+  document.getElementById('login-username').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-error').className = 'login-error';
+  document.getElementById('login-btn').disabled = false;
+  document.getElementById('login-btn').textContent = 'Sign In →';
+  document.getElementById('login-overlay').className = 'overlay show';
+  setTimeout(function(){ document.getElementById('login-username').focus(); }, 80);
+}
+
+function closeLogin() {
+  document.getElementById('login-overlay').className = 'overlay';
+}
+
+// Close overlay on backdrop click
+document.getElementById('login-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeLogin();
+});
+
+function doLogin() {
+  var username = (document.getElementById('login-username').value || '').trim();
+  var password = (document.getElementById('login-password').value || '').trim();
+  var errEl = document.getElementById('login-error');
+  var btn   = document.getElementById('login-btn');
+
+  errEl.className = 'login-error';
+  if (!username || !password) {
+    errEl.textContent = 'Please enter your username and password.';
+    errEl.className = 'login-error show'; return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+
+  var wakeTimer = setTimeout(function(){
+    if (btn.disabled) btn.textContent = 'Waking up server… (30s)';
+  }, 4000);
+
+  fetch('/api/login', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username:username, password:password})
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    clearTimeout(wakeTimer);
+    btn.disabled = false;
+    btn.textContent = 'Sign In →';
+
+    if (d.ok) {
+      var m = DEPT_META[_dept];
+      if (m.roles.indexOf(d.role) === -1) {
+        // Wrong department tile
+        var correctDept = (d.role === 'planner' || d.role === 'tower') ? 'Route Planning' : 'Client Onboarding';
+        errEl.textContent = 'This account belongs to the ' + correctDept + ' department. Please go back and select the correct system.';
+        errEl.className = 'login-error show';
+        document.getElementById('login-password').value = '';
+        return;
+      }
+      window.location.href = m.dest;
+    } else {
+      errEl.textContent = d.error || 'Invalid username or password.';
+      errEl.className = 'login-error show';
+      document.getElementById('login-password').value = '';
+      document.getElementById('login-password').focus();
+    }
+  })
+  .catch(function() {
+    clearTimeout(wakeTimer);
+    btn.disabled = false;
+    btn.textContent = 'Sign In →';
+    errEl.textContent = 'Connection error — server may be starting up. Wait 30 seconds and try again.';
+    errEl.className = 'login-error show';
+  });
+}
+
+// Check if already logged in — redirect to correct system
+fetch('/api/me').then(function(r){ return r.json(); }).then(function(d) {
+  if (d.authenticated) {
+    var role = d.role;
+    if (role === 'planner' || role === 'tower') { window.location.href = '/routing'; return; }
+    if (role === 'sales' || role === 'accounting' || role === 'supervisor') { window.location.href = '/onboarding'; return; }
+  }
+}).catch(function(){});
+</script>
+</body>
+</html>

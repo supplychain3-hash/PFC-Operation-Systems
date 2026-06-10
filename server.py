@@ -79,7 +79,7 @@ _ROUTING_ONLY_APIS = {'/api/upload', '/api/run-routing', '/api/merge-orders',
 def _check_auth():
     if request.path in _AUTH_EXEMPT:
         return None
-    if request.path in ('/', '/onboarding') or not request.path.startswith('/api/'):
+    if request.path in ('/', '/routing', '/onboarding') or not request.path.startswith('/api/'):
         return None
     if not session.get('username'):
         return jsonify({'error': 'Not authenticated', 'login_required': True}), 401
@@ -1183,6 +1183,10 @@ def init_db():
 #  FLASK ROUTES — Core
 # ─────────────────────────────────────────────────────────────
 @app.route('/')
+def landing():
+    return render_template('landing.html')
+
+@app.route('/routing')
 def index():
     return render_template('index.html')
 

@@ -1693,13 +1693,7 @@ function doLogin() {
 
 function doLogout() {
   fetch('/api/logout', {method:'POST'}).then(() => {
-    currentPlan = []; currentRouter = 'default'; currentRole = 'planner';
-    document.getElementById('user-avatar').textContent   = '?';
-    document.getElementById('user-name-lbl').textContent = 'Not signed in';
-    document.getElementById('user-role-lbl').textContent = 'click to sign in';
-    const lb = document.getElementById('logout-btn'); if (lb) lb.style.display = 'none';
-    const pb = document.getElementById('nav-plan-btn'); if (pb) pb.style.display = '';
-    showLoginOverlay();
+    window.location.href = '/';
   });
 }
 
