@@ -106,8 +106,10 @@ body::before{
   opacity:0;
   transition:opacity .22s;
 }
-.tile-routing::before{background:linear-gradient(135deg,rgba(229,91,45,.12),rgba(192,39,45,.08));}
+.tile-routing::before{background:linear-gradient(135deg,rgba(229,91,45,.14),rgba(192,39,45,.1));}
+.tile-routing{border-color:rgba(229,91,45,.25);}
 .tile-onboarding::before{background:linear-gradient(135deg,rgba(27,45,91,.3),rgba(36,58,114,.2));}
+.tile-onboarding{border-color:rgba(27,45,91,.5);}
 
 .tile:hover{
   border-color:rgba(255,255,255,.2);
@@ -261,6 +263,7 @@ body::before{
   transform:translateY(-1px);
 }
 .login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+
 .login-error{
   display:none;
   background:#fef2f2;border:1px solid #fecaca;
@@ -287,10 +290,21 @@ body::before{
 
 <!-- Brand -->
 <div class="brand">
-  <!-- Real PFC logo (transparent PNG) -->
-  <img src="/static/pfc-logo.png" alt="Premier Food Choice"
-       style="display:block;margin:0 auto 8px;height:120px;width:auto;"/>
-  <div class="brand-sub" style="font-size:14px;letter-spacing:4px;">Operating System</div>
+  <!-- Icon flanked by accent lines -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:24px;">
+    <div style="flex:1;max-width:100px;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.2));"></div>
+    <img src="/static/pfc-icon.png" alt="PFC" style="height:140px;width:auto;display:block;flex-shrink:0;"/>
+    <div style="flex:1;max-width:100px;height:1px;background:linear-gradient(270deg,transparent,rgba(255,255,255,.2));"></div>
+  </div>
+  <!-- Massive headline -->
+  <div style="font-size:clamp(60px,11vw,110px);font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:8px;line-height:1;margin-bottom:8px;">PREMIER</div>
+  <div style="font-size:clamp(32px,5.5vw,58px);font-weight:700;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:12px;margin-bottom:22px;">FOOD CHOICE</div>
+  <!-- Accent lines + subtitle -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:14px;">
+    <div style="width:36px;height:2px;background:var(--orange);border-radius:1px;"></div>
+    <div class="brand-sub" style="margin-top:0;font-size:11px;letter-spacing:4px;">Operating System</div>
+    <div style="width:36px;height:2px;background:var(--red);border-radius:1px;"></div>
+  </div>
 </div>
 
 <!-- Department tiles -->
