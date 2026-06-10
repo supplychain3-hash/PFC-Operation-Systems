@@ -3755,6 +3755,25 @@ def client_master_stats():
     return jsonify({'total': total, 'pickup': pickup_ct, 'no_coords': no_coords,
                     'areas': areas, 'pending_submissions': pending_sub})
 
+@app.route('/api/client-master/no-coords', methods=['GET'])
+def get_client_no_coords():
+    """Return records missing latitude/longitude — used by Fix Missing Coords tool."""
+    limit  = min(int(request.args.get('limit') or 50), 200)
+    offset = int(request.args.get('offset') or 0)
+    conn = open_db(); c = conn.cursor()
+    total = c.execute(
+        "SELECT COUNT(*) FROM client_master WHERE (latitude IS NULL OR latitude='') AND active=1"
+    ).fetchone()[0]
+    rows = c.execute(
+        "SELECT id, client_name, address1, address2, city, province, zip_code "
+        "FROM client_master WHERE (latitude IS NULL OR latitude='') AND active=1 "
+        "ORDER BY id LIMIT ? OFFSET ?",
+        (limit, offset)
+    ).fetchall()
+    cols = [d[0] for d in c.description]
+    conn.close()
+    return jsonify({'records': [dict(zip(cols, r)) for r in rows], 'total': total})
+
 # ── CLIENT SUBMISSIONS (CIS) ──────────────────────────────────────────────
 
 @app.route('/api/client-submissions', methods=['GET'])
