@@ -1617,6 +1617,11 @@ document.addEventListener('DOMContentLoaded', () => {
     clearTimeout(_pageWakeTimer);
     const h = document.getElementById('login-wake-hint'); if(h) h.style.display='none';
     if (d.authenticated) {
+      // Onboarding roles don't belong on the routing tool — send them home
+      if (['sales','accounting','supervisor'].includes(d.role)) {
+        window.location.href = '/onboarding'; return;
+      }
+      document.getElementById('login-overlay').style.display = 'none';
       applyUser(d.display, d.role);
       fetch('/api/get-plan?router=' + encodeURIComponent(currentRouter) + '&date=' + encodeURIComponent(currentDeliveryDate))
         .then(r=>r.json()).then(pd=>{

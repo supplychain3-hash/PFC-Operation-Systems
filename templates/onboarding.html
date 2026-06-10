@@ -894,7 +894,7 @@ async function checkAuth(){
     if(av)av.textContent=(d.display||'?')[0].toUpperCase();
     if(un)un.textContent=d.display||'Unknown';
     if(ur)ur.textContent=d.role||'';
-    if(d.role==='planner'){window.location.href='/';return false;}
+    if(d.role==='planner'||d.role==='tower'){window.location.href='/routing';return false;}
     if(d.role!=='supervisor'){
       document.querySelectorAll('.supervisor-only').forEach(el=>el.style.display='none');
       const aab=gid('approve-all-btn');if(aab)aab.style.display='none';
