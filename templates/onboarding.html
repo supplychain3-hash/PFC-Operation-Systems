@@ -1058,7 +1058,7 @@ async function renderApproval(){
         +'<td style="white-space:nowrap">'+acts+'</td>'
         +'</tr>';
     }).join('');
-  }catch(e){console.warn('Approval render',e);}
+  }catch(e){console.warn('Approval render',e);tbody.innerHTML='<tr><td colspan="23"><div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load queue</div><div style="font-size:11px;color:var(--t3);margin-top:4px">'+esc(String(e))+'</div></div></td></tr>';}
 }
 
 function togApprFilt(){
@@ -1680,7 +1680,7 @@ async function submitWizard(){
       gid('success-modal').classList.add('on');
       refreshDash();
     }else showToast('Error: '+(d.error||'Submission failed'));
-  }catch(e){showToast('Network error — please retry');}
+  }catch(e){showToast('Network error: '+e.message);}
 }
 
 function collectOfficers(){

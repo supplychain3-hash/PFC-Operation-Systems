@@ -1176,6 +1176,34 @@ def init_db():
         master_id        INTEGER
     )''')
 
+    # ── Migrate client_submissions — add columns that may be missing in older DBs ──
+    sub_migrations = [
+        ('geo_source',    "TEXT DEFAULT ''"),
+        ('cluster_id',    "TEXT DEFAULT ''"),
+        ('route_id',      "TEXT DEFAULT ''"),
+        ('latitude',      'REAL'),
+        ('longitude',     'REAL'),
+        ('delivery_area', "TEXT DEFAULT ''"),
+        ('del_full',      "TEXT DEFAULT ''"),
+        ('hq_addr1',      "TEXT DEFAULT ''"),
+        ('hq_addr2',      "TEXT DEFAULT ''"),
+        ('hq_city',       "TEXT DEFAULT ''"),
+        ('hq_province',   "TEXT DEFAULT ''"),
+        ('hq_zip',        "TEXT DEFAULT ''"),
+        ('order_min',     'REAL'),
+        ('dup_flag',      'INTEGER DEFAULT 0'),
+        ('dup_detail',    "TEXT DEFAULT ''"),
+        ('master_id',     'INTEGER'),
+        ('remarks',       "TEXT DEFAULT ''"),
+    ]
+    existing_sub_cols = {row[1] for row in c.execute("PRAGMA table_info(client_submissions)").fetchall()}
+    for col, coltype in sub_migrations:
+        if col not in existing_sub_cols:
+            try:
+                c.execute(f"ALTER TABLE client_submissions ADD COLUMN {col} {coltype}")
+            except Exception:
+                pass
+
     conn.commit()
     conn.close()
 
