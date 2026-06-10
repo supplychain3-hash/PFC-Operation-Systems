@@ -46,27 +46,47 @@ def _hw(pw):
     return _hashlib.sha256(pw.encode('utf-8')).hexdigest()
 
 _USERS = {
-    'planner1': {'pw': _hw('PFCplan1!'), 'role': 'planner', 'display': 'Route Planner 1'},
-    'planner2': {'pw': _hw('PFCplan2!'), 'role': 'planner', 'display': 'Route Planner 2'},
-    'planner3': {'pw': _hw('PFCplan3!'), 'role': 'planner', 'display': 'Route Planner 3'},
-    'tower1':   {'pw': _hw('PFCtower1!'), 'role': 'tower',   'display': 'Logistics Tower 1'},
-    'tower2':   {'pw': _hw('PFCtower2!'), 'role': 'tower',   'display': 'Logistics Tower 2'},
-    'tower3':   {'pw': _hw('PFCtower3!'), 'role': 'tower',   'display': 'Logistics Tower 3'},
+    # Routing team — full access to routing planner
+    'planner1': {'pw': _hw('PFCplan1!'),  'role': 'planner',    'display': 'Route Planner 1'},
+    'planner2': {'pw': _hw('PFCplan2!'),  'role': 'planner',    'display': 'Route Planner 2'},
+    'planner3': {'pw': _hw('PFCplan3!'),  'role': 'planner',    'display': 'Route Planner 3'},
+    'tower1':   {'pw': _hw('PFCtower1!'), 'role': 'tower',      'display': 'Logistics Tower 1'},
+    'tower2':   {'pw': _hw('PFCtower2!'), 'role': 'tower',      'display': 'Logistics Tower 2'},
+    'tower3':   {'pw': _hw('PFCtower3!'), 'role': 'tower',      'display': 'Logistics Tower 3'},
+    # Onboarding team — access to onboarding + analytics/monitoring (read-only)
+    'sales1':   {'pw': _hw('PFCsales1!'), 'role': 'sales',      'display': 'Sales Rep 1'},
+    'sales2':   {'pw': _hw('PFCsales2!'), 'role': 'sales',      'display': 'Sales Rep 2'},
+    'sales3':   {'pw': _hw('PFCsales3!'), 'role': 'sales',      'display': 'Sales Rep 3'},
+    'acct1':    {'pw': _hw('PFCacct1!'),  'role': 'accounting', 'display': 'Accounting 1'},
+    'acct2':    {'pw': _hw('PFCacct2!'),  'role': 'accounting', 'display': 'Accounting 2'},
+    # Supervisors — onboarding approval + analytics (no routing edit)
+    'supervisor1': {'pw': _hw('PFCsupervisor1!'), 'role': 'supervisor', 'display': 'Supervisor 1'},
+    'supervisor2': {'pw': _hw('PFCsupervisor2!'), 'role': 'supervisor', 'display': 'Supervisor 2'},
 }
 
 _AUTH_EXEMPT = {'/api/login', '/api/logout', '/api/me', '/api/warehouses', '/api/rates'}
 _TOWER_BLOCKED = {'/api/upload', '/api/run-routing', '/api/merge-orders',
                   '/api/save-plan', '/api/delete-plan'}
+# Roles that belong to the onboarding system — cannot access routing plan APIs
+_ONBOARDING_ROLES = {'sales', 'accounting', 'supervisor'}
+# Routing APIs blocked for onboarding roles
+_ROUTING_ONLY_APIS = {'/api/upload', '/api/run-routing', '/api/merge-orders',
+                      '/api/save-plan', '/api/delete-plan', '/api/update-plan',
+                      '/api/get-plan', '/api/working-plan', '/api/plan-state',
+                      '/api/download-truck-pdf'}
 
 @app.before_request
 def _check_auth():
     if request.path in _AUTH_EXEMPT:
         return None
-    if request.path == '/' or not request.path.startswith('/api/'):
+    if request.path in ('/', '/onboarding') or not request.path.startswith('/api/'):
         return None
     if not session.get('username'):
         return jsonify({'error': 'Not authenticated', 'login_required': True}), 401
-    if session.get('role') == 'tower' and request.path in _TOWER_BLOCKED:
+    role = session.get('role')
+    if role == 'tower' and request.path in _TOWER_BLOCKED:
+        return jsonify({'error': 'Access denied for your role'}), 403
+    if role in _ONBOARDING_ROLES and request.path in _ROUTING_ONLY_APIS:
         return jsonify({'error': 'Access denied for your role'}), 403
     return None
 
@@ -1078,6 +1098,84 @@ def init_db():
         active           INTEGER DEFAULT 1
     )''')
 
+    # ── Client Master — shared address + routing reference DB ──────────────
+    c.execute('''CREATE TABLE IF NOT EXISTS client_master (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        internal_id      TEXT DEFAULT '',
+        client_name      TEXT NOT NULL,
+        company_name     TEXT DEFAULT '',
+        address1         TEXT DEFAULT '',
+        address2         TEXT DEFAULT '',
+        city             TEXT DEFAULT '',
+        province         TEXT DEFAULT '',
+        zip_code         TEXT DEFAULT '',
+        full_address     TEXT DEFAULT '',
+        delivery_area    TEXT DEFAULT '',
+        cluster_id       TEXT DEFAULT '',
+        route_id         TEXT DEFAULT '',
+        latitude         REAL,
+        longitude        REAL,
+        sales_rep        TEXT DEFAULT '',
+        data_quality_flag TEXT DEFAULT 'OK',
+        is_pickup        INTEGER DEFAULT 0,
+        active           INTEGER DEFAULT 1,
+        source           TEXT DEFAULT 'IMPORT',
+        created_at       TEXT DEFAULT (datetime('now','localtime')),
+        updated_at       TEXT DEFAULT (datetime('now','localtime'))
+    )''')
+
+    # ── Client Submissions — CIS wizard queue ─────────────────────────────
+    c.execute('''CREATE TABLE IF NOT EXISTS client_submissions (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        reg_name         TEXT DEFAULT '',
+        trade_name       TEXT DEFAULT '',
+        cis_date         TEXT DEFAULT '',
+        biz_type         TEXT DEFAULT '',
+        nature_of_biz    TEXT DEFAULT '',
+        tin              TEXT DEFAULT '',
+        sec_dti          TEXT DEFAULT '',
+        tax_class        TEXT DEFAULT '',
+        email            TEXT DEFAULT '',
+        website          TEXT DEFAULT '',
+        affiliations     TEXT DEFAULT '',
+        social           TEXT DEFAULT '',
+        sales_rep        TEXT DEFAULT '',
+        officers         TEXT DEFAULT '[]',
+        banks            TEXT DEFAULT '[]',
+        hq_addr1         TEXT DEFAULT '',
+        hq_addr2         TEXT DEFAULT '',
+        hq_city          TEXT DEFAULT '',
+        hq_province      TEXT DEFAULT '',
+        hq_zip           TEXT DEFAULT '',
+        del_addr1        TEXT DEFAULT '',
+        del_addr2        TEXT DEFAULT '',
+        del_city         TEXT DEFAULT '',
+        del_province     TEXT DEFAULT '',
+        del_zip          TEXT DEFAULT '',
+        del_full         TEXT DEFAULT '',
+        delivery_area    TEXT DEFAULT '',
+        cluster_id       TEXT DEFAULT '',
+        route_id         TEXT DEFAULT '',
+        latitude         REAL,
+        longitude        REAL,
+        geo_source       TEXT DEFAULT '',
+        order_min        REAL,
+        payment_terms    TEXT DEFAULT '',
+        documents        TEXT DEFAULT '[]',
+        approval_status  TEXT DEFAULT 'PENDING',
+        submitted_by     TEXT DEFAULT '',
+        submitted_at     TEXT DEFAULT (datetime('now','localtime')),
+        approved_by      TEXT DEFAULT '',
+        approved_at      TEXT DEFAULT '',
+        rejected_by      TEXT DEFAULT '',
+        rejected_at      TEXT DEFAULT '',
+        rejection_reason TEXT DEFAULT '',
+        remarks          TEXT DEFAULT '',
+        dup_flag         INTEGER DEFAULT 0,
+        dup_detail       TEXT DEFAULT '',
+        master_id        INTEGER
+    )''')
+
     conn.commit()
     conn.close()
 
@@ -1087,6 +1185,10 @@ def init_db():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/onboarding')
+def onboarding():
+    return render_template('onboarding.html')
 
 @app.route('/api/warehouses', methods=['GET'])
 def get_warehouses():
@@ -3557,9 +3659,300 @@ def gdrive_set_config():
     except Exception as ex:
         return jsonify({'success': False, 'error': str(ex)}), 500
 
-# ── Bootstrap ───────────────────────────────────────────────────────────────
-init_db()
+# ─────────────────────────────────────────────────────────────
+#  CLIENT MASTER — ONBOARDING APIS
+# ─────────────────────────────────────────────────────────────
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+@app.route('/api/client-master', methods=['GET'])
+def get_client_master():
+    q      = (request.args.get('q') or '').strip()
+    area   = (request.args.get('area') or '').strip()
+    limit  = int(request.args.get('limit') or 100)
+    offset = int(request.args.get('offset') or 0)
+    conn = open_db(); c = conn.cursor()
+    where, params = ['active=1'], []
+    if q:
+        where.append('(client_name LIKE ? OR full_address LIKE ? OR cluster_id LIKE ? OR route_id LIKE ?)')
+        params += [f'%{q}%', f'%{q}%', f'%{q}%', f'%{q}%']
+    if area:
+        where.append('delivery_area LIKE ?')
+        params.append(f'%{area}%')
+    sql = f"SELECT * FROM client_master WHERE {' AND '.join(where)} ORDER BY client_name LIMIT ? OFFSET ?"
+    rows = c.execute(sql, params + [limit, offset]).fetchall()
+    cols = [d[0] for d in c.description]
+    total = c.execute(f"SELECT COUNT(*) FROM client_master WHERE {' AND '.join(where)}", params).fetchone()[0]
+    conn.close()
+    return jsonify({'clients': [dict(zip(cols, r)) for r in rows], 'total': total})
+
+@app.route('/api/client-master/lookup', methods=['GET'])
+def lookup_client_master():
+    """Look up a client by name+address for routing coord pre-fill."""
+    name = (request.args.get('name') or '').strip()
+    addr = (request.args.get('address') or '').strip()
+    conn = open_db(); c = conn.cursor()
+    row = None
+    if name and addr:
+        row = c.execute(
+            'SELECT * FROM client_master WHERE client_name=? AND address1=? AND active=1 LIMIT 1',
+            (name, addr)).fetchone()
+    if not row and name:
+        row = c.execute(
+            'SELECT * FROM client_master WHERE client_name=? AND active=1 LIMIT 1',
+            (name,)).fetchone()
+    if not row and addr:
+        row = c.execute(
+            'SELECT * FROM client_master WHERE address1 LIKE ? AND active=1 LIMIT 1',
+            (f'%{addr[:40]}%',)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'found': False})
+    cols = [d[0] for d in c.description]
+    conn.close()
+    return jsonify({'found': True, 'client': dict(zip(cols, row))})
+
+@app.route('/api/client-master/<int:cid>', methods=['PUT'])
+def update_client_master(cid):
+    if session.get('role') not in ('planner', 'supervisor'):
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json() or {}
+    allowed = ['client_name','company_name','address1','address2','city','province',
+               'zip_code','full_address','delivery_area','cluster_id','route_id',
+               'latitude','longitude','sales_rep','data_quality_flag','is_pickup']
+    sets, vals = [], []
+    for k in allowed:
+        if k in data:
+            sets.append(f'{k}=?')
+            vals.append(data[k])
+    if not sets:
+        return jsonify({'error': 'Nothing to update'}), 400
+    sets.append("updated_at=datetime('now','localtime')")
+    vals.append(cid)
+    conn = open_db(); c = conn.cursor()
+    c.execute(f"UPDATE client_master SET {','.join(sets)} WHERE id=?", vals)
+    conn.commit(); conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/client-master/areas', methods=['GET'])
+def get_client_areas():
+    conn = open_db(); c = conn.cursor()
+    rows = c.execute("SELECT DISTINCT delivery_area FROM client_master WHERE delivery_area!='' AND active=1 ORDER BY delivery_area").fetchall()
+    conn.close()
+    return jsonify([r[0] for r in rows])
+
+@app.route('/api/client-master/stats', methods=['GET'])
+def client_master_stats():
+    conn = open_db(); c = conn.cursor()
+    total       = c.execute("SELECT COUNT(*) FROM client_master WHERE active=1").fetchone()[0]
+    pickup_ct   = c.execute("SELECT COUNT(*) FROM client_master WHERE is_pickup=1 AND active=1").fetchone()[0]
+    no_coords   = c.execute("SELECT COUNT(*) FROM client_master WHERE (latitude IS NULL OR latitude='') AND active=1").fetchone()[0]
+    areas       = c.execute("SELECT COUNT(DISTINCT delivery_area) FROM client_master WHERE active=1").fetchone()[0]
+    pending_sub = c.execute("SELECT COUNT(*) FROM client_submissions WHERE approval_status='PENDING'").fetchone()[0]
+    conn.close()
+    return jsonify({'total': total, 'pickup': pickup_ct, 'no_coords': no_coords,
+                    'areas': areas, 'pending_submissions': pending_sub})
+
+# ── CLIENT SUBMISSIONS (CIS) ──────────────────────────────────────────────
+
+@app.route('/api/client-submissions', methods=['GET'])
+def get_client_submissions():
+    status = (request.args.get('status') or '').strip()
+    conn = open_db(); c = conn.cursor()
+    where, params = [], []
+    if status:
+        where.append('approval_status=?'); params.append(status)
+    sql = f"SELECT * FROM client_submissions {'WHERE '+' AND '.join(where) if where else ''} ORDER BY submitted_at DESC"
+    rows = c.execute(sql, params).fetchall()
+    cols = [d[0] for d in c.description]
+    conn.close()
+    return jsonify([dict(zip(cols, r)) for r in rows])
+
+@app.route('/api/client-submissions', methods=['POST'])
+def add_client_submission():
+    if session.get('role') not in ('sales', 'accounting', 'supervisor', 'planner'):
+        return jsonify({'error': 'Access denied'}), 403
+    data = request.get_json() or {}
+    conn = open_db(); c = conn.cursor()
+    # Duplicate check: same name + address already in client_master or pending
+    name = (data.get('trade_name') or data.get('reg_name') or '').strip()
+    addr = (data.get('del_addr1') or '').strip()
+    dup_master = c.execute(
+        'SELECT id FROM client_master WHERE client_name=? AND address1=? AND active=1',
+        (name, addr)).fetchone()
+    dup_sub = c.execute(
+        "SELECT id FROM client_submissions WHERE trade_name=? AND del_addr1=? AND approval_status='PENDING'",
+        (name, addr)).fetchone()
+    dup_flag   = 1 if (dup_master or dup_sub) else 0
+    dup_detail = ''
+    if dup_master: dup_detail = f'Already in client master (ID {dup_master[0]})'
+    elif dup_sub:  dup_detail = f'Duplicate pending submission (ID {dup_sub[0]})'
+
+    c.execute('''INSERT INTO client_submissions
+        (reg_name,trade_name,cis_date,biz_type,nature_of_biz,tin,sec_dti,tax_class,
+         email,website,affiliations,social,sales_rep,officers,banks,
+         hq_addr1,hq_addr2,hq_city,hq_province,hq_zip,
+         del_addr1,del_addr2,del_city,del_province,del_zip,del_full,
+         delivery_area,cluster_id,route_id,latitude,longitude,geo_source,
+         order_min,payment_terms,documents,
+         approval_status,submitted_by,dup_flag,dup_detail)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', [
+        data.get('reg_name',''), data.get('trade_name',''), data.get('cis_date',''),
+        data.get('biz_type',''), data.get('nature_of_biz',''), data.get('tin',''),
+        data.get('sec_dti',''), data.get('tax_class',''),
+        data.get('email',''), data.get('website',''), data.get('affiliations',''),
+        data.get('social',''), data.get('sales_rep',''),
+        json.dumps(data.get('officers',[])), json.dumps(data.get('banks',[])),
+        data.get('hq_addr1',''), data.get('hq_addr2',''), data.get('hq_city',''),
+        data.get('hq_province',''), data.get('hq_zip',''),
+        data.get('del_addr1',''), data.get('del_addr2',''), data.get('del_city',''),
+        data.get('del_province',''), data.get('del_zip',''), data.get('del_full',''),
+        data.get('delivery_area',''), data.get('cluster_id',''), data.get('route_id',''),
+        data.get('latitude'), data.get('longitude'), data.get('geo_source',''),
+        data.get('order_min'), data.get('payment_terms',''),
+        json.dumps(data.get('documents',[])),
+        'FLAGGED' if dup_flag else 'PENDING',
+        session.get('display', session.get('username','')),
+        dup_flag, dup_detail
+    ])
+    sub_id = c.lastrowid
+    conn.commit(); conn.close()
+    return jsonify({'ok': True, 'id': sub_id, 'dup_flag': bool(dup_flag), 'dup_detail': dup_detail})
+
+@app.route('/api/client-submissions/<int:sid>/approve', methods=['POST'])
+def approve_submission(sid):
+    if session.get('role') not in ('supervisor', 'planner'):
+        return jsonify({'error': 'Access denied'}), 403
+    conn = open_db(); c = conn.cursor()
+    sub = c.execute('SELECT * FROM client_submissions WHERE id=?', (sid,)).fetchone()
+    if not sub:
+        conn.close()
+        return jsonify({'error': 'Submission not found'}), 404
+    cols = [d[0] for d in c.description]
+    rec  = dict(zip(cols, sub))
+    # Insert into client_master
+    c.execute('''INSERT INTO client_master
+        (client_name,company_name,address1,address2,city,province,zip_code,full_address,
+         delivery_area,cluster_id,route_id,latitude,longitude,sales_rep,
+         data_quality_flag,is_pickup,source)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', [
+        rec['trade_name'] or rec['reg_name'], rec['reg_name'],
+        rec['del_addr1'], rec['del_addr2'], rec['del_city'], rec['del_province'], rec['del_zip'],
+        rec['del_full'], rec['delivery_area'], rec['cluster_id'], rec['route_id'],
+        rec['latitude'], rec['longitude'], rec['sales_rep'], 'CIS_APPROVED', 0, 'CIS'
+    ])
+    master_id = c.lastrowid
+    approver  = session.get('display', session.get('username',''))
+    c.execute('''UPDATE client_submissions SET approval_status='APPROVED',
+        approved_by=?, approved_at=datetime('now','localtime'), master_id=? WHERE id=?''',
+        (approver, master_id, sid))
+    conn.commit(); conn.close()
+    return jsonify({'ok': True, 'master_id': master_id})
+
+@app.route('/api/client-submissions/<int:sid>/reject', methods=['POST'])
+def reject_submission(sid):
+    if session.get('role') not in ('supervisor', 'planner'):
+        return jsonify({'error': 'Access denied'}), 403
+    data   = request.get_json() or {}
+    reason = data.get('reason', '')
+    rejecter = session.get('display', session.get('username',''))
+    conn = open_db(); c = conn.cursor()
+    c.execute('''UPDATE client_submissions SET approval_status='REJECTED',
+        rejected_by=?, rejected_at=datetime('now','localtime'), rejection_reason=? WHERE id=?''',
+        (rejecter, reason, sid))
+    conn.commit(); conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/client-submissions/<int:sid>', methods=['DELETE'])
+def delete_submission(sid):
+    if session.get('role') not in ('supervisor', 'planner'):
+        return jsonify({'error': 'Access denied'}), 403
+    conn = open_db(); c = conn.cursor()
+    c.execute('DELETE FROM client_submissions WHERE id=?', (sid,))
+    conn.commit(); conn.close()
+    return jsonify({'ok': True})
+
+# ─────────────────────────────────────────────────────────────
+#  SEED client_master FROM CLEANED EXCEL (runs once on startup)
+# ─────────────────────────────────────────────────────────────
+
+
+# ─────────────────────────────────────────────────────────────
+#  SEED client_master FROM CLEANED EXCEL (runs once on startup)
+# ─────────────────────────────────────────────────────────────
+def seed_client_master():
+    """Import PFC_Client_Database_Cleaned.xlsx into client_master if table is empty."""
+    try:
+        conn = open_db()
+        c = conn.cursor()
+        count = c.execute('SELECT COUNT(*) FROM client_master').fetchone()[0]
+        if count > 0:
+            conn.close()
+            return  # already seeded
+        xlsx_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 'PFC_Client_Database_Cleaned.xlsx')
+        if not os.path.exists(xlsx_path):
+            conn.close()
+            print('[seed_client_master] Excel not found, skipping seed.')
+            return
+        import openpyxl
+        wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
+        ws = wb['Client Master']
+        rows_iter = ws.iter_rows(values_only=True)
+        header = [str(h).strip() if h is not None else '' for h in next(rows_iter)]
+
+        def col(row, name):
+            try:
+                idx = header.index(name)
+                v = row[idx]
+                return str(v).strip() if v is not None else ''
+            except (ValueError, IndexError):
+                return ''
+
+        def flt(row, name):
+            try:
+                idx = header.index(name)
+                v = row[idx]
+                if v is None or str(v).strip() == '':
+                    return None
+                return float(v)
+            except (ValueError, IndexError, TypeError):
+                return None
+
+        inserted = 0
+        for row in rows_iter:
+            if not any(row):
+                continue
+            client_name = col(row, 'Client Name') or col(row, 'Company Name')
+            if not client_name:
+                continue
+            flag = col(row, 'Data Quality Flag') or 'OK'
+            is_pickup = 1 if flag == 'PICKUP' else 0
+            c.execute(
+                """INSERT INTO client_master
+                   (internal_id, client_name, company_name, address1, address2,
+                    city, province, zip_code, full_address, delivery_area,
+                    cluster_id, route_id, latitude, longitude, sales_rep,
+                    data_quality_flag, is_pickup, source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (col(row, 'Internal ID'), client_name,
+                 col(row, 'Company Name'), col(row, 'Address 1'), col(row, 'Address 2'),
+                 col(row, 'City'), col(row, 'Province'), col(row, 'Zip Code'),
+                 col(row, 'Full Address'), col(row, 'Delivery Area'),
+                 col(row, 'Cluster ID'), col(row, 'Route ID'),
+                 flt(row, 'Latitude'), flt(row, 'Longitude'),
+                 col(row, 'Sales Rep'), flag, is_pickup, 'IMPORT'))
+            inserted += 1
+
+        conn.commit()
+        conn.close()
+        print(f'[seed_client_master] Seeded {inserted} records into client_master.')
+    except Exception as e:
+        print(f'[seed_client_master] Error: {e}')
+        import traceback
+        traceback.print_exc()
+
+
+# ─────────────────────────────────────────────────────────────
+#  BOOTSTRAP — called once at module load
+# ─────────────────────────────────────────────────────────────
+init_db()
+seed_client_master()

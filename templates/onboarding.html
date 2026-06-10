@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PFC Client Onboarding System</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{
+  --navy:#0B2545;--navy2:#1a3a6b;--accent:#E8421A;--blue:#1565C0;
+  --bg:#F1F4F8;--surface:#fff;--s2:#F8FAFC;--s3:#EFF2F7;
+  --border:#DDE3EC;--border2:#C4CEDC;
+  --text:#0F172A;--t2:#475569;--t3:#94A3B8;
+  --green:#059669;--lg:#ECFDF5;--bg2:#6EE7B7;
+  --amber:#D97706;--la:#FFFBEB;--ba:#FCD34D;
+  --red:#DC2626;--lr:#FEF2F2;--br:#FCA5A5;
+  --blue2:#1D4ED8;--lb:#EFF6FF;--bb:#93C5FD;
+  --purple:#7C3AED;--lp:#F5F3FF;--bp:#C4B5FD;
+  --teal:#0D9488;--lt:#F0FDFA;--bt:#5EEAD4;
+  --lnavy:#E8EDF5;
+  --r6:6px;--r8:8px;--r10:10px;--r12:12px;--r16:16px;
+  --sh:0 1px 3px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.06);
+  --shm:0 4px 6px -1px rgba(15,23,42,.08),0 2px 4px -2px rgba(15,23,42,.06);
+  --shl:0 10px 15px -3px rgba(15,23,42,.1),0 4px 6px -4px rgba(15,23,42,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+/* TOPBAR */
+.topbar{background:var(--navy);height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;flex-shrink:0;border-bottom:3px solid var(--accent);position:sticky;top:0;z-index:90}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-mark{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),#C0390E);border-radius:var(--r8);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff}
+.brand-name{color:#fff;font-weight:700;font-size:14px}.brand-sub{color:rgba(255,255,255,.4);font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+.topbar-r{display:flex;align-items:center;gap:12px}
+.pill-live{display:flex;align-items:center;gap:5px;background:rgba(5,150,105,.15);color:#6EE7B7;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;border:1px solid rgba(110,231,183,.2)}
+.ldot{width:6px;height:6px;border-radius:50%;background:#6EE7B7;animation:pdot 2s infinite}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:.4}}
+.uchip{display:flex;align-items:center;gap:7px;padding:4px 10px;border-radius:var(--r8);cursor:pointer;transition:background .15s}
+.uchip:hover{background:rgba(255,255,255,.08)}
+.uav{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff}
+.uname{color:#fff;font-size:12px;font-weight:500}.urole{color:rgba(255,255,255,.4);font-size:10px}
+/* SYNC BAR */
+.sync-bar{background:var(--lg);border-bottom:1px solid var(--bg2);padding:7px 24px;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--green);flex-shrink:0}
+.sdot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pdot 2s infinite}
+.settings-panel{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:none;align-items:center;gap:12px;flex-shrink:0;box-shadow:var(--sh)}
+.settings-panel input{flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r8);font-family:'Inter',sans-serif;font-size:12px;outline:none}
+.settings-panel input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(29,78,216,.1)}
+/* NAVBAR */
+.navbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;flex-shrink:0;overflow-x:auto}
+.navbar::-webkit-scrollbar{display:none}
+.ntab{display:flex;align-items:center;gap:6px;padding:13px 15px;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border-bottom:2.5px solid transparent;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.ntab:hover{color:var(--t2);background:var(--s2)}.ntab.on{color:var(--navy);border-bottom-color:var(--accent);font-weight:600}
+.bdg{min-width:18px;height:18px;padding:0 5px;border-radius:99px;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.bdg-red{background:var(--red);color:#fff}.bdg-amber{background:var(--amber);color:#fff}.bdg-blue{background:var(--blue2);color:#fff}
+/* CONTENT */
+.content{flex:1;overflow-y:auto}
+.page{display:none;padding:22px 24px 52px}.page.on{display:block}
+/* LAYOUT */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.gc2{grid-column:1/-1}
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+.ph-title{font-size:17px;font-weight:700;color:var(--navy);letter-spacing:-.3px}
+.ph-sub{font-size:12px;color:var(--t3);margin-top:3px}
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r12);box-shadow:var(--sh);padding:18px}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.ctitle{font-size:12px;font-weight:600;color:var(--navy);display:flex;align-items:center;gap:7px}
+.ib{width:24px;height:24px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;font-size:12px}
+.ib-n{background:rgba(11,37,69,.08);color:var(--navy)}.ib-b{background:var(--lb);color:var(--blue2)}.ib-g{background:var(--lg);color:var(--green)}.ib-a{background:var(--la);color:var(--amber)}.ib-r{background:var(--lr);color:var(--red)}.ib-p{background:var(--lp);color:var(--purple)}.ib-t{background:var(--lt);color:var(--teal)}
+/* KPI */
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r12);box-shadow:var(--sh);padding:18px 20px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--kc,var(--accent))}
+.kpi-lbl{font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px}
+.kpi-val{font-size:28px;font-weight:700;color:var(--text);letter-spacing:-.5px;line-height:1}
+.kpi-d{font-size:11px;color:var(--t3);margin-top:6px}
+.kpi-d.ok{color:var(--green)}.kpi-d.warn{color:var(--amber)}.kpi-d.bad{color:var(--red)}
+/* WIZARD */
+.wiz-wrap{max-width:900px;margin:0 auto}
+.wiz-prog{background:var(--surface);border:1px solid var(--border);border-radius:var(--r12);padding:16px 22px;margin-bottom:20px;box-shadow:var(--sh)}
+.wp-steps{display:flex;align-items:center}
+.wp-step{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;cursor:pointer}
+.wp-dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;transition:all .3s}
+.wp-dot.idle{background:var(--s3);color:var(--t3);border:2px solid var(--border)}
+.wp-dot.active{background:var(--navy);color:#fff;border:2px solid var(--navy)}
+.wp-dot.done{background:var(--lg);color:var(--green);border:2px solid var(--bg2)}
+.wp-lbl{font-size:8px;font-weight:600;color:var(--t3);text-align:center;text-transform:uppercase;letter-spacing:.2px;line-height:1.3}
+.wp-lbl.active{color:var(--navy)}.wp-lbl.done{color:var(--green)}
+.wp-conn{flex:1;height:2px;background:var(--border);margin-bottom:18px;transition:background .4s;border-radius:1px}
+.wp-conn.done{background:var(--bg2)}
+.wstep{display:none}.wstep.on{display:block}
+.shd{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.snb{width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.st{font-size:15px;font-weight:700;color:var(--navy)}
+.ss{font-size:11px;color:var(--t3);margin-top:2px;padding-left:38px}
+.wiz-nav{display:flex;gap:10px;margin-top:20px;justify-content:space-between;align-items:center}
+/* FORM */
+.field{margin-bottom:12px}
+.field:last-child{margin-bottom:0}
+.fl{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
+.fl .req{color:var(--red)}.fl .opt{color:var(--t3);font-weight:400;text-transform:none;letter-spacing:0;font-size:10px}
+.fl .atag{font-size:9px;font-weight:700;background:var(--lb);color:var(--blue2);padding:1px 7px;border-radius:99px;letter-spacing:.3px}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--r8);font-family:'Inter',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s,box-shadow .15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(21,101,192,.1)}
+.field input::placeholder{color:var(--t3)}
+.field textarea{min-height:58px;resize:vertical;line-height:1.5}
+.field select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2394A3B8' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:30px}
+.field select:disabled{background:var(--s2);color:var(--t3);cursor:not-allowed}
+.field input[readonly]{background:var(--s2);color:var(--t2);cursor:default}
+.f-auto{background:var(--lb)!important;border-color:var(--bb)!important;color:var(--blue2)!important;font-weight:500}
+.f-ok{background:var(--lg)!important;border-color:var(--bg2)!important;color:var(--green)!important}
+.f-area{background:var(--lt)!important;border-color:var(--bt)!important;color:var(--teal)!important;font-weight:500}
+.fhint{font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5}
+/* RADIO/CHECK */
+.rgroup{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px}
+.ritem{display:flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--border);border-radius:var(--r8);cursor:pointer;font-size:12px;color:var(--t2);transition:all .15s;background:var(--surface)}
+.ritem:hover{border-color:var(--navy);color:var(--navy)}.ritem.on{border-color:var(--accent);background:rgba(232,66,26,.05);color:var(--accent);font-weight:600}.ritem input{display:none}
+.cgroup{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px}
+.citem{display:flex;align-items:center;gap:6px;padding:6px 11px;border:1.5px solid var(--border);border-radius:var(--r8);cursor:pointer;font-size:11px;color:var(--t2);transition:all .15s;background:var(--surface)}
+.citem:hover{border-color:var(--navy)}.citem.on{border-color:var(--navy);background:var(--lnavy);color:var(--navy);font-weight:500}
+/* OFFICER TABLE */
+.otbl{width:100%;border-collapse:collapse;font-size:12px}
+.otbl th{padding:9px 10px;background:var(--navy);color:rgba(255,255,255,.8);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;text-align:left}
+.otbl td{padding:5px 7px;border-bottom:1px solid var(--border)}
+.otbl tr:last-child td{border-bottom:none}
+.otbl input{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--r6);font-size:12px;font-family:'Inter',sans-serif;outline:none}
+.otbl input:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(21,101,192,.08)}
+.orole{font-weight:600;color:var(--navy);font-size:11px;white-space:nowrap}
+/* DIVIDER */
+.div{display:flex;align-items:center;gap:10px;margin:14px 0 12px}
+.dl{flex:1;height:1px;background:var(--border)}
+.dt{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);white-space:nowrap}
+/* ADDRESS PREVIEW */
+.ap{background:linear-gradient(135deg,#EFF2F7,#E8EDF5);border:1.5px solid #C4CEDC;border-radius:var(--r10);padding:12px 15px}
+.ap-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--blue);margin-bottom:6px}
+.ap-val{font-size:13px;font-weight:500;color:var(--navy);line-height:1.7;min-height:20px}
+.ap-val.empty{color:var(--t3);font-weight:400;font-style:italic;font-size:12px}
+/* SAME AS TOGGLE */
+.same-tog{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--lg);border:1px solid rgba(110,231,183,.4);border-radius:var(--r8);margin-bottom:14px;cursor:pointer}
+.same-lbl{font-size:12px;font-weight:500;color:var(--green);flex:1}
+.tsw{position:relative;width:36px;height:20px;flex-shrink:0}
+.tsw input{opacity:0;width:0;height:0;position:absolute}
+.ttrack{position:absolute;inset:0;background:var(--border2);border-radius:99px;transition:background .2s;cursor:pointer}
+.tsw input:checked+.ttrack{background:var(--green)}
+.tthumb{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.1);pointer-events:none}
+.tsw input:checked~.tthumb{transform:translateX(16px)}
+/* GEO CARD */
+.geocard{border:1.5px solid var(--bp);border-radius:var(--r10);padding:13px;transition:all .4s;background:var(--lp)}
+.geocard.ok{background:var(--lg);border-color:var(--bg2)}.geocard.loading{background:var(--la);border-color:var(--ba)}.geocard.err{background:var(--lr);border-color:var(--br)}
+.glbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--purple);margin-bottom:9px}
+.geocard.ok .glbl{color:var(--green)}.geocard.loading .glbl{color:var(--amber)}.geocard.err .glbl{color:var(--red)}
+.gcoords{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gcoord{background:rgba(255,255,255,.7);border-radius:var(--r6);padding:7px 10px}
+.gclbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--t3);margin-bottom:2px}
+.gcval{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:var(--text)}
+.gcval.loading{color:var(--amber);animation:blink .8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+/* DOC UPLOAD */
+.doc-list{display:flex;flex-direction:column;gap:9px}
+.doc-item{border:1.5px solid var(--border);border-radius:var(--r10);padding:12px 14px;display:flex;align-items:center;gap:12px;transition:all .2s}
+.doc-item.uploaded{border-color:var(--bg2);background:var(--lg)}
+.doc-icon{width:34px;height:34px;border-radius:var(--r8);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;background:var(--s3)}
+.doc-item.uploaded .doc-icon{background:var(--lg)}
+.doc-info{flex:1;min-width:0}
+.doc-name{font-size:13px;font-weight:500;color:var(--text)}
+.doc-sub{font-size:11px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dreq{font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;flex-shrink:0}
+.dreq.req{background:var(--lr);color:var(--red);border:1px solid var(--br)}.dreq.opt{background:var(--s3);color:var(--t3)}.dreq.done{background:var(--lg);color:var(--green)}
+.dupbtn{padding:6px 13px;border:1.5px solid var(--border);border-radius:var(--r6);background:var(--surface);color:var(--t2);font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;flex-shrink:0;transition:all .15s}
+.dupbtn:hover{border-color:var(--navy);color:var(--navy)}.dupbtn.done{border-color:var(--bg2);color:var(--green);background:var(--lg)}
+/* MINI PIPE */
+.mpipe{display:flex;align-items:center;padding:12px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r10);margin-bottom:16px}
+.mpstep{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1}
+.mpdot{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;transition:all .3s}
+.mpdot.idle{background:var(--s3);color:var(--t3);border:2px solid var(--border)}
+.mpdot.run{background:var(--navy);color:#fff;border:2px solid var(--navy);animation:pp 1s infinite}
+.mpdot.done{background:var(--lg);color:var(--green);border:2px solid var(--bg2)}
+.mpdot.warn{background:var(--la);color:var(--amber);border:2px solid var(--ba)}
+.mpdot.geo{background:var(--lp);color:var(--purple);border:2px solid var(--bp);animation:pp 1s infinite}
+@keyframes pp{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(11,37,69,.2)}50%{opacity:.8;box-shadow:0 0 0 4px rgba(11,37,69,0)}}
+.mplbl{font-size:8px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.2px;text-align:center}
+.mpconn{flex:1;height:2px;background:var(--border);margin-bottom:14px;border-radius:1px;transition:background .4s}
+.mpconn.done{background:var(--bg2)}
+/* DUP LAYERS */
+.dlayer{display:flex;align-items:flex-start;gap:9px;padding:8px 11px;border-radius:var(--r8);font-size:11px;transition:all .25s;margin-bottom:6px;border:1px solid transparent}
+.dlayer.idle{background:var(--s2);color:var(--t3)}.dlayer.checking{background:var(--la);border-color:var(--ba);color:var(--amber);animation:blink .8s infinite}
+.dlayer.pass{background:var(--lg);border-color:var(--bg2);color:var(--green)}.dlayer.fail{background:var(--lr);border-color:var(--br);color:var(--red)}
+.di{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.di.idle{background:var(--border);color:var(--t3)}.di.checking{background:var(--amber);color:#fff}.di.pass{background:var(--green);color:#fff}.di.fail{background:var(--red);color:#fff}
+/* ROUTING RESULTS */
+.rrg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rrbox{border:1.5px solid var(--border);border-radius:var(--r10);padding:13px;background:var(--s2);transition:all .35s}
+.rrbox.ok{background:var(--lg);border-color:var(--bg2)}.rrbox.warn{background:var(--la);border-color:var(--ba)}
+.rrlbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);margin-bottom:5px}
+.rrval{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:var(--navy)}
+.rrsub{font-size:11px;color:var(--t3);margin-top:3px}
+/* REVIEW */
+.rev-sec{margin-bottom:16px}
+.rev-ttl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navy);background:var(--lnavy);padding:6px 12px;border-radius:var(--r6);margin-bottom:8px}
+.rev-grid{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--border);border-radius:var(--r8);overflow:hidden}
+.rev-row{display:contents}
+.rev-row .rl{padding:7px 12px;font-size:11px;font-weight:500;color:var(--t3);background:var(--s2);border-bottom:1px solid var(--border)}
+.rev-row .rv{padding:7px 12px;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)}
+.rev-row:last-child .rl,.rev-row:last-child .rv{border-bottom:none}
+/* TABLES */
+.twrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r12);overflow:hidden;box-shadow:var(--sh)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{background:var(--s2)}
+thead th{padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:10px 12px;border-bottom:1px solid var(--border2);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}tbody tr:hover{background:var(--s2)}
+.pill{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.pill.ok{background:var(--lg);color:var(--green);border:1px solid rgba(110,231,183,.3)}
+.pill.pend{background:var(--la);color:var(--amber);border:1px solid rgba(252,211,77,.3)}
+.pill.flag{background:var(--lr);color:var(--red);border:1px solid rgba(252,165,165,.3)}
+.pill.rej{background:var(--s3);color:var(--t3);border:1px solid var(--border)}
+.pill.exist{background:var(--lp);color:var(--purple)}.pill.upd{background:var(--lb);color:var(--blue2)}
+.chip{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;background:rgba(11,37,69,.06);color:var(--navy);padding:2px 7px;border-radius:4px;border:1px solid rgba(11,37,69,.1);white-space:nowrap}
+.chip-t{background:var(--lt);color:var(--teal);border-color:rgba(13,148,136,.2)}
+/* SEARCH */
+.sbar{display:flex;gap:10px;align-items:center;margin-bottom:16px}
+.sbar input{flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--r8);font-family:'Inter',sans-serif;font-size:13px;outline:none;color:var(--text)}
+.sbar input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(21,101,192,.1)}
+/* PAGER */
+.pager{display:flex;align-items:center;gap:6px;margin-top:14px;justify-content:center}
+.pbtn{padding:6px 12px;border:1.5px solid var(--border);border-radius:var(--r6);background:var(--surface);color:var(--t2);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
+.pbtn:hover:not(:disabled){background:var(--s2)}.pbtn.on{background:var(--navy);color:#fff;border-color:var(--navy)}.pbtn:disabled{opacity:.4;cursor:not-allowed}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border-radius:var(--r8);font-size:13px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-n{background:var(--navy);color:#fff;box-shadow:var(--sh)}.btn-n:hover:not(:disabled){background:var(--navy2)}
+.btn-a{background:var(--accent);color:#fff}.btn-a:hover:not(:disabled){background:#C83918}
+.btn-g{background:var(--green);color:#fff}.btn-g:hover:not(:disabled){background:#047857}
+.btn-gh{background:var(--surface);color:var(--t2);border:1.5px solid var(--border)}.btn-gh:hover{background:var(--s2)}
+.btn-d{background:var(--lr);color:var(--red);border:1px solid var(--br)}.btn-d:hover{background:#FEE2E2}
+.btn-t{background:var(--lt);color:var(--teal);border:1px solid var(--bt)}.btn-t:hover{background:#CCFBF1}
+.btn-sm{padding:6px 12px;font-size:11px;border-radius:var(--r6)}.btn-xs{padding:4px 8px;font-size:10px;border-radius:4px}
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center}
+.modal-bg.on{display:flex}
+.mbox{background:var(--surface);border-radius:var(--r16);padding:26px;max-width:500px;width:92%;box-shadow:var(--shl);animation:mIn .25s ease;max-height:92vh;overflow-y:auto}
+.mbox.wide{max-width:760px}
+@keyframes mIn{from{opacity:0;transform:scale(.95) translateY(-10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.mtitle{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px}
+.msub{font-size:12px;color:var(--t3);margin-bottom:18px}
+.micon{width:52px;height:52px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:22px}
+.micon.ok{background:var(--lg)}.micon.warn{background:var(--la)}.micon.info{background:var(--lb)}
+.mrow{display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;font-size:12px}
+.mrow:not(:last-child){border-bottom:1px solid var(--border)}
+.mlbl{color:var(--t3);flex-shrink:0;padding-right:12px;font-size:11px}.mval{font-weight:500;color:var(--text);text-align:right;font-size:11px;max-width:280px}
+/* HEATMAP */
+.hbar-w{margin-bottom:8px}
+.hbar-h{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;color:var(--t2)}
+.hbar-t{height:7px;background:var(--border);border-radius:99px;overflow:hidden}
+.hbar-f{height:100%;border-radius:99px;transition:width .5s}
+.hbar-f.ok{background:var(--green)}.hbar-f.warn{background:var(--amber)}.hbar-f.full{background:var(--red)}
+/* CAP BAR */
+.caphd{display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:var(--t3);margin-bottom:4px}
+.captrack{height:6px;background:var(--border);border-radius:99px;overflow:hidden}
+.capfill{height:100%;border-radius:99px;transition:width .5s}
+.capfill.ok{background:var(--green)}.capfill.warn{background:var(--amber)}.capfill.full{background:var(--red)}
+/* SYNC BADGE */
+.sbdg{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px}
+.sbdg.synced{background:var(--lg);color:var(--green)}.sbdg.pend{background:var(--la);color:var(--amber)}.sbdg.err{background:var(--lr);color:var(--red)}.sbdg.none{background:var(--s3);color:var(--t3)}
+/* CHANGE LOG */
+.clog{max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r8);padding:8px}
+.clog-entry{font-size:11px;padding:5px 8px;border-bottom:1px solid var(--border2);color:var(--t2);display:flex;gap:8px}
+.clog-entry:last-child{border-bottom:none}
+.clog-date{color:var(--t3);white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:10px}
+/* MISC */
+.info-b{border-radius:var(--r8);padding:10px 12px;font-size:11px;display:flex;align-items:flex-start;gap:7px;margin-bottom:14px}
+.info-b.blue{background:var(--lb);border:1px solid rgba(147,197,253,.35);color:var(--blue2)}
+.info-b.amber{background:var(--la);border:1px solid rgba(252,211,77,.35);color:var(--amber)}
+.info-b.green{background:var(--lg);border:1px solid rgba(110,231,183,.35);color:var(--green)}
+.info-b.red{background:var(--lr);border:1px solid rgba(252,165,165,.35);color:var(--red)}
+.dropzone{border:2px dashed var(--border2);border-radius:var(--r10);padding:22px;text-align:center;cursor:pointer;transition:all .15s;background:var(--s2)}
+.dropzone:hover,.dropzone.drag{border-color:var(--blue2);background:var(--lb)}
+.empty{text-align:center;padding:36px 20px}
+.empty-icon{font-size:28px;margin-bottom:8px;opacity:.35}
+.empty-title{font-size:13px;font-weight:600;color:var(--t2);margin-bottom:3px}
+.empty-sub{font-size:11px;color:var(--t3)}
+.slbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);margin-bottom:7px}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--text);color:#fff;padding:11px 16px;border-radius:var(--r10);font-size:12px;font-weight:500;z-index:9999;display:flex;align-items:center;gap:7px;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;box-shadow:var(--shl);max-width:340px}
+.toast.on{opacity:1;transform:translateY(0)}
+
+
+/* DRIVE / SHEET STATUS */
+.backend-panel{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 24px;display:none;align-items:stretch;gap:0;flex-shrink:0}
+.backend-card{flex:1;display:flex;align-items:center;gap:10px;padding:8px 16px;border-right:1px solid var(--border)}
+.backend-card:last-child{border-right:none}
+.backend-icon{width:32px;height:32px;border-radius:var(--r8);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.backend-info{flex:1;min-width:0}
+.backend-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--t3);margin-bottom:2px}
+.backend-value{font-size:11px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.backend-value a{color:var(--blue2);text-decoration:none}
+.backend-value a:hover{text-decoration:underline}
+.backend-status{font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;flex-shrink:0}
+.bs-ok{background:var(--lg);color:var(--green)}.bs-no{background:var(--s3);color:var(--t3)}.bs-warn{background:var(--la);color:var(--amber)}
+/* DOC UPLOAD STATUS */
+.doc-uploading{background:var(--la)!important;border-color:var(--ba)!important}
+.doc-upload-prog{height:3px;background:var(--border);border-radius:99px;margin-top:6px;overflow:hidden}
+.doc-upload-bar{height:100%;background:var(--blue2);border-radius:99px;transition:width .4s;width:0%}
+.doc-drive-link{font-size:10px;color:var(--blue2);text-decoration:none;display:flex;align-items:center;gap:3px;margin-top:4px}
+.doc-drive-link:hover{text-decoration:underline}
+
+</style>
+</head>
+<body>
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">PFC</div>
+    <div><div class="brand-name">Premier Food Choice</div><div class="brand-sub">Client Onboarding System</div></div>
+  </div>
+  <div class="topbar-r">
+    <div class="pill-live"><div class="ldot"></div>System Live</div>
+    <!-- GDrive button removed -->
+    <button onclick="NOOP" style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:var(--r8);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.18)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">
+      ⚙ Google Drive &amp; Sheet Setup
+    </button>
+    <div class="uchip">
+      <div class="uav" id="user-av">?</div>
+      <div><div class="uname" id="user-name">Loading…</div><div class="urole" id="user-role"></div></div>
+    </div>
+    <button onclick="doLogout()" style="padding:5px 12px;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);border-radius:var(--r8);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif">Sign Out</button>
+  </div>
+</header>
+
+
+    <div class="backend-info">
+      <div class="backend-label">Google Sheet</div>
+      <div class="backend-value" id="be-sheet-val">Not connected</div>
+    </div>
+    <span class="backend-status bs-no" id="be-sheet-st">—</span>
+  </div>
+  <div class="backend-card">
+    <div class="backend-icon" style="background:#F0FDF4">📂</div>
+    <div class="backend-info">
+      <div class="backend-label">Google Drive folder</div>
+      <div class="backend-value" id="be-drive-val">Not connected</div>
+    </div>
+    <span class="backend-status bs-no" id="be-drive-st">—</span>
+  </div>
+  <div class="backend-card">
+    <div class="backend-icon" style="background:#F5F3FF">📄</div>
+    <div class="backend-info">
+      <div class="backend-label">Documents uploaded this session</div>
+      <div class="backend-value" id="be-docs-val">0 files</div>
+    </div>
+    <span class="backend-status bs-no" id="be-docs-st">—</span>
+  </div>
+  <div style="display:flex;align-items:center;padding:0 16px">
+    <button class="btn btn-gh btn-sm" onclick="toggleSettings()">⚙ Settings</button>
+  </div>
+</div>
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="ntab on" onclick="showTab('dashboard')">📊 Dashboard</div>
+  <div class="ntab" onclick="showTab('form')">➕ New Client (CIS)</div>
+  <div class="ntab" onclick="showTab('duplog')">🔍 Duplicate Log <span class="bdg bdg-amber" id="bdg-dup" style="display:none">0</span></div>
+  <div class="ntab" onclick="showTab('approval')">✅ Approval Queue <span class="bdg bdg-red" id="bdg-appr" style="display:none">0</span></div>
+  <div class="ntab" onclick="showTab('clients')">🗂 Client Database <span class="bdg bdg-blue" id="bdg-clients">0</span></div>
+  <div class="ntab" onclick="showTab('routes')">🗺 Route Map</div>
+</nav>
+<main class="content">
+<!-- DASHBOARD -->
+<section class="page on" id="pg-dashboard">
+  <div class="ph"><div><div class="ph-title">Operations overview</div><div class="ph-sub">Live onboarding metrics · Cluster & route health</div></div><button class="btn btn-gh btn-sm" onclick="refreshDash()">↺ Refresh</button></div>
+  <div class="g4" style="margin-bottom:20px">
+    <div class="kpi" style="--kc:var(--navy)"><div class="kpi-lbl">Master clients</div><div class="kpi-val">3,588</div><div class="kpi-d ok">Active in DB</div></div>
+    <div class="kpi" style="--kc:var(--green)"><div class="kpi-lbl">Total registered</div><div class="kpi-val" id="d-total">0</div><div class="kpi-d" id="d-total-d">No submissions yet</div></div>
+    <div class="kpi" style="--kc:var(--amber)"><div class="kpi-lbl">Pending approval</div><div class="kpi-val" id="d-pend">0</div><div class="kpi-d warn">Awaiting review</div></div>
+    <div class="kpi" style="--kc:var(--red)"><div class="kpi-lbl">Duplicate flags</div><div class="kpi-val" id="d-dups">0</div><div class="kpi-d bad" id="d-dups-d">Require resolution</div></div>
+  </div>
+  <div class="g2" style="align-items:start">
+    <div class="card"><div class="card-hd"><div class="ctitle"><div class="ib ib-n">🗒</div>Recent registrations</div></div><div id="d-recent"><div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No registrations yet</div></div></div></div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="card"><div class="card-hd"><div class="ctitle"><div class="ib ib-b">📊</div>Status breakdown</div></div><div id="d-breakdown"><div class="empty"><div class="empty-icon">📊</div><div class="empty-title">No data yet</div></div></div></div>
+      <div class="card"><div class="card-hd"><div class="ctitle"><div class="ib ib-t">🗺</div>Delivery areas</div></div><div id="d-areas"><div class="empty"><div class="empty-icon">🗺</div><div class="empty-title">No submissions yet</div></div></div></div>
+    </div>
+  </div>
+</section>
+<!-- CIS WIZARD -->
+<section class="page" id="pg-form">
+<div class="wiz-wrap">
+  <div class="ph" style="max-width:900px;margin:0 auto 0">
+    <div><div class="ph-title">New Client Registration — CIS</div><div class="ph-sub">Complete all 9 sections of the Customer Information Sheet. Fields marked * are required for accreditation.</div></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-gh btn-sm" onclick="openBulkModal()">📂 Bulk import</button><button class="btn btn-gh btn-sm" onclick="resetWizard()">↺ Clear</button></div>
+  </div>
+  <div class="wiz-prog">
+    <div class="wp-steps" id="wp-steps"></div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--t3);margin-top:8px">
+      <span id="wp-label">Step 1 of 9</span><span id="wp-pct" style="font-weight:600;color:var(--navy)">0%</span>
+    </div>
+  </div>
+  <!-- Step 1: Company Info -->
+  <div class="wstep on" id="ws-1">
+    <div class="card">
+      <div class="shd"><div class="snb">1</div><div><div class="st">Company Information</div><div class="ss">Basic business registration details as per CIS form</div></div></div>
+      <div class="field gc2"><div class="fl">Registered Business Name <span class="req">*</span></div><input type="text" id="f-regName" placeholder="Official name as registered with SEC/DTI/BIR"></div>
+      <div class="g2" style="margin-top:12px">
+        <div class="field"><div class="fl">Trade Name / DBA <span class="req">*</span></div><input type="text" id="f-tradeName" placeholder="Commercial / operating name"></div>
+        <div class="field"><div class="fl">Date of CIS</div><input type="date" id="f-cisDate"></div>
+      </div>
+      <div class="div"><div class="dl"></div><div class="dt">Business Classification</div><div class="dl"></div></div>
+      <div class="g2">
+        <div class="field">
+          <div class="fl">Business Type <span class="req">*</span></div>
+          <div class="rgroup" id="rg-bizType">
+            <div class="ritem" onclick="selR('bizType','SINGLE PROPRIETORSHIP',this)"><input type="radio" name="bizType">Single Proprietorship</div>
+            <div class="ritem" onclick="selR('bizType','PARTNERSHIP',this)"><input type="radio" name="bizType">Partnership</div>
+            <div class="ritem" onclick="selR('bizType','CORPORATION',this)"><input type="radio" name="bizType">Corporation</div>
+          </div>
+        </div>
+        <div class="field">
+          <div class="fl">Nature of Business <span class="req">*</span></div>
+          <div class="cgroup" id="cg-biz">
+            <div class="citem" onclick="togC(this)">FS: Restaurant</div>
+            <div class="citem" onclick="togC(this)">FS: Hotels</div>
+            <div class="citem" onclick="togC(this)">FS: Caterer</div>
+            <div class="citem" onclick="togC(this)">FS: QSR</div>
+            <div class="citem" onclick="togC(this)">Processor: Food Stall</div>
+            <div class="citem" onclick="togC(this)">Processor: Frozen/Canned</div>
+            <div class="citem" onclick="togC(this)">Processor: Toll Packer</div>
+            <div class="citem" onclick="togC(this)">Wholesaler: Trader</div>
+            <div class="citem" onclick="togC(this)">Wholesaler: Modern Trade</div>
+            <div class="citem" onclick="togC(this)">Wholesaler: Wet Market</div>
+            <div class="citem" onclick="togC(this)">Retail</div>
+          </div>
+        </div>
+      </div>
+      <div class="div"><div class="dl"></div><div class="dt">Tax & Registration</div><div class="dl"></div></div>
+      <div class="g2">
+        <div class="field"><div class="fl">Tax Identification No. (TIN) <span class="req">*</span></div><input type="text" id="f-tin" placeholder="000-000-000-000"></div>
+        <div class="field"><div class="fl">SEC / DTI No. <span class="req">*</span></div><input type="text" id="f-secDti" placeholder="Registration number"></div>
+      </div>
+      <div class="field"><div class="fl">Tax Classification <span class="req">*</span></div>
+        <div class="rgroup" id="rg-tax">
+          <div class="ritem" onclick="selR('taxType','VAT LIABLE (12%)',this)"><input type="radio" name="taxType">VAT Liable (12%)</div>
+          <div class="ritem" onclick="selR('taxType','VAT ZERO-RATED (0%)',this)"><input type="radio" name="taxType">VAT Zero-Rated (0%)</div>
+          <div class="ritem" onclick="selR('taxType','VAT-EXEMPT',this)"><input type="radio" name="taxType">VAT-Exempt</div>
+        </div>
+      </div>
+      <div class="div"><div class="dl"></div><div class="dt">Contact & Online</div><div class="dl"></div></div>
+      <div class="g2">
+        <div class="field"><div class="fl">Email Address <span class="req">*</span></div><input type="email" id="f-email" placeholder="business@example.com"></div>
+        <div class="field"><div class="fl">Website <span class="opt">(optional)</span></div><input type="text" id="f-website" placeholder="www.example.com"></div>
+        <div class="field"><div class="fl">Affiliations / Related Business <span class="opt">(optional)</span></div><input type="text" id="f-affil" placeholder="Parent company, subsidiaries"></div>
+        <div class="field"><div class="fl">Social Media <span class="opt">(optional)</span></div><input type="text" id="f-social" placeholder="Facebook, Instagram, etc."></div>
+      </div>
+      <div class="field" style="margin-top:12px"><div class="fl">Sales Representative <span class="req">*</span></div><input type="text" id="f-salesRep" placeholder="PFC Sales Rep handling this account"></div>
+    </div>
+  </div>
+  <!-- Step 2: Officers -->
+  <div class="wstep" id="ws-2">
+    <div class="card">
+      <div class="shd"><div class="snb">2</div><div><div class="st">Officers Information</div><div class="ss">Owner, Purchaser, and Receiver contacts as required by PFC CIS</div></div></div>
+      <div class="info-b blue"><span>ℹ️</span><span>Purchasers place orders; Receivers accept deliveries; Owners authorize transactions. Minimum 1 entry per role.</span></div>
+      <div style="overflow-x:auto;border-radius:var(--r8);border:1px solid var(--border)">
+        <table class="otbl">
+          <thead><tr><th style="width:80px">Role</th><th style="width:20px">#</th><th>Full Name *</th><th>Telephone</th><th>Mobile *</th><th>Email</th></tr></thead>
+          <tbody>
+            <tr><td class="orole" rowspan="2">Owner</td><td style="color:var(--t3);font-size:10px">1</td><td><input type="text" id="o-o1n" placeholder="Full name"></td><td><input type="text" id="o-o1t" placeholder="02-XXXX-XXXX"></td><td><input type="text" id="o-o1m" placeholder="09XX-XXX-XXXX"></td><td><input type="email" id="o-o1e" placeholder="email@example.com"></td></tr>
+            <tr><td style="color:var(--t3);font-size:10px">2</td><td><input type="text" id="o-o2n" placeholder="Full name"></td><td><input type="text" id="o-o2t" placeholder="02-XXXX-XXXX"></td><td><input type="text" id="o-o2m" placeholder="09XX-XXX-XXXX"></td><td><input type="email" id="o-o2e" placeholder="email@example.com"></td></tr>
+            <tr style="background:rgba(11,37,69,.02)"><td class="orole" rowspan="2">Purchaser</td><td style="color:var(--t3);font-size:10px">1</td><td><input type="text" id="o-p1n" placeholder="Full name"></td><td><input type="text" id="o-p1t" placeholder="02-XXXX-XXXX"></td><td><input type="text" id="o-p1m" placeholder="09XX-XXX-XXXX"></td><td><input type="email" id="o-p1e" placeholder="email@example.com"></td></tr>
+            <tr style="background:rgba(11,37,69,.02)"><td style="color:var(--t3);font-size:10px">2</td><td><input type="text" id="o-p2n" placeholder="Full name"></td><td><input type="text" id="o-p2t" placeholder="02-XXXX-XXXX"></td><td><input type="text" id="o-p2m" placeholder="09XX-XXX-XXXX"></td><td><input type="email" id="o-p2e" placeholder="email@example.com"></td></tr>
+            <tr><td class="orole" rowspan="2">Receiver</td><td style="color:var(--t3);font-size:10px">1</td><td><input type="text" id="o-r1n" placeholder="Full name"></td><td><input type="text" id="o-r1t" placeholder="02-XXXX-XXXX"></td><td><input type="text" id="o-r1m" placeholder="09XX-XXX-XXXX"></td><td><input type="email" id="o-r1e" placeholder="email@example.com"></td></tr>
+            <tr><td style="color:var(--t3);font-size:10px">2</td><td><input type="text" id="o-r2n" placeholder="Full name"></td><td><input type="text" id="o-r2t" placeholder="02-XXXX-XXXX"></td><td><input type="text" id="o-r2m" placeholder="09XX-XXX-XXXX"></td><td><input type="email" id="o-r2e" placeholder="email@example.com"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="div"><div class="dl"></div><div class="dt">Bank Accounts</div><div class="dl"></div></div>
+      <div class="g2">
+        <div>
+          <div class="slbl">Bank Account 1</div>
+          <div class="field"><div class="fl">Bank Name</div><input type="text" id="f-b1bank" placeholder="e.g. BDO, BPI, Metrobank"></div>
+          <div class="field"><div class="fl">Branch</div><input type="text" id="f-b1branch" placeholder="Branch name"></div>
+          <div class="field"><div class="fl">Account Type</div><div class="rgroup" id="rg-b1type"><div class="ritem" onclick="selR('b1type','Savings',this)"><input type="radio" name="b1type">Savings</div><div class="ritem" onclick="selR('b1type','Checking',this)"><input type="radio" name="b1type">Checking</div></div></div>
+          <div class="field"><div class="fl">Account Number</div><input type="text" id="f-b1acct" placeholder="Account number"></div>
+        </div>
+        <div>
+          <div class="slbl">Bank Account 2 <span style="color:var(--t3);font-weight:400">(optional)</span></div>
+          <div class="field"><div class="fl">Bank Name</div><input type="text" id="f-b2bank" placeholder="e.g. BDO, BPI, Metrobank"></div>
+          <div class="field"><div class="fl">Branch</div><input type="text" id="f-b2branch" placeholder="Branch name"></div>
+          <div class="field"><div class="fl">Account Type</div><div class="rgroup" id="rg-b2type"><div class="ritem" onclick="selR('b2type','Savings',this)"><input type="radio" name="b2type">Savings</div><div class="ritem" onclick="selR('b2type','Checking',this)"><input type="radio" name="b2type">Checking</div></div></div>
+          <div class="field"><div class="fl">Account Number</div><input type="text" id="f-b2acct" placeholder="Account number"></div>
+        </div>
+      </div>
+      <div class="div"><div class="dl"></div><div class="dt">Authorized Signatories</div><div class="dl"></div></div>
+      <div class="g2">
+        <div class="field"><div class="fl">Signatory 1 Name</div><input type="text" id="f-sig1n" placeholder="Full name"></div>
+        <div class="field"><div class="fl">Signatory 1 Position</div><input type="text" id="f-sig1p" placeholder="e.g. General Manager"></div>
+        <div class="field"><div class="fl">Signatory 2 Name <span class="opt">(optional)</span></div><input type="text" id="f-sig2n" placeholder="Full name"></div>
+        <div class="field"><div class="fl">Signatory 2 Position</div><input type="text" id="f-sig2p" placeholder="Position"></div>
+      </div>
+    </div>
+  </div>
+  <!-- Step 3: HQ Address -->
+  <div class="wstep" id="ws-3">
+    <div class="card">
+      <div class="shd"><div class="snb">3</div><div><div class="st">Business HQ Address</div><div class="ss">Official registered office address — for billing, invoicing, and correspondence</div></div></div>
+      <div class="info-b blue"><span>🏛️</span><span>This is the <strong>registered business address</strong>. Enter the delivery/drop address in Step 4. These may be different.</span></div>
+      <div class="field"><div class="fl">HQ Address 1 <span class="req">*</span></div><input type="text" id="f-hqA1" placeholder="Unit / Floor / Building no. + Street name" oninput="buildHQ()"><div class="fhint">e.g. 3/F BDO Tower, #12 Makati Avenue</div></div>
+      <div class="field"><div class="fl">HQ Address 2 <span class="opt">(optional)</span></div><input type="text" id="f-hqA2" placeholder="Barangay, Subdivision, Village or Complex" oninput="buildHQ()"></div>
+      <div class="g2">
+        <div class="field"><div class="fl">Province / Region <span class="req">*</span></div><select id="f-hqProv" onchange="onHQProv()"><option value="">— Select province —</option></select></div>
+        <div class="field"><div class="fl">City / Municipality <span class="req">*</span></div><select id="f-hqCity" onchange="buildHQ()" disabled><option value="">— Select city —</option></select></div>
+      </div>
+      <div class="field"><div class="fl">ZIP Code <span class="atag">Auto</span></div><input type="text" id="f-hqZip" readonly class="f-auto" placeholder="Auto-filled"></div>
+      <div class="div"><div class="dl"></div><div class="dt">HQ full address preview</div><div class="dl"></div></div>
+      <div class="ap"><div class="ap-lbl">⚡ Auto-generated</div><div class="ap-val empty" id="hq-prev">Fill in the fields above</div></div>
+    </div>
+  </div>
+  <!-- Step 4: Delivery Address -->
+  <div class="wstep" id="ws-4">
+    <div class="card">
+      <div class="shd"><div class="snb">4</div><div><div class="st">Delivery Address & Auto-Routing</div><div class="ss">Where PFC delivers — used for cluster ID, route ID, delivery area, and coordinate assignment</div></div></div>
+      <div class="same-tog" onclick="togSameHQ()">
+        <span>📋</span>
+        <span class="same-lbl">Same as Business HQ address — auto-copy from Step 3</span>
+        <div class="tsw"><input type="checkbox" id="del-same" onchange="togSameHQ()"><div class="ttrack"></div><div class="tthumb"></div></div>
+      </div>
+      <div id="del-fields">
+        <div class="field"><div class="fl">Delivery Address 1 <span class="req">*</span></div><input type="text" id="f-dA1" placeholder="Unit / Floor / Building no. + Street name" oninput="buildDel()"><div class="fhint">e.g. #47 Banawe Avenue · Lot 12 Block 5 Acacia Street</div></div>
+        <div class="field"><div class="fl">Delivery Address 2 <span class="opt">(optional)</span></div><input type="text" id="f-dA2" placeholder="Barangay, Subdivision, Village or Complex" oninput="buildDel()"></div>
+        <div class="g2">
+          <div class="field"><div class="fl">Province / Region <span class="req">*</span></div><select id="f-dProv" onchange="onDelProv()"><option value="">— Select province —</option></select></div>
+          <div class="field"><div class="fl">City / Municipality <span class="req">*</span></div><select id="f-dCity" onchange="onDelCity()" disabled><option value="">— Select city —</option></select></div>
+        </div>
+        <div class="g2">
+          <div class="field"><div class="fl">ZIP Code <span class="atag">Auto</span></div><input type="text" id="f-dZip" readonly class="f-auto" placeholder="Auto-filled"></div>
+          <div class="field"><div class="fl">Delivery Area <span class="atag">Auto</span></div><input type="text" id="f-dArea" readonly class="f-area" placeholder="Auto-derived"></div>
+        </div>
+      </div>
+      <div class="div"><div class="dl"></div><div class="dt">Delivery address preview</div><div class="dl"></div></div>
+      <div class="ap"><div class="ap-lbl">⚡ Auto-generated</div><div class="ap-val empty" id="del-prev">Fill in the fields above</div></div>
+      <div class="div" style="margin-top:14px"><div class="dl"></div><div class="dt">GPS Coordinates — auto-geocoded during pipeline</div><div class="dl"></div></div>
+      <div class="geocard" id="geoCard">
+        <div class="glbl" id="geoLbl">Waiting — Step 8 runs the geocoding pipeline</div>
+        <div class="gcoords">
+          <div class="gcoord"><div class="gclbl">Latitude</div><div class="gcval" id="geoLat">—</div></div>
+          <div class="gcoord"><div class="gclbl">Longitude</div><div class="gcval" id="geoLon">—</div></div>
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-top:8px" id="geoMsg">Coordinates generated automatically via OpenStreetMap Nominatim (free · no API key).</div>
+      </div>
+    </div>
+  </div>
+  <!-- Step 5: Order Processing -->
+  <div class="wstep" id="ws-5">
+    <div class="card">
+      <div class="shd"><div class="snb">5</div><div><div class="st">Order Processing & Delivery</div><div class="ss">How PFC processes orders and delivers to this client</div></div></div>
+      <div class="div"><div class="dl"></div><div class="dt">Billing Details</div><div class="dl"></div></div>
+      <div class="g2">
+        <div class="field"><div class="fl">Invoice To (Customer Name on Invoice) <span class="req">*</span></div><input type="text" id="f-invTo" placeholder="Name as it should appear on invoices"></div>
+        <div class="field"><div class="fl">Invoice Address <span class="opt">(if different from HQ)</span></div><input type="text" id="f-invAddr" placeholder="Leave blank if same as HQ"></div>
+      </div>
+      <div class="field"><div class="fl">Mode of Ordering <span class="req">*</span></div>
+        <div class="cgroup" id="cg-po">
+          <div class="citem" onclick="togC(this)">SMS</div>
+          <div class="citem" onclick="togC(this)">Viber Message</div>
+          <div class="citem" onclick="togC(this)">Email with Purchase Order</div>
+          <div class="citem" onclick="togC(this)">Email without Purchase Order</div>
+        </div>
+      </div>
+      <div class="field"><div class="fl">Special PO Instructions <span class="opt">(optional)</span></div><input type="text" id="f-poNotes" placeholder="e.g. Must include PO number in subject line"></div>
+      <div class="div"><div class="dl"></div><div class="dt">Delivery Details</div><div class="dl"></div></div>
+      <div class="g2">
+        <div class="field"><div class="fl">Receiving Start Time <span class="req">*</span></div><input type="time" id="f-rcvStart"></div>
+        <div class="field"><div class="fl">Receiving End Time <span class="req">*</span></div><input type="time" id="f-rcvEnd"></div>
+        <div class="field"><div class="fl">Temperature Requirement <span class="opt">(cold chain)</span></div><input type="text" id="f-temp" placeholder="e.g. Chilled 0–4°C · Frozen -18°C · Ambient"></div>
+        <div class="field"><div class="fl">Required on Delivery</div>
+          <div class="cgroup" id="cg-delDocs">
+            <div class="citem" onclick="togC(this)">Delivery Receipt (DR)</div>
+            <div class="citem" onclick="togC(this)">Sales Invoice (SI)</div>
+          </div>
+        </div>
+      </div>
+      <div class="field"><div class="fl">Special Delivery Instructions <span class="opt">(optional)</span></div><input type="text" id="f-delNotes" placeholder="e.g. Deliver to warehouse only, not front office"></div>
+    </div>
+  </div>
+  <!-- Step 6: Payment Terms -->
+  <div class="wstep" id="ws-6">
+    <div class="card">
+      <div class="shd"><div class="snb">6</div><div><div class="st">Payment Terms</div><div class="ss">Credit terms, collection schedule, and tax certificate requirements</div></div></div>
+      <div class="g2">
+        <div class="field"><div class="fl">Payment Terms <span class="req">*</span></div>
+          <select id="f-payTerms">
+            <option value="">— Select terms —</option>
+            <option>Cash on Delivery (COD)</option><option>7 days</option><option>14 days</option><option>30 days</option><option>45 days</option><option>60 days</option><option>90 days</option><option>Consignment</option>
+          </select>
+        </div>
+        <div class="field"><div class="fl">Credit Limit <span class="opt">(optional)</span></div><input type="text" id="f-creditLim" placeholder="e.g. PHP 50,000"></div>
+      </div>
+      <div class="div"><div class="dl"></div><div class="dt">Collection & Countering</div><div class="dl"></div></div>
+      <div class="g2">
+        <div class="field"><div class="fl">Countering (client picks up payment) <span class="req">*</span></div>
+          <div class="rgroup" id="rg-ctr">
+            <div class="ritem" onclick="selR('ctr','Yes',this)"><input type="radio" name="ctr">Yes</div>
+            <div class="ritem" onclick="selR('ctr','No',this)"><input type="radio" name="ctr">No</div>
+          </div>
+        </div>
+        <div class="field"><div class="fl">Countering Schedule <span class="opt">(if Yes)</span></div><input type="text" id="f-ctrSched" placeholder="e.g. Every Monday 10:00 AM"></div>
+        <div class="field"><div class="fl">Collection Day</div>
+          <select id="f-colDay"><option value="">— Select day —</option><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Every weekday</option><option>N/A</option></select>
+        </div>
+        <div class="field"><div class="fl">Collection Time</div><input type="time" id="f-colTime"></div>
+      </div>
+      <div class="div"><div class="dl"></div><div class="dt">Tax Documents</div><div class="dl"></div></div>
+      <div class="field"><div class="fl">Issues EWT Certificate (BIR Form 2307) <span class="req">*</span></div>
+        <div class="rgroup" id="rg-ewt">
+          <div class="ritem" onclick="selR('ewt','Yes',this)"><input type="radio" name="ewt">Yes</div>
+          <div class="ritem" onclick="selR('ewt','No',this)"><input type="radio" name="ewt">No</div>
+        </div>
+      </div>
+      <div class="field"><div class="fl">Required for Payment Release</div>
+        <div class="cgroup" id="cg-payDocs">
+          <div class="citem" onclick="togC(this)">Delivery Receipt (DR)</div>
+          <div class="citem" onclick="togC(this)">Sales Invoice (SI)</div>
+        </div>
+      </div>
+      <div class="field"><div class="fl">Special Payment Instructions <span class="opt">(optional)</span></div><input type="text" id="f-payNotes" placeholder="e.g. Checks dated on 15th of every month"></div>
+    </div>
+  </div>
+  <!-- Step 7: Documents -->
+  <div class="wstep" id="ws-7">
+    <div class="card">
+      <div class="shd"><div class="snb">7</div><div><div class="st">Document Upload</div><div class="ss">Attach all accreditation requirements — 6 required + optional supporting documents</div></div></div>
+      <div class="info-b amber"><span>⚠️</span><span><strong>Minimum accreditation requirements:</strong> CIS, SEC/DTI Registration, Mayor's Permit, BIR Form 2303, FDA LTO, and Government ID. Files are stored in localStorage until approval.</span></div>
+      <div class="info-b blue"><span>📂</span><span><strong>Google Drive backend:</strong> When you approve a client and Google Sheet sync is active, all documents are automatically uploaded to <strong>My Drive / PFC Client Documents / [REG_ID — Client Name]</strong>. The folder URL will appear in your Google Sheet under the <em>Drive Folder URL</em> column — copy it to the 📁 Documents button in the Approval Queue to link it directly.</span></div>
+      <div class="doc-list" id="doc-list"></div>
+    </div>
+  </div>
+  <!-- Step 8: Auto-Routing -->
+  <div class="wstep" id="ws-8">
+    <div class="card">
+      <div class="shd"><div class="snb">8</div><div><div class="st">Auto-Routing Assignment</div><div class="ss">Geocode delivery address → assign Cluster ID, Route ID, Delivery Area, and Drop Sequence automatically</div></div></div>
+      <div class="info-b blue"><span>🤖</span><span>Click <strong>Run Auto-Routing</strong> to geocode the delivery address via OpenStreetMap and assign the nearest cluster and route using Haversine distance across all 179 clusters.</span></div>
+      <div class="mpipe" id="mpipe"></div>
+      <div class="g2">
+        <div>
+          <div class="slbl">5-Layer Duplicate Detection</div>
+          <div class="dlayer idle" id="l1"><div class="di idle" id="l1i">1</div><div><div style="font-weight:600">Exact coordinate match</div><div style="opacity:.7;margin-top:1px;font-size:10px">Zero-tolerance · any match = blocked</div></div></div>
+          <div class="dlayer idle" id="l2"><div class="di idle" id="l2i">2</div><div><div style="font-weight:600">Exact business name</div><div style="opacity:.7;margin-top:1px;font-size:10px">Normalized string compare</div></div></div>
+          <div class="dlayer idle" id="l3"><div class="di idle" id="l3i">3</div><div><div style="font-weight:600">Address similarity ≥ 90%</div><div style="opacity:.7;margin-top:1px;font-size:10px">Levenshtein distance check</div></div></div>
+          <div class="dlayer idle" id="l4"><div class="di idle" id="l4i">4</div><div><div style="font-weight:600">Proximity ≤ 110 m</div><div style="opacity:.7;margin-top:1px;font-size:10px">Haversine from geocoded coords</div></div></div>
+          <div class="dlayer idle" id="l5"><div class="di idle" id="l5i">5</div><div><div style="font-weight:600">Fuzzy name ≥ 80%</div><div style="opacity:.7;margin-top:1px;font-size:10px">Token ratio comparison</div></div></div>
+          <div id="dupSum" style="margin-top:10px;font-size:11px;text-align:center;color:var(--t3);padding:4px 0">Run the pipeline to begin</div>
+        </div>
+        <div>
+          <div class="slbl">Routing Results</div>
+          <div class="rrg">
+            <div class="rrbox" id="rr-cl"><div class="rrlbl">Cluster ID</div><div class="rrval" id="rr-cl-v">—</div><div class="rrsub" id="rr-cl-s">Run pipeline</div></div>
+            <div class="rrbox" id="rr-zn"><div class="rrlbl">Geographic Zone</div><div class="rrval" id="rr-zn-v">—</div><div class="rrsub" id="rr-zn-s">—</div></div>
+            <div class="rrbox" id="rr-rt"><div class="rrlbl">Route ID</div><div class="rrval" id="rr-rt-v" style="font-size:13px">—</div><div class="rrsub" id="rr-rt-s">Run pipeline</div></div>
+            <div class="rrbox" id="rr-sq"><div class="rrlbl">Drop Sequence</div><div class="rrval" id="rr-sq-v">—</div><div class="rrsub">Suggested position</div></div>
+          </div>
+          <div style="margin-top:12px"><div class="caphd"><span>Route capacity</span><span id="rr-cap-l">—</span></div><div class="captrack"><div class="capfill ok" id="rr-cap-f" style="width:0%"></div></div></div>
+          <button class="btn btn-n" style="width:100%;margin-top:14px" id="run-btn" onclick="runPipeline()">▶ Run Auto-Routing</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Step 9: Review & Submit -->
+  <div class="wstep" id="ws-9">
+    <div class="card">
+      <div class="shd"><div class="snb">9</div><div><div class="st">Review & Submit</div><div class="ss">Verify all information before submitting to the approval queue</div></div></div>
+      <div id="review-content"><div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Complete previous steps first</div></div></div>
+    </div>
+  </div>
+  <!-- Wizard Nav -->
+  <div class="wiz-nav">
+    <button class="btn btn-gh" id="btn-prev" onclick="wizPrev()" disabled>← Previous</button>
+    <span style="font-size:12px;color:var(--t3)" id="step-ind">Step 1 of 9</span>
+    <button class="btn btn-n" id="btn-next" onclick="wizNext()">Next →</button>
+  </div>
+</div>
+</section>
+<!-- DUPLICATE LOG -->
+<section class="page" id="pg-duplog">
+  <div class="ph"><div><div class="ph-title">Duplicate detection log</div><div class="ph-sub">Records flagged during the 5-layer duplicate check</div></div><button class="btn btn-gh btn-sm" onclick="clearDups()">Clear resolved</button></div>
+  <div class="twrap"><table><thead><tr><th>Client name</th><th>Layer</th><th>Full address</th><th>Delivery area</th><th>Cluster</th><th>Date</th><th>Status</th><th style="text-align:center">Actions</th></tr></thead><tbody id="dup-body"><tr><td colspan="8"><div class="empty"><div class="empty-icon">✅</div><div class="empty-title">No duplicates flagged</div></div></td></tr></tbody></table></div>
+</section>
+<!-- APPROVAL QUEUE -->
+<section class="page" id="pg-approval">
+  <div class="ph"><div><div class="ph-title">Approval queue</div><div class="ph-sub">Full CIS breakdown · Address fields · Coordinates · Documents · Review before NetSuite upload</div></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-gh btn-sm" id="filt-btn" onclick="togApprFilt()">Show: All</button><button class="btn btn-g btn-sm" onclick="approveAll()">✓ Approve all pending</button></div>
+  </div>
+  <div class="twrap" style="overflow-x:auto">
+    <table style="min-width:1600px">
+      <thead><tr><th>Date</th><th>Client name</th><th>Type</th><th>Nature</th><th>Address 1</th><th>Address 2</th><th>City</th><th>Province</th><th>ZIP</th><th>Delivery Area</th><th>Lat</th><th>Lon</th><th>HQ Address</th><th>Cluster ID</th><th>Route ID</th><th>Seq.</th><th>Pay Terms</th><th>Docs</th><th>Remarks</th><th>Dup?</th><th>Status</th><th>Sync</th><th style="text-align:center">Actions</th></tr></thead>
+      <tbody id="appr-body"><tr><td colspan="23"><div class="empty"><div class="empty-icon">📋</div><div class="empty-title">Queue is empty</div></div></td></tr></tbody>
+    </table>
+  </div>
+</section>
+<!-- CLIENT DATABASE -->
+<section class="page" id="pg-clients">
+  <div class="ph">
+    <div><div class="ph-title">Client database</div><div class="ph-sub">3,588 existing + new approved registrations · Search · Download individual record · Update client info</div></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="pill exist" style="font-size:11px;padding:4px 10px">● Existing</span>
+      <span class="pill ok" style="font-size:11px;padding:4px 10px">● New</span>
+      <span class="pill upd" style="font-size:11px;padding:4px 10px">● Updated</span>
+      <div style="width:1px;height:18px;background:var(--border)"></div>
+      <button class="btn btn-gh btn-sm" onclick="dlExcel('all')">⬇ Download all (Excel)</button>
+      <button class="btn btn-gh btn-sm" onclick="dlExcel('filtered')">⬇ Download filtered</button>
+    </div>
+  </div>
+  <div class="sbar"><input type="text" id="dbSearch" placeholder="Search by name, address, city, province, cluster, route, delivery area, TIN, nature of business..." oninput="filterDB()"><div style="font-size:12px;color:var(--t3);white-space:nowrap" id="dbStats">Loading...</div></div>
+  <div class="twrap"><table style="min-width:1400px">
+    <thead><tr><th>Type</th><th>Internal ID</th><th>Client name</th><th>Address 1</th><th>Address 2</th><th>City</th><th>Province</th><th>ZIP</th><th>Delivery Area</th><th>Cluster ID</th><th>Route ID</th><th>Lat</th><th>Lon</th><th style="text-align:center">Actions</th></tr></thead>
+    <tbody id="db-body"><tr><td colspan="14"><div class="empty"><div class="empty-icon">⏳</div><div class="empty-title">Loading...</div></div></td></tr></tbody>
+  </table></div>
+  <div class="pager" id="db-pager"></div>
+</section>
+<!-- ROUTE MAP -->
+<section class="page" id="pg-routes">
+  <div class="ph">
+    <div><div class="ph-title">Route & cluster map</div><div class="ph-sub">All 179 clusters · Colour-coded by capacity · Click cluster for details</div></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="map-cl-filter" style="padding:7px 28px 7px 10px;font-size:12px;border:1.5px solid var(--border);border-radius:var(--r8);outline:none;cursor:pointer;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 fill=%22none%22 stroke=%22%2394A3B8%22 stroke-width=%222%22 viewBox=%220 0 24 24%22%3E%3Cpath d=%22M6 9l6 6 6-6%22/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 10px center" onchange="filterMap()"><option value="">All clusters</option></select>
+      <button class="btn btn-gh btn-sm" onclick="resetMap()">Reset</button>
+    </div>
+  </div>
+  <div class="g2" style="align-items:start;gap:14px">
+    <div><div class="card" style="padding:0;overflow:hidden"><div id="main-map" style="height:500px"></div></div>
+      <div style="display:flex;gap:12px;margin-top:10px;font-size:11px;color:var(--t3);flex-wrap:wrap">
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#059669;display:inline-block"></span>Healthy (≤70%)</span>
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#D97706;display:inline-block"></span>Near full (70–88%)</span>
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#DC2626;display:inline-block"></span>Full (≥88%)</span>
+        <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#1565C0;display:inline-block"></span>New registration</span>
+      </div>
+    </div>
+    <div style="width:280px;flex-shrink:0">
+      <div class="card"><div class="card-hd"><div class="ctitle"><div class="ib ib-t">📊</div>Cluster heatmap</div></div><div id="heatmap" style="max-height:440px;overflow-y:auto"><div class="empty"><div class="empty-icon">🗺</div><div class="empty-title">Loading...</div></div></div></div>
+    </div>
+  </div>
+</section>
+</main>
+<!-- MODALS -->
+<div class="modal-bg" id="user-modal"><div class="mbox" style="max-width:360px">
+  <div class="mtitle" style="text-align:center;margin-bottom:16px">Configure your profile</div>
+  <div class="field"><div class="fl">Your name</div><input type="text" id="user-name-in" placeholder="e.g. Maria Santos" maxlength="40"></div>
+  <div class="field"><div class="fl">Your role</div><select id="user-role-in"><option>Data Entry Operator</option><option>Routing Analyst</option><option>Logistics Planner</option><option>Logistics Manager</option><option>NS Admin</option><option>Accounts Development Specialist</option></select></div>
+  <div style="display:flex;gap:10px;margin-top:8px"><button class="btn btn-gh" style="flex:1" onclick="closeUserModal()">Cancel</button><button class="btn btn-n" style="flex:1" onclick="saveUser()">Save</button></div>
+</div></div>
+<div class="modal-bg" id="success-modal"><div class="mbox" style="max-width:480px;text-align:center">
+  <div class="micon ok" id="sm-icon">✅</div>
+  <div style="font-size:17px;font-weight:700;color:var(--navy);margin-bottom:8px" id="sm-title">Submitted to approval queue</div>
+  <div style="font-size:12px;color:var(--t3);margin-bottom:16px;line-height:1.6" id="sm-sub">Awaiting review.</div>
+  <div style="background:var(--s2);border-radius:var(--r10);border:1px solid var(--border);padding:14px;margin-bottom:16px;text-align:left" id="sm-data"></div>
+  <button class="btn btn-n" style="width:100%" onclick="closeSM()">Register another client</button>
+</div></div>
+<div class="modal-bg" id="edit-modal"><div class="mbox wide">
+  <div class="mtitle">Edit approved record</div>
+  <div class="msub">Changes saved locally and marked for re-sync.</div>
+  <input type="hidden" id="edit-id">
+  <div style="background:var(--lnavy);border-radius:var(--r8);padding:9px 14px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--navy)" id="edit-name">—</div>
+  <div class="g2">
+    <div class="field"><div class="fl">Business name</div><input type="text" id="edit-bizName"></div>
+    <div class="field"><div class="fl">Trade name</div><input type="text" id="edit-tradeName"></div>
+    <div class="field"><div class="fl">Address 1</div><input type="text" id="edit-addr1"></div>
+    <div class="field"><div class="fl">Address 2</div><input type="text" id="edit-addr2"></div>
+    <div class="field"><div class="fl">City</div><input type="text" id="edit-city"></div>
+    <div class="field"><div class="fl">Province</div><input type="text" id="edit-province"></div>
+    <div class="field"><div class="fl">ZIP</div><input type="text" id="edit-zip"></div>
+    <div class="field"><div class="fl">Delivery area</div><input type="text" id="edit-deliveryArea"></div>
+    <div class="field"><div class="fl">Payment terms</div><select id="edit-paymentTerms"><option value="">—</option><option>Cash on Delivery (COD)</option><option>7 days</option><option>14 days</option><option>30 days</option><option>45 days</option><option>60 days</option><option>90 days</option></select></div>
+    <div class="field"><div class="fl">Cluster ID</div><input type="text" id="edit-clusterId"></div>
+    <div class="field"><div class="fl">Route ID</div><input type="text" id="edit-routeId"></div>
+    <div class="field"><div class="fl">Remarks / reason</div><input type="text" id="edit-remarks" placeholder="e.g. Address correction per Sales Rep email"></div>
+  </div>
+  <div style="margin-top:12px"><div class="slbl">Change history</div><div class="clog" id="edit-clog"><div style="font-size:11px;color:var(--t3);padding:8px">No changes yet</div></div></div>
+  <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-gh" style="flex:1" onclick="closeEditModal()">Cancel</button><button class="btn btn-g" style="flex:2" onclick="saveEdit()">Save changes</button></div>
+</div></div>
+<div class="modal-bg" id="dl-modal"><div class="mbox" style="max-width:460px">
+  <div class="micon info" style="margin-bottom:14px">📥</div>
+  <div class="mtitle" style="text-align:center" id="dl-title">Download client record</div>
+  <div class="msub" style="text-align:center">PFC-formatted CSV · all available fields</div>
+  <div style="background:var(--s2);border-radius:var(--r8);padding:12px;margin-bottom:16px;font-size:11px" id="dl-preview"></div>
+  <div style="display:flex;gap:10px"><button class="btn btn-gh" style="flex:1" onclick="document.getElementById('dl-modal').classList.remove('on')">Cancel</button><button class="btn btn-n" style="flex:2" id="dl-btn">⬇ Download CSV</button></div>
+</div></div>
+<div class="modal-bg" id="update-modal"><div class="mbox wide">
+  <div class="mtitle">Update client information</div>
+  <div class="msub">Apply changes to client record. All updates are logged with timestamp and synced to Google Sheet.</div>
+  <input type="hidden" id="upd-id">
+  <div style="background:var(--lnavy);border-radius:var(--r8);padding:9px 14px;margin-bottom:14px">
+    <div style="font-size:13px;font-weight:600;color:var(--navy)" id="upd-name">—</div>
+    <div style="font-size:11px;color:var(--t3)" id="upd-meta">—</div>
+  </div>
+  <div class="field"><div class="fl">Update category <span class="req">*</span></div>
+    <select id="upd-cat" onchange="showUpdFields()">
+      <option value="">— Select what to update —</option>
+      <option value="address">Delivery address change</option>
+      <option value="payment">Payment terms change</option>
+      <option value="contact">Contact information update</option>
+      <option value="hq">HQ / billing address change</option>
+      <option value="routing">Routing assignment correction</option>
+      <option value="other">Other / general update</option>
+    </select>
+  </div>
+  <div id="upd-fields" style="display:none">
+    <div id="upd-addr-f">
+      <div class="g2">
+        <div class="field"><div class="fl">New Address 1</div><input type="text" id="upd-addr1"></div>
+        <div class="field"><div class="fl">New Address 2</div><input type="text" id="upd-addr2"></div>
+        <div class="field"><div class="fl">New City</div><input type="text" id="upd-city"></div>
+        <div class="field"><div class="fl">New Province</div><input type="text" id="upd-province"></div>
+        <div class="field"><div class="fl">New ZIP</div><input type="text" id="upd-zip"></div>
+        <div class="field"><div class="fl">New Delivery Area</div><input type="text" id="upd-area"></div>
+      </div>
+    </div>
+    <div id="upd-pay-f">
+      <div class="g2">
+        <div class="field"><div class="fl">New payment terms</div><select id="upd-payTerms"><option value="">—</option><option>Cash on Delivery (COD)</option><option>7 days</option><option>14 days</option><option>30 days</option><option>45 days</option><option>60 days</option><option>90 days</option></select></div>
+        <div class="field"><div class="fl">New credit limit</div><input type="text" id="upd-credit" placeholder="e.g. PHP 100,000"></div>
+      </div>
+    </div>
+    <div id="upd-route-f">
+      <div class="g2">
+        <div class="field"><div class="fl">New Cluster ID</div><input type="text" id="upd-clusterId"></div>
+        <div class="field"><div class="fl">New Route ID</div><input type="text" id="upd-routeId"></div>
+      </div>
+    </div>
+    <div class="field"><div class="fl">Reason for update <span class="req">*</span></div><input type="text" id="upd-reason" placeholder="e.g. Client relocated per Sales Rep J. Cruz email 15 May 2026"></div>
+    <div class="field"><div class="fl">Authorized by</div><input type="text" id="upd-auth" placeholder="Name and position of authorizing person"></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-gh" style="flex:1" onclick="closeUpdModal()">Cancel</button><button class="btn btn-n" style="flex:2" onclick="saveUpdate()">Apply update</button></div>
+</div></div>
+<div class="modal-bg" id="bulk-modal"><div class="mbox" style="max-width:600px">
+  <div class="mtitle">Bulk import from CSV</div>
+  <div class="msub">Upload multiple new clients at once. Each row goes to the approval queue.</div>
+  <div class="info-b blue"><span>ℹ️</span><span><strong>Required columns:</strong> Business Name, Trade Name, Sales Rep, Address 1, Address 2, Province, City<br><button onclick="dlBulkTpl()" style="background:none;border:none;color:var(--blue2);text-decoration:underline;cursor:pointer;font-size:11px;font-family:'Inter',sans-serif">⬇ Download template</button></span></div>
+  <div class="dropzone" id="dropzone" onclick="document.getElementById('csv-in').click()">
+    <input type="file" id="csv-in" accept=".csv" style="display:none" onchange="handleCSV(event)">
+    <div style="font-size:26px;margin-bottom:8px;opacity:.4">📂</div>
+    <div style="font-size:13px;font-weight:500;color:var(--t2);margin-bottom:4px">Click to select CSV file</div>
+    <div style="font-size:11px;color:var(--t3)">or drag and drop · .csv files only</div>
+  </div>
+  <div id="bulk-preview" style="margin-top:14px"></div>
+  <div style="display:flex;gap:10px;margin-top:12px">
+    <button class="btn btn-gh" style="flex:1" onclick="closeBulkModal()">Cancel</button>
+    <button class="btn btn-g" style="flex:2;display:none" id="bulk-go" onclick="submitBulk()">Import all to queue</button>
+  </div>
+</div></div>
+<div class="modal-bg" id="map-modal"><div class="mbox" style="max-width:620px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div class="mtitle">Verify delivery location</div>
+    <button class="btn btn-gh btn-sm" onclick="document.getElementById('map-modal').classList.remove('on')">✕</button>
+  </div>
+  <div id="map-verify" style="height:340px;border-radius:var(--r8);overflow:hidden;border:1px solid var(--border)"></div>
+  <div style="margin-top:10px;font-size:11px;color:var(--t3)">Drag the pin to correct · <span id="map-coords" style="font-family:'JetBrains Mono',monospace;color:var(--blue2)"></span></div>
+  <button class="btn btn-n" style="width:100%;margin-top:10px" onclick="confirmMapCoords()">✓ Confirm coordinates</button>
+</div></div>
+
+<!-- ══ DOCUMENT MANAGER MODAL ════════════════════════════════════════════ -->
+<div class="modal-bg" id="docs-modal">
+  <div class="mbox wide" style="max-width:680px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div class="mtitle">📁 Document Manager</div>
+        <div class="msub" style="margin-bottom:0" id="docs-modal-client">Client documents & Drive folder</div>
+      </div>
+      <button class="btn btn-gh btn-sm" onclick="document.getElementById('docs-modal').classList.remove('on')">✕ Close</button>
+    </div>
+    <!-- Drive Folder Link -->
+    <div style="background:var(--lg);border:1px solid var(--bg2);border-radius:var(--r10);padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.3px">📂 Google Drive Folder</div>
+        <span class="pill ok" id="docs-drive-status" style="font-size:10px">Not synced yet</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="docs-drive-url" placeholder="Paste Google Drive folder URL here after syncing to Sheet..."
+          style="flex:1;padding:9px 12px;border:1.5px solid var(--bg2);border-radius:var(--r8);font-family:'Inter',sans-serif;font-size:12px;outline:none;color:var(--text);background:#fff">
+        <button class="btn btn-g btn-sm" onclick="saveDriveFolderUrl()">Save URL</button>
+        <a id="docs-drive-open" href="#" target="_blank" style="display:none">
+          <button class="btn btn-t btn-sm" type="button">🔗 Open in Drive</button>
+        </a>
+      </div>
+      <div style="font-size:10px;color:var(--green);margin-top:7px;line-height:1.5">
+        After approving this client, go to your Google Sheet → the <strong>Drive Folder URL</strong> column contains the link. Copy and paste it here. The folder contains all uploaded accreditation documents.
+      </div>
+    </div>
+    <!-- Documents List -->
+    <div>
+      <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:10px">Attached documents</div>
+      <div id="docs-list-content">
+        <div class="empty"><div class="empty-icon">📄</div><div class="empty-title">No documents attached</div><div class="empty-sub">Upload documents in Step 7 of the CIS wizard</div></div>
+      </div>
+    </div>
+    <!-- Upload status summary -->
+    <div id="docs-upload-summary" style="display:none;margin-top:14px;padding:10px 14px;background:var(--lb);border:1px solid var(--bb);border-radius:var(--r8);font-size:11px;color:var(--blue2)"></div>
+  </div>
+</div>
+
+
+<!-- ══ GOOGLE DRIVE & SHEET SETUP MODAL ════════════════════════════════════ -->
+<div class="modal-bg" id="setup-modal">
+  <div class="mbox" style="max-width:580px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div style="width:44px;height:44px;border-radius:var(--r10);background:linear-gradient(135deg,#1a73e8,#0d9488);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">⚙</div>
+      <div>
+        <div class="mtitle" style="margin-bottom:0">Google Drive & Sheet Setup</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:3px">Connect once — files go to Drive automatically, clients appear in your Sheet</div>
+      </div>
+    </div>
+
+    <!-- STATUS INDICATORS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+      <div id="setup-sheet-card" style="padding:12px 14px;border-radius:var(--r10);border:1.5px solid var(--border);background:var(--s2)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:18px">📊</span>
+          <span style="font-size:11px;font-weight:700;color:var(--t2)">Google Sheet</span>
+          <span id="setup-sheet-pill" style="margin-left:auto;font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--s3);color:var(--t3)">Not connected</span>
+        </div>
+        <div id="setup-sheet-info" style="font-size:11px;color:var(--t3)">Approved clients will be written here automatically</div>
+        <a id="setup-sheet-link" href="#" target="_blank" style="display:none;font-size:11px;color:var(--blue2);text-decoration:none;margin-top:4px;display:none">🔗 Open Google Sheet</a>
+      </div>
+      <div id="setup-drive-card" style="padding:12px 14px;border-radius:var(--r10);border:1.5px solid var(--border);background:var(--s2)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:18px">📂</span>
+          <span style="font-size:11px;font-weight:700;color:var(--t2)">Google Drive</span>
+          <span id="setup-drive-pill" style="margin-left:auto;font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--s3);color:var(--t3)">Not connected</span>
+        </div>
+        <div id="setup-drive-info" style="font-size:11px;color:var(--t3)">Uploaded documents go here, organized per client</div>
+        <a id="setup-drive-link" href="#" target="_blank" style="display:none;font-size:11px;color:var(--blue2);text-decoration:none;margin-top:4px">🔗 Open Drive folder</a>
+      </div>
+    </div>
+
+    <!-- STEP BY STEP INSTRUCTIONS -->
+    <div style="background:var(--lnavy);border-radius:var(--r10);padding:16px;margin-bottom:18px">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:12px">One-time setup — 5 minutes</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+          <div>Go to <a href="https://sheets.google.com" target="_blank" style="color:var(--blue2)">sheets.google.com</a> → create a new blank spreadsheet → name it <strong>PFC Onboarding</strong></div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+          <div>Inside that Sheet → click <strong>Extensions</strong> → <strong>Apps Script</strong> → delete all code → paste the entire <strong>PFC_GoogleAppsScript_v3.js</strong> file → click Save</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
+          <div>Click <strong>Deploy → New deployment</strong> → Type: <strong>Web App</strong> → Execute as: <strong>Me</strong> → Who has access: <strong>Anyone within Premier Food Choice International Corp.</strong> → click <strong>Deploy</strong> → Authorize with your PFC Google account</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">4</div>
+          <div>Copy the <strong>Web App URL</strong> → paste it below → click <strong>Verify in browser →</strong> to open it in a new tab</div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;font-size:12px;color:var(--t2)">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">5</div>
+          <div>From the JSON response that opens, copy the <strong>driveRootUrl</strong> and <strong>sheetUrl</strong> values → paste them in the fields below → click <strong>Save & activate</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- URL INPUT -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Web App URL</div>
+      <div style="font-size:11px;color:var(--amber);background:var(--la);border:1px solid var(--ba);border-radius:var(--r6);padding:7px 11px;margin-bottom:8px;display:flex;align-items:flex-start;gap:6px">
+        <span>⚠️</span>
+        <span><strong>Note:</strong> Because this is a local HTML file, the browser cannot auto-test your connection. Click <strong>Verify in browser →</strong> to open your Web App URL in a new tab — if it shows <em>status: ok</em> JSON, it works. Data uploads happen silently in the background.</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="setup-url-input" placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+          style="flex:1;padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--r8);font-family:'Inter',sans-serif;font-size:12px;outline:none;color:var(--text)"
+          oninput="this.style.borderColor='var(--border)'"
+          value="">
+        <button class="btn btn-n" onclick="connectBackend()" id="setup-connect-btn">Verify in browser →</button>
+      </div>
+      <div id="setup-test-result" style="font-size:11px;margin-top:8px;min-height:16px;color:var(--t3)">Paste your Web App URL above then click Connect & test</div>
+    </div>
+
+    <!-- Drive + Sheet URL fields -->
+    
+
+    <!-- Step 5: paste URLs from JSON -->
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r10);padding:12px;margin-bottom:12px">
+      <div style="font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Step 5 — Paste these from the JSON tab</div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:10px;color:var(--t3);margin-bottom:3px">📊 sheetUrl → Google Sheet link</div>
+        <input type="text" id="setup-sheet-url-input" placeholder="https://docs.google.com/spreadsheets/d/..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r6);font-family:'Inter',sans-serif;font-size:11px;outline:none;color:var(--text)">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--t3);margin-bottom:3px">📂 driveRootUrl → Drive folder link</div>
+        <input type="text" id="setup-drive-url-input" placeholder="https://drive.google.com/drive/folders/..." style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--r6);font-family:'Inter',sans-serif;font-size:11px;outline:none;color:var(--text)">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-gh" style="flex:1" onclick="document.getElementById('setup-modal').classList.remove('on')">Close</button>
+      <button class="btn btn-g" style="flex:1" id="setup-save-btn" onclick="finalizeSetup()">✓ Save & activate</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<script>// ═══════════════════════════════════════════════════════════════════════════
+//  PFC CLIENT ONBOARDING SYSTEM — Backend-wired JS  (API version)
+//  Replaces all localStorage with Flask /api/* calls
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CLUSTER_CENTROIDS=[{"id":"AGN-BUT","city":"Butuan","province":"Agusan del Norte","zone":"Single Zone","lat":8.93155,"lon":125.52748,"clients":45},{"id":"BEN-BAG","city":"Baguio","province":"Benguet","zone":"Single Zone","lat":16.41639,"lon":120.59306,"clients":48},{"id":"BIL-TAG","city":"Tagbilaran","province":"Bohol","zone":"Single Zone","lat":9.65695,"lon":123.85437,"clients":31},{"id":"CAG-TUG","city":"Tuguegarao","province":"Cagayan","zone":"Single Zone","lat":17.6132,"lon":121.72686,"clients":14},{"id":"CAM-SUR","city":"Naga","province":"Camarines Sur","zone":"Single Zone","lat":13.6218,"lon":123.19444,"clients":25},{"id":"CAP-ILO","city":"Iloilo","province":"Capiz","zone":"Single Zone","lat":10.69639,"lon":122.56194,"clients":42},{"id":"CAV-CAVI","city":"Cavite City","province":"Cavite","zone":"Zone A","lat":14.47694,"lon":120.89806,"clients":28},{"id":"CAV-DAS","city":"Dasmariñas","province":"Cavite","zone":"Zone B","lat":14.32944,"lon":120.93611,"clients":34},{"id":"CAV-GEN","city":"General Trias","province":"Cavite","zone":"Zone C","lat":14.38778,"lon":120.88,"clients":19},{"id":"CAV-IMU","city":"Imus","province":"Cavite","zone":"Zone A","lat":14.42972,"lon":120.93528,"clients":23},{"id":"CAV-TAG","city":"Tagaytay","province":"Cavite","zone":"Zone D","lat":14.10361,"lon":120.96222,"clients":11},{"id":"CEB-CEB","city":"Cebu City","province":"Cebu","zone":"Zone A","lat":10.31667,"lon":123.89167,"clients":120},{"id":"CEB-LAP","city":"Lapu-Lapu","province":"Cebu","zone":"Zone B","lat":10.31167,"lon":124.0375,"clients":38},{"id":"CEB-MAN","city":"Mandaue","province":"Cebu","zone":"Zone A","lat":10.35361,"lon":123.93111,"clients":45},{"id":"DAV-DAV","city":"Davao City","province":"Davao del Sur","zone":"Zone A","lat":7.07306,"lon":125.61278,"clients":89},{"id":"ILN-ILO","city":"Iloilo City","province":"Iloilo","zone":"Single Zone","lat":10.72028,"lon":122.5621,"clients":67},{"id":"LAG-CAL","city":"Calamba","province":"Laguna","zone":"Zone A","lat":14.21167,"lon":121.16444,"clients":41},{"id":"LAG-SPA","city":"San Pablo","province":"Laguna","zone":"Zone B","lat":14.06417,"lon":121.32028,"clients":18},{"id":"LAG-STA","city":"Santa Rosa","province":"Laguna","zone":"Zone A","lat":14.31222,"lon":121.1125,"clients":29},{"id":"LAN-GEN","city":"General Santos","province":"South Cotabato","zone":"Single Zone","lat":6.11278,"lon":125.17222,"clients":44},{"id":"LEY-TAC","city":"Tacloban","province":"Leyte","zone":"Single Zone","lat":11.24444,"lon":125.00278,"clients":35},{"id":"LUZ-BAT","city":"Batangas City","province":"Batangas","zone":"Zone A","lat":13.75417,"lon":121.05833,"clients":31},{"id":"LUZ-LIP","city":"Lipa","province":"Batangas","zone":"Zone B","lat":13.94361,"lon":121.16389,"clients":24},{"id":"MAR-ILI","city":"Iligan","province":"Lanao del Norte","zone":"Single Zone","lat":8.22806,"lon":124.24,"clients":21},{"id":"MIO-CDO","city":"Cagayan de Oro","province":"Misamis Oriental","zone":"Single Zone","lat":8.47222,"lon":124.64722,"clients":58},{"id":"NCR-CAL","city":"Caloocan","province":"Metro Manila","zone":"Zone A","lat":14.65028,"lon":120.96667,"clients":52},{"id":"NCR-LAS","city":"Las Piñas","province":"Metro Manila","zone":"Zone B","lat":14.44944,"lon":121.00139,"clients":38},{"id":"NCR-MAK","city":"Makati","province":"Metro Manila","zone":"Zone A","lat":14.55444,"lon":121.02222,"clients":145},{"id":"NCR-MAL","city":"Malabon","province":"Metro Manila","zone":"Zone A","lat":14.66361,"lon":120.96028,"clients":29},{"id":"NCR-MAN","city":"Manila","province":"Metro Manila","zone":"Zone A","lat":14.5958,"lon":120.9772,"clients":198},{"id":"NCR-MAN-E","city":"Manila East","province":"Metro Manila","zone":"Zone A","lat":14.6042,"lon":121.0089,"clients":87},{"id":"NCR-MAR","city":"Marikina","province":"Metro Manila","zone":"Zone B","lat":14.65,"lon":121.10306,"clients":44},{"id":"NCR-MNL","city":"Muntinlupa","province":"Metro Manila","zone":"Zone B","lat":14.40833,"lon":121.04083,"clients":61},{"id":"NCR-PAS","city":"Pasay","province":"Metro Manila","zone":"Zone A","lat":14.53778,"lon":121.00333,"clients":48},{"id":"NCR-PSG","city":"Pasig","province":"Metro Manila","zone":"Zone A","lat":14.5756,"lon":121.07944,"clients":89},{"id":"NCR-PRQ-NW","city":"Paranaque NW","province":"Metro Manila","zone":"Zone B","lat":14.50833,"lon":120.99917,"clients":55},{"id":"NCR-PRQ-S","city":"Paranaque S","province":"Metro Manila","zone":"Zone B","lat":14.47722,"lon":121.00417,"clients":33},{"id":"NCR-QC-N","city":"Quezon City N","province":"Metro Manila","zone":"Zone A","lat":14.70056,"lon":121.04167,"clients":78},{"id":"NCR-QC-S","city":"Quezon City S","province":"Metro Manila","zone":"Zone A","lat":14.62694,"lon":121.04333,"clients":112},{"id":"NCR-QC-SE","city":"Quezon City SE","province":"Metro Manila","zone":"Zone A","lat":14.64528,"lon":121.07889,"clients":67},{"id":"NCR-QC-W","city":"Quezon City W","province":"Metro Manila","zone":"Zone A","lat":14.65583,"lon":121.00722,"clients":43},{"id":"NCR-SJN","city":"San Juan","province":"Metro Manila","zone":"Zone A","lat":14.60139,"lon":121.03,"clients":31},{"id":"NCR-TAG","city":"Taguig","province":"Metro Manila","zone":"Zone A","lat":14.52028,"lon":121.05111,"clients":74},{"id":"NCR-VAL","city":"Valenzuela","province":"Metro Manila","zone":"Zone A","lat":14.69444,"lon":120.98333,"clients":46},{"id":"NEC-BAL","city":"Balanga","province":"Bataan","zone":"Single Zone","lat":14.67528,"lon":120.53583,"clients":12},{"id":"NEC-OLO","city":"Olongapo","province":"Zambales","zone":"Single Zone","lat":14.83028,"lon":120.28333,"clients":19},{"id":"NEO-CAG","city":"Cabanatuan","province":"Nueva Ecija","zone":"Single Zone","lat":15.48639,"lon":120.96722,"clients":22},{"id":"PAM-ANG","city":"Angeles","province":"Pampanga","zone":"Zone A","lat":15.14972,"lon":120.58222,"clients":37},{"id":"PAM-PAMP","city":"San Fernando","province":"Pampanga","zone":"Zone B","lat":15.07,"lon":120.67361,"clients":44},{"id":"QUE-LUC","city":"Lucena","province":"Quezon","zone":"Single Zone","lat":13.93417,"lon":121.61611,"clients":18},{"id":"RIZ-ANT","city":"Antipolo","province":"Rizal","zone":"Zone A","lat":14.58583,"lon":121.17611,"clients":56},{"id":"RIZ-ROD","city":"Rodriguez","province":"Rizal","zone":"Zone B","lat":14.73667,"lon":121.115,"clients":19},{"id":"RIZ-SAN","city":"San Mateo","province":"Rizal","zone":"Zone B","lat":14.69944,"lon":121.12333,"clients":24},{"id":"RIZ-TAY","city":"Taytay","province":"Rizal","zone":"Zone A","lat":14.55389,"lon":121.13222,"clients":31},{"id":"TAR-TAR","city":"Tarlac City","province":"Tarlac","zone":"Single Zone","lat":15.48583,"lon":120.59694,"clients":26},{"id":"ZAM-ZAM","city":"Zamboanga City","province":"Zamboanga del Sur","zone":"Single Zone","lat":6.90972,"lon":122.07333,"clients":37}];
+
+const ROUTE_LOOKUP={"BEN-BAG-R01":{"cluster":"BEN-BAG","drops":8,"remaining":17},"BEN-BAG-R02":{"cluster":"BEN-BAG","drops":5,"remaining":20},"CAV-CAVI-R01":{"cluster":"CAV-CAVI","drops":4,"remaining":21},"CAV-DAS-R01":{"cluster":"CAV-DAS","drops":6,"remaining":19},"CAV-GEN-R01":{"cluster":"CAV-GEN","drops":3,"remaining":22},"CAV-IMU-R01":{"cluster":"CAV-IMU","drops":4,"remaining":21},"CAV-TAG-R01":{"cluster":"CAV-TAG","drops":2,"remaining":23},"CEB-CEB-R01":{"cluster":"CEB-CEB","drops":9,"remaining":16},"CEB-CEB-R02":{"cluster":"CEB-CEB","drops":7,"remaining":18},"CEB-CEB-R03":{"cluster":"CEB-CEB","drops":6,"remaining":19},"CEB-LAP-R01":{"cluster":"CEB-LAP","drops":5,"remaining":20},"CEB-MAN-R01":{"cluster":"CEB-MAN","drops":7,"remaining":18},"DAV-DAV-R01":{"cluster":"DAV-DAV","drops":8,"remaining":17},"DAV-DAV-R02":{"cluster":"DAV-DAV","drops":6,"remaining":19},"ILN-ILO-R01":{"cluster":"ILN-ILO","drops":7,"remaining":18},"ILN-ILO-R02":{"cluster":"ILN-ILO","drops":5,"remaining":20},"LAG-CAL-R01":{"cluster":"LAG-CAL","drops":6,"remaining":19},"LAG-SPA-R01":{"cluster":"LAG-SPA","drops":3,"remaining":22},"LAG-STA-R01":{"cluster":"LAG-STA","drops":5,"remaining":20},"LAN-GEN-R01":{"cluster":"LAN-GEN","drops":6,"remaining":19},"MIO-CDO-R01":{"cluster":"MIO-CDO","drops":7,"remaining":18},"MIO-CDO-R02":{"cluster":"MIO-CDO","drops":5,"remaining":20},"NCR-CAL-R01":{"cluster":"NCR-CAL","drops":8,"remaining":17},"NCR-LAS-R01":{"cluster":"NCR-LAS","drops":6,"remaining":19},"NCR-MAK-R01":{"cluster":"NCR-MAK","drops":9,"remaining":16},"NCR-MAK-R02":{"cluster":"NCR-MAK","drops":8,"remaining":17},"NCR-MAK-R03":{"cluster":"NCR-MAK","drops":7,"remaining":18},"NCR-MAL-R01":{"cluster":"NCR-MAL","drops":5,"remaining":20},"NCR-MAN-R01":{"cluster":"NCR-MAN","drops":10,"remaining":15},"NCR-MAN-R02":{"cluster":"NCR-MAN","drops":9,"remaining":16},"NCR-MAN-R03":{"cluster":"NCR-MAN","drops":8,"remaining":17},"NCR-MAN-E-R01":{"cluster":"NCR-MAN-E","drops":7,"remaining":18},"NCR-MAR-R01":{"cluster":"NCR-MAR","drops":6,"remaining":19},"NCR-MNL-R01":{"cluster":"NCR-MNL","drops":7,"remaining":18},"NCR-MNL-R02":{"cluster":"NCR-MNL","drops":5,"remaining":20},"NCR-PAS-R01":{"cluster":"NCR-PAS","drops":7,"remaining":18},"NCR-PSG-R01":{"cluster":"NCR-PSG","drops":8,"remaining":17},"NCR-PSG-R02":{"cluster":"NCR-PSG","drops":6,"remaining":19},"NCR-PRQ-NW-R01":{"cluster":"NCR-PRQ-NW","drops":7,"remaining":18},"NCR-PRQ-NW-R02":{"cluster":"NCR-PRQ-NW","drops":5,"remaining":20},"NCR-PRQ-S-R01":{"cluster":"NCR-PRQ-S","drops":6,"remaining":19},"NCR-QC-N-R01":{"cluster":"NCR-QC-N","drops":8,"remaining":17},"NCR-QC-N-R02":{"cluster":"NCR-QC-N","drops":6,"remaining":19},"NCR-QC-S-R01":{"cluster":"NCR-QC-S","drops":9,"remaining":16},"NCR-QC-S-R02":{"cluster":"NCR-QC-S","drops":7,"remaining":18},"NCR-QC-SE-R01":{"cluster":"NCR-QC-SE","drops":7,"remaining":18},"NCR-QC-SE-R02":{"cluster":"NCR-QC-SE","drops":5,"remaining":20},"NCR-QC-W-R01":{"cluster":"NCR-QC-W","drops":6,"remaining":19},"NCR-SJN-R01":{"cluster":"NCR-SJN","drops":5,"remaining":20},"NCR-TAG-R01":{"cluster":"NCR-TAG","drops":8,"remaining":17},"NCR-TAG-R02":{"cluster":"NCR-TAG","drops":6,"remaining":19},"NCR-VAL-R01":{"cluster":"NCR-VAL","drops":7,"remaining":18},"PAM-ANG-R01":{"cluster":"PAM-ANG","drops":5,"remaining":20},"PAM-PAMP-R01":{"cluster":"PAM-PAMP","drops":6,"remaining":19},"RIZ-ANT-R01":{"cluster":"RIZ-ANT","drops":7,"remaining":18},"RIZ-ANT-R02":{"cluster":"RIZ-ANT","drops":5,"remaining":20},"RIZ-ROD-R01":{"cluster":"RIZ-ROD","drops":3,"remaining":22},"RIZ-SAN-R01":{"cluster":"RIZ-SAN","drops":4,"remaining":21},"RIZ-TAY-R01":{"cluster":"RIZ-TAY","drops":5,"remaining":20},"TAR-TAR-R01":{"cluster":"TAR-TAR","drops":4,"remaining":21},"ZAM-ZAM-R01":{"cluster":"ZAM-ZAM","drops":5,"remaining":20}};
+
+const STEP_LABELS=['Company Info','Officers & Banking','HQ Address','Delivery & Routing','Order Details','Payment Terms','Documents','Auto-Routing','Review & Submit'];
+let wizStep=1, formData={}, wizDocs=[];
+let st={lat:null,lon:null,clusterId:'',routeId:'',seq:0,slotsLeft:0,clusterZone:'',clusterDist:0,geoSource:''};
+let routingDone=false;
+let approvalShowAll=true, dbPage=1, dbPageSize=20, dbTotal=0, dbSearch='', dbAreaFilter='';
+let _currentUser=null, _map=null, _mapLoaded=false;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function gid(id){return document.getElementById(id);}
+function tv(id){const el=gid(id);return el?el.value.trim():'';}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let _tTimer=null;
+function showToast(msg,dur=3200){
+  const t=gid('toast');if(!t)return;
+  const sp=t.querySelector('#toast-msg')||t;
+  sp.textContent=msg;t.classList.add('on');
+  if(_tTimer)clearTimeout(_tTimer);
+  _tTimer=setTimeout(()=>t.classList.remove('on'),dur);
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+async function checkAuth(){
+  try{
+    const r=await fetch('/api/me');
+    if(!r.ok){window.location.href='/';return false;}
+    const d=await r.json();
+    if(!d.authenticated){window.location.href='/';return false;}
+    _currentUser=d;
+    const av=gid('user-av'),un=gid('user-name'),ur=gid('user-role');
+    if(av)av.textContent=(d.display||'?')[0].toUpperCase();
+    if(un)un.textContent=d.display||'Unknown';
+    if(ur)ur.textContent=d.role||'';
+    if(d.role==='planner'){window.location.href='/';return false;}
+    if(d.role!=='supervisor'){
+      document.querySelectorAll('.supervisor-only').forEach(el=>el.style.display='none');
+      const aab=gid('approve-all-btn');if(aab)aab.style.display='none';
+    }
+    return true;
+  }catch(e){window.location.href='/';return false;}
+}
+
+async function doLogout(){
+  await fetch('/api/logout',{method:'POST'});
+  window.location.href='/';
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function showTab(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('on'));
+  const pg=gid('pg-'+id);if(pg)pg.classList.add('on');
+  document.querySelectorAll('.ntab').forEach(t=>{
+    const oc=t.getAttribute('onclick')||'';
+    if(oc.includes("'"+id+"'"))t.classList.add('on');
+  });
+  if(id==='dashboard')refreshDash();
+  if(id==='approval')renderApproval();
+  if(id==='duplog')renderDupLog();
+  if(id==='clients'){renderClientDB();loadAreaFilter();}
+  if(id==='routes'){initMap();setTimeout(()=>{if(_map)_map.invalidateSize();},300);}
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+async function refreshDash(){
+  try{
+    const r=await fetch('/api/client-master/stats');
+    if(!r.ok)return;
+    const d=await r.json();
+    const dt=gid('d-total'),dd=gid('d-total-d'),dp=gid('d-pend'),du=gid('d-dups');
+    if(dt)dt.textContent=d.total.toLocaleString();
+    if(dd)dd.textContent=d.total+' active clients';
+    if(dp)dp.textContent=d.pending_submissions;
+    if(du)du.textContent='0';
+    updateBadges(d.pending_submissions,0);
+  }catch(e){}
+  try{
+    const r2=await fetch('/api/client-submissions?status=PENDING');
+    if(!r2.ok)return;
+    const subs=await r2.json();
+    const recEl=gid('d-recent');if(!recEl)return;
+    if(!subs.length){
+      recEl.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">No pending submissions</div></div>';
+    }else{
+      recEl.innerHTML='<table><thead><tr><th>Client</th><th>Type</th><th>Submitted by</th><th>Date</th></tr></thead><tbody>'+
+        subs.slice(0,8).map(row=>'<tr><td><strong>'+esc(row.trade_name||row.reg_name)+'</strong></td><td>'+esc(row.biz_type||'—')+'</td><td>'+esc(row.submitted_by)+'</td><td>'+(row.submitted_at||'').slice(0,10)+'</td></tr>').join('')+
+        '</tbody></table>';
+    }
+  }catch(e){}
+}
+
+function updateBadges(pend,dups){
+  const ba=gid('bdg-appr'),bd=gid('bdg-dup');
+  if(ba){ba.textContent=pend;ba.style.display=pend>0?'':'none';}
+  if(bd){bd.textContent=dups;bd.style.display=dups>0?'':'none';}
+  const bc=gid('bdg-clients');
+  if(bc)fetch('/api/client-master/stats').then(r=>r.json()).then(d=>{bc.textContent=d.total.toLocaleString();}).catch(()=>{});
+}
+
+// ── Approval Queue ─────────────────────────────────────────────────────────
+async function renderApproval(){
+  const tbody=gid('appr-body');if(!tbody)return;
+  try{
+    const url=approvalShowAll?'/api/client-submissions':'/api/client-submissions?status=PENDING';
+    const r=await fetch(url);if(!r.ok)return;
+    const queue=await r.json();
+    if(!queue.length){
+      tbody.innerHTML='<tr><td colspan="23"><div class="empty"><div class="empty-icon">✅</div><div class="empty-title">Queue is empty</div></div></td></tr>';
+      return;
+    }
+    const isSup=_currentUser&&_currentUser.role==='supervisor';
+    tbody.innerHTML=queue.map(row=>{
+      const pill=row.approval_status==='APPROVED'?'ok':row.approval_status==='REJECTED'?'rej':row.dup_flag?'flag':'pend';
+      const acts=isSup&&row.approval_status==='PENDING'
+        ?'<button class="btn btn-g btn-xs" onclick="approveReg('+row.id+')">✓</button> <button class="btn btn-d btn-xs" onclick="rejReg('+row.id+')">✗</button>'
+        :'<span class="pill '+pill+'">'+esc(row.approval_status)+'</span>';
+      return '<tr>'
+        +'<td style="font-size:11px">'+(row.submitted_at||'').slice(0,10)+'</td>'
+        +'<td><strong>'+esc(row.trade_name||row.reg_name)+'</strong>'+(row.dup_flag?'<br><span class="pill flag" style="font-size:9px">⚠ Dup</span>':'')+'</td>'
+        +'<td>'+esc(row.biz_type||'—')+'</td>'
+        +'<td style="font-size:11px">'+esc(row.nature_of_biz||'—')+'</td>'
+        +'<td style="font-size:11px">'+esc(row.del_addr1||'—')+'</td>'
+        +'<td style="font-size:11px">'+esc(row.del_addr2||'')+'</td>'
+        +'<td>'+esc(row.del_city||'—')+'</td>'
+        +'<td>'+esc(row.del_province||'—')+'</td>'
+        +'<td>'+esc(row.del_zip||'—')+'</td>'
+        +'<td>'+esc(row.delivery_area||'—')+'</td>'
+        +'<td style="font-family:monospace;font-size:10px">'+(row.latitude?Number(row.latitude).toFixed(4):'—')+'</td>'
+        +'<td style="font-family:monospace;font-size:10px">'+(row.longitude?Number(row.longitude).toFixed(4):'—')+'</td>'
+        +'<td style="font-size:11px">'+esc(row.hq_addr1||'—')+'</td>'
+        +'<td><span class="chip" style="font-size:9px">'+esc(row.cluster_id||'—')+'</span></td>'
+        +'<td style="font-size:11px">'+esc(row.route_id||'—')+'</td>'
+        +'<td>—</td><td style="font-size:11px">'+esc(row.payment_terms||'—')+'</td>'
+        +'<td>—</td><td>—</td>'
+        +'<td>'+(row.dup_flag?'<span class="pill flag">Yes</span>':'—')+'</td>'
+        +'<td><span class="pill '+pill+'">'+esc(row.approval_status)+'</span></td>'
+        +'<td>—</td>'
+        +'<td style="white-space:nowrap">'+acts+'</td>'
+        +'</tr>';
+    }).join('');
+  }catch(e){console.warn('Approval render',e);}
+}
+
+function togApprFilt(){
+  approvalShowAll=!approvalShowAll;
+  const fb=gid('filt-btn');if(fb)fb.textContent='Show: '+(approvalShowAll?'All':'Pending only');
+  renderApproval();
+}
+
+async function approveAll(){
+  if(!confirm('Approve ALL pending submissions?'))return;
+  try{
+    const r=await fetch('/api/client-submissions?status=PENDING');
+    const queue=await r.json();
+    const pending=queue.filter(q=>q.approval_status==='PENDING');
+    for(const row of pending)await fetch('/api/client-submissions/'+row.id+'/approve',{method:'POST'});
+    showToast('Approved '+pending.length+' submission(s)');
+    renderApproval();refreshDash();
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+async function approveReg(id){
+  if(!confirm('Approve and add to Client Master?'))return;
+  const r=await fetch('/api/client-submissions/'+id+'/approve',{method:'POST'});
+  const d=await r.json();
+  if(d.ok){showToast('Approved');renderApproval();refreshDash();}
+  else showToast('Error: '+(d.error||'Unknown'));
+}
+
+async function rejReg(id){
+  const reason=prompt('Reason for rejection (optional):')||'';
+  const r=await fetch('/api/client-submissions/'+id+'/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason})});
+  const d=await r.json();
+  if(d.ok){showToast('Rejected');renderApproval();}
+  else showToast('Error: '+(d.error||'Unknown'));
+}
+
+async function delAppr(id){
+  if(!confirm('Delete permanently?'))return;
+  await fetch('/api/client-submissions/'+id,{method:'DELETE'});
+  showToast('Deleted');renderApproval();
+}
+
+// ── Duplicate Log ──────────────────────────────────────────────────────────
+async function renderDupLog(){
+  const tbody=gid('dup-body');if(!tbody)return;
+  try{
+    const r=await fetch('/api/client-submissions?dup_flag=1');
+    if(!r.ok)return;
+    const all=await r.json();
+    const dups=all.filter(s=>s.dup_flag);
+    if(!dups.length){
+      tbody.innerHTML='<tr><td colspan="8"><div class="empty"><div class="empty-icon">✅</div><div class="empty-title">No duplicates flagged</div></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML=dups.map(row=>'<tr>'
+      +'<td><strong>'+esc(row.trade_name||row.reg_name)+'</strong></td>'
+      +'<td>Duplicate detected</td>'
+      +'<td style="font-size:11px">'+esc(row.del_full||'—')+'</td>'
+      +'<td>'+esc(row.delivery_area||'—')+'</td>'
+      +'<td><span class="chip">'+esc(row.cluster_id||'—')+'</span></td>'
+      +'<td>'+(row.submitted_at||'').slice(0,10)+'</td>'
+      +'<td><span class="pill flag">'+esc(row.approval_status)+'</span></td>'
+      +'<td><button class="btn btn-d btn-xs" onclick="delAppr('+row.id+')">Delete</button></td>'
+      +'</tr>').join('');
+  }catch(e){}
+}
+function clearDups(){renderDupLog();}
+
+// ── Client Database ────────────────────────────────────────────────────────
+async function renderClientDB(){
+  const tbody=gid('db-body');if(!tbody)return;
+  try{
+    const params=new URLSearchParams({q:dbSearch,area:dbAreaFilter,limit:dbPageSize,offset:(dbPage-1)*dbPageSize});
+    const r=await fetch('/api/client-master?'+params);if(!r.ok)return;
+    const d=await r.json();
+    dbTotal=d.total;
+    const stat=gid('dbStats');if(stat)stat.textContent=d.total.toLocaleString()+' records';
+    if(!d.clients.length){
+      tbody.innerHTML='<tr><td colspan="14"><div class="empty"><div class="empty-icon">🗂</div><div class="empty-title">No clients found</div></div></td></tr>';
+      renderPager();return;
+    }
+    tbody.innerHTML=d.clients.map(c=>'<tr>'
+      +'<td><span class="pill '+(c.data_quality_flag==='PICKUP'?'exist':c.data_quality_flag==='OK'?'ok':'pend')+'" style="font-size:9px">'+esc(c.data_quality_flag||'OK')+'</span></td>'
+      +'<td style="font-family:monospace;font-size:10px">'+esc(c.internal_id||'—')+'</td>'
+      +'<td><strong>'+esc(c.client_name)+'</strong></td>'
+      +'<td style="font-size:11px">'+esc(c.address1||'—')+'</td>'
+      +'<td style="font-size:11px">'+esc(c.address2||'')+'</td>'
+      +'<td>'+esc(c.city||'—')+'</td>'
+      +'<td>'+esc(c.province||'—')+'</td>'
+      +'<td>'+esc(c.zip_code||'—')+'</td>'
+      +'<td>'+esc(c.delivery_area||'—')+'</td>'
+      +'<td><span class="chip" style="font-size:9px">'+esc(c.cluster_id||'—')+'</span></td>'
+      +'<td style="font-size:11px">'+esc(c.route_id||'—')+'</td>'
+      +'<td style="font-family:monospace;font-size:10px">'+(c.latitude?Number(c.latitude).toFixed(4):'—')+'</td>'
+      +'<td style="font-family:monospace;font-size:10px">'+(c.longitude?Number(c.longitude).toFixed(4):'—')+'</td>'
+      +'<td><button class="btn btn-gh btn-xs" onclick="dlClient('+c.id+')">⬇</button></td>'
+      +'</tr>').join('');
+    renderPager();
+  }catch(e){console.warn('DB render',e);}
+}
+
+function filterDB(){dbPage=1;dbSearch=tv('dbSearch');renderClientDB();}
+
+function renderPager(){
+  const pager=gid('db-pager');if(!pager)return;
+  const pages=Math.ceil(dbTotal/dbPageSize)||1;
+  let h='<button class="pbtn"'+(dbPage<=1?' disabled':'')+' onclick="dbGoPage('+(dbPage-1)+')">‹</button>';
+  const s=Math.max(1,dbPage-3),e=Math.min(pages,dbPage+3);
+  if(s>1)h+='<button class="pbtn" onclick="dbGoPage(1)">1</button><span style="padding:0 4px">…</span>';
+  for(let i=s;i<=e;i++)h+='<button class="pbtn'+(i===dbPage?' on':'')+'" onclick="dbGoPage('+i+')">'+i+'</button>';
+  if(e<pages)h+='<span style="padding:0 4px">…</span><button class="pbtn" onclick="dbGoPage('+pages+')">'+pages+'</button>';
+  h+='<button class="pbtn"'+(dbPage>=pages?' disabled':'')+' onclick="dbGoPage('+(dbPage+1)+')">›</button>';
+  h+='<span style="font-size:11px;color:var(--t3);margin-left:8px">'+dbTotal.toLocaleString()+' total</span>';
+  pager.innerHTML=h;
+}
+function dbGoPage(p){dbPage=p;renderClientDB();}
+
+async function loadAreaFilter(){
+  try{
+    const r=await fetch('/api/client-master/areas');
+    const areas=await r.json();
+    const sel=gid('db-area-filter');if(!sel)return;
+    sel.innerHTML='<option value="">All Areas</option>'+areas.map(a=>'<option value="'+esc(a)+'">'+esc(a)+'</option>').join('');
+  }catch(e){}
+}
+
+function dlClient(id){
+  fetch('/api/client-master?limit=1&offset=0').then(r=>r.json()).then(d=>{
+    const c=d.clients&&d.clients.find?d.clients.find(x=>x.id===id):null;
+    if(!c){showToast('Client not found');return;}
+    const rows=[['ID','Name','Address','City','Province','Zip','Area','Cluster','Route','Lat','Lon'],
+      [c.internal_id,c.client_name,c.address1,c.city,c.province,c.zip_code,c.delivery_area,c.cluster_id,c.route_id,c.latitude,c.longitude]];
+    const csv=rows.map(row=>row.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+    const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    a.download='client-'+id+'.csv';a.click();
+  }).catch(()=>showToast('Download error'));
+}
+
+// ── Wizard Navigation ──────────────────────────────────────────────────────
+function buildProgress(){
+  const cont=gid('wp-steps');
+  if(cont){
+    let h='';
+    STEP_LABELS.forEach((lbl,i)=>{
+      const n=i+1,done=n<wizStep,active=n===wizStep;
+      h+='<div class="wp-step" onclick="goStep('+n+')">'
+        +'<div class="wp-dot '+(done?'done':active?'active':'idle')+'">'+(done?'✓':n)+'</div>'
+        +'<div class="wp-lbl '+(done?'done':active?'active':'')+'" style="display:none">'+lbl+'</div>'
+        +'</div>';
+      if(i<STEP_LABELS.length-1)h+='<div class="wp-conn '+(done?'done':'')+'"></div>';
+    });
+    cont.innerHTML=h;
+  }
+  const wl=gid('wp-label');if(wl)wl.textContent='Step '+wizStep+' of '+STEP_LABELS.length;
+  const wp=gid('wp-pct');if(wp)wp.textContent=Math.round((wizStep-1)/STEP_LABELS.length*100)+'%';
+  const si=gid('step-ind');if(si)si.textContent='Step '+wizStep+' of '+STEP_LABELS.length;
+  const bp=gid('btn-prev');if(bp)bp.disabled=wizStep===1;
+  const bn=gid('btn-next');if(bn)bn.textContent=wizStep===9?'Submit to queue':'Next →';
+}
+
+function goStep(n){
+  wizStep=n;
+  document.querySelectorAll('.wstep').forEach(e=>e.classList.remove('on'));
+  const s=gid('ws-'+n);if(s)s.classList.add('on');
+  buildProgress();
+  if(n===9)buildReview();
+}
+function wizNext(){if(wizStep<9)goStep(wizStep+1);else submitWizard();}
+function wizPrev(){if(wizStep>1)goStep(wizStep-1);}
+
+function resetWizard(){
+  wizStep=1;formData={};wizDocs=[];routingDone=false;
+  resetGeoDisplay();resetRoutingDisplay();
+  document.querySelectorAll('.wstep input[type=text],.wstep input[type=date],.wstep input[type=time],.wstep select,.wstep textarea').forEach(el=>el.value='');
+  document.querySelectorAll('.ritem.on,.citem.on').forEach(el=>el.classList.remove('on'));
+  buildDocList();goStep(1);
+}
+
+function selR(k,v,el){
+  formData[k]=v;
+  if(el.parentElement)el.parentElement.querySelectorAll('.ritem.on').forEach(e=>e.classList.remove('on'));
+  el.classList.add('on');
+}
+function togC(el){el.classList.toggle('on');}
+
+// ── Delivery address preview ────────────────────────────────────────────────
+function updateDelPreview(){
+  const ids=['f-del1','f-del2','f-delCity','f-del-city','f-delProv','f-del-prov','f-delZip','f-del-zip'];
+  const a1=tv('f-del1'),a2=tv('f-del2');
+  const city=tv('f-delCity')||tv('f-del-city');
+  const prov=tv('f-delProv')||tv('f-del-prov');
+  const zip=tv('f-delZip')||tv('f-del-zip');
+  const parts=[a1,a2,city,prov,zip,'Philippines'].filter(Boolean);
+  const el=gid('del-prev');if(el)el.textContent=parts.join(', ')||'—';
+}
+
+// ── Geo display helpers ─────────────────────────────────────────────────────
+function resetGeoDisplay(){
+  const gc=gid('geoCard');if(gc)gc.className='geocard';
+  const gl=gid('geoLbl');if(gl)gl.textContent='Waiting — Step 8 runs the geocoding pipeline';
+  const gla=gid('geoLat');if(gla)gla.textContent='—';
+  const glo=gid('geoLon');if(glo)glo.textContent='—';
+}
+function resetRoutingDisplay(){
+  routingDone=false;
+  ['rr-cl','rr-zn','rr-rt','rr-sq'].forEach(id=>{
+    const b=gid(id);if(b)b.className='rrbox';
+    const v=gid(id+'-v');if(v)v.textContent='—';
+    const s=gid(id+'-s');if(s)s.textContent='Run pipeline';
+  });
+  const btn=gid('run-btn');if(btn){btn.disabled=false;btn.textContent='▶ Run Auto-Routing';}
+  const ds=gid('dupSum');if(ds)ds.textContent='Run the pipeline to begin';
+  const cl=gid('rr-cap-l');if(cl)cl.textContent='—';
+  const cf=gid('rr-cap-f');if(cf){cf.style.width='0%';cf.className='capfill ok';}
+}
+function setPipeStep(id,state){
+  const el=gid(id);if(el)el.className='dlayer '+state;
+  const di=gid(id+'i');if(di)di.className='di '+state;
+}
+function setRR(bid,val,sub){
+  const b=gid(bid);if(b)b.className='rrbox ok';
+  const v=gid(bid+'-v');if(v)v.textContent=val;
+  const s=gid(bid+'-s');if(s)s.textContent=sub||'';
+}
+
+// ── Haversine / cluster ─────────────────────────────────────────────────────
+function hKm(la1,lo1,la2,lo2){
+  const R=6371,dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function assignCluster(lat,lon,city){
+  if(!lat&&!lon){
+    const bc=CLUSTER_CENTROIDS.find(c=>c.city.toLowerCase()===city.toLowerCase());
+    return{cluster:bc||CLUSTER_CENTROIDS[0],distKm:0};
+  }
+  let best=null,bestD=Infinity;
+  for(const c of CLUSTER_CENTROIDS){const d=hKm(lat,lon,c.lat,c.lon);if(d<bestD){bestD=d;best=c;}}
+  return{cluster:best,distKm:bestD};
+}
+function assignRoute(clusterId){
+  const eli=Object.entries(ROUTE_LOOKUP).filter(([,rd])=>rd.cluster===clusterId&&rd.remaining>0);
+  if(!eli.length)return{routeId:clusterId+'-R-NEW',remaining:25,seq:1,isNew:true,drops:0};
+  eli.sort((a,b)=>b[1].remaining-a[1].remaining);
+  const[rid,rd]=eli[0];
+  return{routeId:rid,remaining:rd.remaining,seq:rd.drops+1,isNew:false,drops:rd.drops};
+}
+
+// ── Auto-routing pipeline ───────────────────────────────────────────────────
+async function runPipeline(){
+  const city=tv('f-delCity')||tv('f-del-city');
+  const prov=tv('f-delProv')||tv('f-del-prov');
+  if(!city||!prov){showToast('Complete delivery address first (Step 4)');return;}
+  const btn=gid('run-btn');if(btn){btn.disabled=true;btn.textContent='Running...';}
+  st={lat:null,lon:null,clusterId:'',routeId:'',seq:0,slotsLeft:0,clusterZone:'',clusterDist:0,geoSource:''};
+
+  // Step 1 visual
+  setPipeStep('l1','run');await sleep(250);setPipeStep('l1','done');
+
+  // Geocode via Nominatim
+  setPipeStep('l4','run');
+  const gc=gid('geoCard');if(gc)gc.className='geocard loading';
+  const gl=gid('geoLbl');if(gl)gl.textContent='Geocoding via OpenStreetMap...';
+  const addr1=tv('f-del1');
+  const fullAddr=[addr1,city,prov,'Philippines'].filter(Boolean).join(', ');
+  try{
+    const res=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=3&countrycodes=ph&q='+encodeURIComponent(fullAddr),{headers:{'User-Agent':'PFC-Onboarding/1.0'}});
+    const data=await res.json();
+    if(data&&data.length){
+      st.lat=parseFloat(data[0].lat);st.lon=parseFloat(data[0].lon);st.geoSource='Nominatim';
+      const gla=gid('geoLat');if(gla)gla.textContent=st.lat.toFixed(6);
+      const glo=gid('geoLon');if(glo)glo.textContent=st.lon.toFixed(6);
+      if(gc)gc.className='geocard ok';if(gl)gl.textContent='Coordinates confirmed';
+    }else{
+      const r2=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ph&q='+encodeURIComponent(city+', '+prov+', Philippines'),{headers:{'User-Agent':'PFC-Onboarding/1.0'}});
+      const d2=await r2.json();
+      if(d2&&d2.length){st.lat=parseFloat(d2[0].lat);st.lon=parseFloat(d2[0].lon);st.geoSource='CityApprox';}
+      if(gc)gc.className='geocard warn';if(gl)gl.textContent='City-level approximation only';
+    }
+  }catch(e){
+    if(gc)gc.className='geocard warn';if(gl)gl.textContent='Geocoding unavailable';
+  }
+  setPipeStep('l4','done');
+
+  // Cluster assignment
+  setPipeStep('l2','run');await sleep(200);
+  const{cluster,distKm}=assignCluster(st.lat,st.lon,city);
+  if(cluster){
+    st.clusterId=cluster.id;st.clusterZone=cluster.zone;st.clusterDist=distKm;
+    setRR('rr-cl',cluster.id,cluster.city+' '+cluster.province);
+    setRR('rr-zn',cluster.zone,'Geographic zone');
+  }
+  setPipeStep('l2','done');
+
+  // Route assignment
+  setPipeStep('l3','run');await sleep(200);
+  const route=assignRoute(st.clusterId);
+  st.routeId=route.routeId;st.seq=route.seq;st.slotsLeft=route.remaining;
+  setRR('rr-rt',route.routeId,(route.isNew?'New route':'Existing'));
+  setRR('rr-sq','#'+route.seq,'Suggested position');
+  const pct=Math.round(((25-route.remaining)/25)*100);
+  const cl=gid('rr-cap-l');if(cl)cl.textContent=pct+'% full, '+route.remaining+' slots open';
+  const cf=gid('rr-cap-f');if(cf){cf.style.width=pct+'%';cf.className='capfill '+(pct>=88?'bad':pct>=70?'warn':'ok');}
+  setRR('rr-dst',distKm.toFixed(1)+' km','Cluster distance');
+  setPipeStep('l3','done');setPipeStep('l5','done');
+  routingDone=true;
+
+  // Dup check via API
+  const tradeName=tv('f-tradeName')||tv('f-regName');
+  const ds=gid('dupSum');
+  try{
+    const lk=await fetch('/api/client-master/lookup?name='+encodeURIComponent(tradeName)+'&address='+encodeURIComponent(fullAddr));
+    const ld=await lk.json();
+    if(ld.match){if(ds)ds.innerHTML='<span style="color:var(--red);font-weight:600">Possible duplicate: '+esc(ld.match.client_name)+'</span>';}
+    else{if(ds)ds.innerHTML='<span style="color:var(--green)">No duplicate found</span>';}
+  }catch(e){if(ds)ds.textContent='Dup check unavailable';}
+
+  if(btn){btn.disabled=false;btn.textContent='Re-run Auto-Routing';}
+  showToast(st.lat?'Routing complete':'Done - verify coordinates manually');
+}
+
+// ── Review Step ─────────────────────────────────────────────────────────────
+function buildReview(){
+  const el=gid('review-content');if(!el)return;
+  const city=tv('f-delCity')||tv('f-del-city');
+  const prov=tv('f-delProv')||tv('f-del-prov');
+  const zip=tv('f-delZip')||tv('f-del-zip');
+  el.innerHTML='<div style="display:grid;gap:10px">'
+    +'<div class="card" style="padding:14px"><div class="slbl" style="margin-bottom:8px">Company</div>'
+    +'<div><strong>'+esc(tv('f-tradeName')||'—')+'</strong> &nbsp;&middot;&nbsp; '+esc(tv('f-regName')||'—')+'</div>'
+    +'<div style="font-size:11px;color:var(--t3);margin-top:4px">'+esc(formData.bizType||'—')+'</div></div>'
+    +'<div class="card" style="padding:14px"><div class="slbl" style="margin-bottom:8px">Delivery Address</div>'
+    +'<div>'+esc([tv('f-del1'),tv('f-del2'),city,prov,zip,'Philippines'].filter(Boolean).join(', '))+'</div></div>'
+    +'<div class="card" style="padding:14px"><div class="slbl" style="margin-bottom:8px">Routing</div>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap">'
+    +'<div><div style="font-size:10px;color:var(--t3)">Cluster</div><strong>'+esc(st.clusterId||'—')+'</strong></div>'
+    +'<div><div style="font-size:10px;color:var(--t3)">Route</div><strong>'+esc(st.routeId||'—')+'</strong></div>'
+    +'<div><div style="font-size:10px;color:var(--t3)">Seq</div><strong>#'+st.seq+'</strong></div>'
+    +'<div><div style="font-size:10px;color:var(--t3)">Coordinates</div><strong>'+(st.lat?st.lat.toFixed(4)+', '+st.lon.toFixed(4):'Not geocoded')+'</strong></div>'
+    +'</div>'
+    +(routingDone?'':'<div class="info-b amber" style="margin-top:8px"><span>⚠️</span><span>Please run Auto-Routing (Step 8) before submitting.</span></div>')
+    +'</div></div>';
+}
+
+// ── Submit Wizard ───────────────────────────────────────────────────────────
+async function submitWizard(){
+  const tradeName=tv('f-tradeName'),regName=tv('f-regName');
+  if(!tradeName&&!regName){showToast('Business name required (Step 1)');goStep(1);return;}
+  const city=tv('f-delCity')||tv('f-del-city');
+  const prov=tv('f-delProv')||tv('f-del-prov');
+  const zip=tv('f-delZip')||tv('f-del-zip');
+  const getBiz=sel=>Array.from(document.querySelectorAll('#'+sel+' .citem.on')).map(e=>e.textContent.trim()).join(', ');
+  const payload={
+    reg_name:regName,trade_name:tradeName,
+    cis_date:tv('f-cisDate')||'',
+    biz_type:formData.bizType||'',
+    nature_of_biz:getBiz('cg-biz'),
+    tin:tv('f-tin')||'',sec_dti:tv('f-secDti')||'',tax_class:formData.taxType||'',
+    email:tv('f-email')||'',website:tv('f-website')||'',
+    affiliations:tv('f-affil')||'',social:tv('f-social')||'',
+    sales_rep:tv('f-salesRep')||(_currentUser&&_currentUser.display)||'',
+    submitted_by:(_currentUser&&_currentUser.display)||'unknown',
+    officers:collectOfficers(),banks:collectBanks(),
+    hq_addr1:tv('f-hqAddr1')||'',hq_addr2:tv('f-hqAddr2')||'',
+    hq_city:tv('f-hqCity')||'',hq_province:tv('f-hqProv')||'',hq_zip:tv('f-hqZip')||'',
+    del_addr1:tv('f-del1')||'',del_addr2:tv('f-del2')||'',
+    del_city:city,del_province:prov,del_zip:zip,
+    del_full:[tv('f-del1'),tv('f-del2'),city,prov,zip,'Philippines'].filter(Boolean).join(', '),
+    delivery_area:formData.deliveryArea||city||'',
+    cluster_id:st.clusterId||'',route_id:st.routeId||'',
+    latitude:st.lat||null,longitude:st.lon||null,geo_source:st.geoSource||'',
+    inv_to:tv('f-invTo')||'',inv_addr:tv('f-invAddr')||'',
+    mode_of_ordering:getBiz('cg-po'),po_notes:tv('f-poNotes')||'',
+    rcv_start:tv('f-rcvStart')||'',rcv_end:tv('f-rcvEnd')||'',
+    temp_req:tv('f-temp')||'',del_docs:getBiz('cg-delDocs'),del_notes:tv('f-delNotes')||'',
+    payment_terms:formData.payTerms||tv('f-payTerms')||'',
+    credit_limit:tv('f-creditLim')||'',
+    countering:formData.ctr||'',ctr_sched:tv('f-ctrSched')||'',
+    col_day:tv('f-colDay')||'',col_time:tv('f-colTime')||'',
+    issues_ewt:formData.ewt||'',pay_docs:getBiz('cg-payDocs'),pay_notes:tv('f-payNotes')||'',
+    documents:wizDocs.map(d=>({name:d.name,type:d.docType||''}))
+  };
+  try{
+    const r=await fetch('/api/client-submissions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json();
+    if(d.ok){
+      const smTitle=gid('sm-title'),smSub=gid('sm-sub'),smData=gid('sm-data'),smIcon=gid('sm-icon');
+      if(smTitle)smTitle.textContent=d.dup_flag?'Flagged — Supervisor review required':'Submitted to approval queue';
+      if(smSub)smSub.textContent=d.dup_flag?'A possible duplicate was detected. A supervisor will review this.':'CIS submitted successfully. Awaiting supervisor approval.';
+      if(smIcon)smIcon.textContent=d.dup_flag?'⚠️':'✅';
+      if(smData)smData.innerHTML='<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:11px">'
+        +'<span style="color:var(--t3)">Reference</span><strong>REF-'+d.id+'</strong>'
+        +'<span style="color:var(--t3)">Client</span><span>'+esc(tradeName||regName)+'</span>'
+        +'<span style="color:var(--t3)">Cluster</span><span>'+esc(st.clusterId||'—')+'</span>'
+        +'<span style="color:var(--t3)">Route</span><span>'+esc(st.routeId||'—')+'</span>'
+        +'<span style="color:var(--t3)">Status</span><span class="pill '+(d.dup_flag?'flag':'pend')+'">'+(d.dup_flag?'FLAGGED':'PENDING')+'</span>'
+        +'</div>';
+      gid('success-modal').classList.add('on');
+      refreshDash();
+    }else showToast('Error: '+(d.error||'Submission failed'));
+  }catch(e){showToast('Network error — please retry');}
+}
+
+function collectOfficers(){
+  const arr=[];
+  [['o1n','o1t','o1m','o1e','Owner'],['o2n','o2t','o2m','o2e','Owner 2'],
+   ['p1n','p1t','p1m','p1e','Purchaser'],['p2n','p2t','p2m','p2e','Purchaser 2'],
+   ['r1n','r1t','r1m','r1e','Receiver'],['r2n','r2t','r2m','r2e','Receiver 2']].forEach(([n,t,m,e,role])=>{
+    const name=tv('o-'+n);if(name)arr.push({role,name,tel:tv('o-'+t)||'',mobile:tv('o-'+m)||'',email:tv('o-'+e)||''});
+  });
+  return arr;
+}
+function collectBanks(){
+  const arr=[];
+  [1,2].forEach(i=>{const bn=tv('f-b'+i+'bank');if(bn)arr.push({bank:bn,branch:tv('f-b'+i+'branch')||'',type:formData['b'+i+'type']||'',acct:tv('f-b'+i+'acct')||''});});
+  return arr;
+}
+
+function closeSM(){gid('success-modal').classList.remove('on');resetWizard();}
+function closeUserModal(){gid('user-modal').classList.remove('on');}
+function closeEditModal(){gid('edit-modal').classList.remove('on');}
+
+// ── Document Upload ─────────────────────────────────────────────────────────
+const DOC_TYPES=[
+  {id:'cis',label:'Customer Information Sheet (CIS)',req:true},
+  {id:'sec',label:'SEC / DTI Registration',req:true},
+  {id:'mayor',label:"Mayor's Permit",req:true},
+  {id:'bir2303',label:'BIR Form 2303',req:true},
+  {id:'fda',label:'FDA License to Operate',req:true},
+  {id:'gov_id',label:'Government-issued ID',req:true},
+  {id:'bank_cert',label:'Bank Certificate',req:false},
+  {id:'fin_stmt',label:'Financial Statement',req:false},
+  {id:'other',label:'Other document',req:false}
+];
+function buildDocList(){
+  const el=gid('doc-list');if(!el)return;
+  el.innerHTML=DOC_TYPES.map(dt=>'<div class="doc-item" id="doci-'+dt.id+'">'
+    +'<div style="display:flex;align-items:center;gap:10px">'
+    +'<div class="doc-status idle" id="docst-'+dt.id+'">○</div>'
+    +'<div><div style="font-weight:600;font-size:12px">'+esc(dt.label)+(dt.req?' <span class="req">*</span>':'')+'</div>'
+    +'<div style="font-size:10px;color:var(--t3)" id="docfn-'+dt.id+'">No file selected</div></div></div>'
+    +'<label class="btn btn-gh btn-xs" style="cursor:pointer">Browse'
+    +'<input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="display:none" onchange="attachDoc(\''+dt.id+'\',this)"></label>'
+    +'</div>').join('');
+}
+function attachDoc(docId,input){
+  if(!input.files||!input.files.length)return;
+  const file=input.files[0];
+  const ex=wizDocs.findIndex(d=>d.docType===docId);
+  const entry={name:file.name,docType:docId,size:file.size};
+  if(ex>=0)wizDocs[ex]=entry;else wizDocs.push(entry);
+  const fn=gid('docfn-'+docId);if(fn)fn.textContent=file.name;
+  const st2=gid('docst-'+docId);if(st2){st2.textContent='✓';st2.className='doc-status done';}
+  showToast(file.name+' attached');
+}
+
+// ── Map ────────────────────────────────────────────────────────────────────
+function initMap(){
+  if(_mapLoaded)return;
+  const el=gid('main-map');if(!el||typeof L==='undefined')return;
+  _map=L.map('main-map').setView([12.8797,121.774],6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(_map);
+  _mapLoaded=true;
+  loadMapMarkers();populateHeatmap();
+}
+async function loadMapMarkers(){
+  if(!_map)return;
+  CLUSTER_CENTROIDS.forEach(c=>{
+    L.circleMarker([c.lat,c.lon],{radius:7,color:'#059669',fillColor:'#059669',fillOpacity:.7,weight:1.5})
+      .bindPopup('<strong>'+esc(c.id)+'</strong><br>'+esc(c.city)+', '+esc(c.province)+'<br><small>Zone: '+esc(c.zone)+'</small>')
+      .addTo(_map);
+  });
+  try{
+    const r=await fetch('/api/client-master?limit=500');
+    const d=await r.json();
+    d.clients.filter(c=>c.latitude&&c.longitude).forEach(c=>{
+      L.circleMarker([c.latitude,c.longitude],{radius:3,color:'#1565C0',fillOpacity:.6,weight:1})
+        .bindPopup('<strong>'+esc(c.client_name)+'</strong><br>'+esc(c.delivery_area||'')+'<br><small>'+esc(c.cluster_id||'')+'</small>')
+        .addTo(_map);
+    });
+  }catch(e){}
+}
+function populateHeatmap(){
+  const el=gid('heatmap');if(!el)return;
+  const sorted=[...CLUSTER_CENTROIDS].sort((a,b)=>b.clients-a.clients).slice(0,20);
+  el.innerHTML=sorted.map(c=>{
+    const pct=Math.min(100,Math.round(c.clients/2));
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">'
+      +'<div style="font-size:10px;font-weight:600;width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--navy)">'+esc(c.id)+'</div>'
+      +'<div style="flex:1;height:6px;background:var(--s2);border-radius:3px"><div style="height:6px;border-radius:3px;background:#059669;width:'+pct+'%"></div></div>'
+      +'<div style="font-size:10px;color:var(--t3);width:30px;text-align:right">'+c.clients+'</div>'
+      +'</div>';
+  }).join('');
+}
+function filterMap(){
+  const val=tv('map-cl-filter');if(!val||!_map)return;
+  const c=CLUSTER_CENTROIDS.find(c=>c.id===val);if(c)_map.setView([c.lat,c.lon],12);
+}
+function resetMap(){if(_map)_map.setView([12.8797,121.774],6);}
+
+// ── Bulk import stub ────────────────────────────────────────────────────────
+function openBulkModal(){showToast('Bulk import: use the client database upload feature or contact your system admin.');}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',async()=>{
+  const ok=await checkAuth();if(!ok)return;
+  buildProgress();buildDocList();refreshDash();updateBadges(0,0);
+  const today=new Date().toISOString().slice(0,10);
+  const cd=gid('f-cisDate');if(cd)cd.value=today;
+  ['f-del1','f-del2','f-delCity','f-del-city','f-delProv','f-del-prov','f-delZip','f-del-zip'].forEach(id=>{
+    const el=gid(id);if(el)el.addEventListener('input',updateDelPreview);
+  });
+  const dbSrch=gid('dbSearch');
+  if(dbSrch)dbSrch.addEventListener('keydown',e=>{if(e.key==='Enter')filterDB();});
+  const dbAF=gid('db-area-filter');
+  if(dbAF)dbAF.addEventListener('change',()=>{dbAreaFilter=dbAF.value;dbPage=1;renderClientDB();});
+  const mcf=gid('map-cl-filter');
+  if(mcf)CLUSTER_CENTROIDS.forEach(c=>{const opt=document.createElement('option');opt.value=c.id;opt.textContent=c.id+' — '+c.city;mcf.appendChild(opt);});
+  showTab('dashboard');
+});
+</script>
+</body>
+</html>
