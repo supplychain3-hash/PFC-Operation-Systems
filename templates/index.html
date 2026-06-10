@@ -5876,4 +5876,11 @@ function exportPodSummaryCSV() {
   var data = [header].concat(_podSummaryRows.map(function(r){
     var late    = r.returned - r.ontime;
     var pending = r.total    - r.returned;
-    return [r.label||r.date||'', r
+    return [r.label||r.date||'', r.total||0, r.returned||0, r.ontime||0, late, pending,
+            r.compliance!=null ? r.compliance.toFixed(1)+'%' : ''];
+  }));
+  _downloadCSV(data, 'PFC_PODSummary_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+</script>
+</body>
+</html>
