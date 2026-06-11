@@ -1565,6 +1565,7 @@ let currentDeliveryDate = new Date().toISOString().slice(0,10); // manually set 
 let mapLayers      = {};
 let whMarkers      = {};   // code → L.marker for CSW toggle
 let isolatedWH     = null; // code of isolated Cold Storage WH
+let isolatedStop   = null; // {truckId, seq} — single-stop spotlight
 let warehouseData  = {};
 let mapExpanded    = false;
 let reassignTarget = null;
@@ -3255,17 +3256,63 @@ function toggleIsolation(truckId) {
     }
   }
 }
-function clearIsolation() { isolatedTrucks.clear(); isolatedWH=null; applyIsolation(); renderLegend(); }
+function clearIsolation() { isolatedTrucks.clear(); isolatedWH=null; isolatedStop=null; applyIsolation(); renderLegend(); }
+
+// Called from CSW popup "👁 Only" button — isolates a single truck (within the warehouse context)
+function isolateTruckFromWH(truckId) {
+  if (isolatedTrucks.size === 1 && isolatedTrucks.has(truckId)) {
+    // Already isolated to just this truck — toggle back to full CSW view or all
+    if (isolatedWH) {
+      isolatedTrucks.clear();
+      currentPlan.forEach(t => {
+        if (t.pickup_wh === isolatedWH || (t.all_whs||[]).includes(isolatedWH))
+          isolatedTrucks.add(t.truck_id);
+      });
+      applyIsolation();
+      showToast(isolatedWH + ': showing all trucks', 'info');
+    } else {
+      clearIsolation();
+      showToast('Showing all trucks', 'info');
+    }
+    return;
+  }
+  isolatedTrucks.clear();
+  isolatedTrucks.add(truckId);
+  isolatedStop = null;
+  applyIsolation();
+  renderLegend();
+  const ti = currentPlan.findIndex(t => t.truck_id === truckId);
+  if (ti >= 0) {
+    const card = document.getElementById('tc-'+ti);
+    if (card) card.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  showToast('🚛 ' + truckId + ' isolated on map', 'success');
+}
 
 function applyIsolation() {
   const btn=document.getElementById('iso-clear-btn');
-  if(btn) btn.style.display=isolatedTrucks.size>0?'':'none';
+  if(btn) btn.style.display=isolatedTrucks.size>0||isolatedStop?'':'none';
   currentPlan.forEach((truck,ti)=>{
     const lg=mapLayers[truck.truck_id];
     if(lg){ if(isolatedTrucks.size===0||isolatedTrucks.has(truck.truck_id)) leafletMap.addLayer(lg); else leafletMap.removeLayer(lg); }
     const card=document.getElementById('tc-'+ti);
     if(card){ card.classList.toggle('isolated',isolatedTrucks.has(truck.truck_id)); card.classList.toggle('dimmed',isolatedTrucks.size>0&&!isolatedTrucks.has(truck.truck_id)); }
   });
+  // Per-stop spotlight: within the isolated truck's layer, style non-selected markers faded
+  if(isolatedStop) {
+    const lg=mapLayers[isolatedStop.truckId];
+    if(lg) lg.eachLayer(l=>{
+      if(!l.getLatLng||!l._seq) return;
+      const isTarget=l._truckId===isolatedStop.truckId&&l._seq===isolatedStop.seq;
+      const el=l.getElement&&l.getElement();
+      if(el) el.style.opacity=isTarget?'1':'0.18';
+    });
+  } else {
+    // Restore all marker opacities when no stop is isolated
+    Object.values(mapLayers).forEach(lg=>lg.eachLayer&&lg.eachLayer(l=>{
+      const el=l.getElement&&l.getElement(); if(el) el.style.opacity='';
+    }));
+  }
   document.querySelectorAll('.legend-item').forEach(item=>{
     const active=isolatedTrucks.has(item.dataset.truckId);
     item.classList.toggle('iso-active',active);
@@ -3274,7 +3321,11 @@ function applyIsolation() {
   });
   const selCount=document.getElementById('legend-sel-count');
   if(selCount){ if(isolatedTrucks.size>0){selCount.textContent=isolatedTrucks.size+' selected';selCount.style.display='';}else{selCount.style.display='none';} }
-  if(isolatedTrucks.size>0){
+  if(isolatedStop){
+    // Zoom tight to the spotlighted stop
+    const lg=mapLayers[isolatedStop.truckId];
+    if(lg) lg.eachLayer(l=>{ if(l._truckId===isolatedStop.truckId&&l._seq===isolatedStop.seq&&l.getLatLng) leafletMap.setView(l.getLatLng(),16); });
+  } else if(isolatedTrucks.size>0){
     const allBB=[];
     isolatedTrucks.forEach(id=>{ const lg=mapLayers[id]; if(lg) lg.eachLayer(l=>{if(l.getLatLng)allBB.push(l.getLatLng());}); });
     if(allBB.length) leafletMap.fitBounds(L.latLngBounds(allBB).pad(.18));
@@ -4231,30 +4282,51 @@ function initMap(){
 
 function buildWhPopupContent(code, d) {
   const trucks = currentPlan.filter(t => t.pickup_wh === code || (t.all_whs||[]).includes(code));
+  const bgColor = WH_GROUP_COLORS[d.group] || '#1e3a5f';
   if (!trucks.length) {
     return `<div style="font-family:Segoe UI,sans-serif;min-width:200px">
-      <div style="background:${WH_GROUP_COLORS[d.group]||'#1e3a5f'};color:#fff;padding:7px 10px;margin:-10px -10px 10px;border-radius:4px 4px 0 0;font-weight:800">${code} — ${d.name}</div>
+      <div style="background:${bgColor};color:#fff;padding:7px 10px;margin:-10px -10px 10px;border-radius:4px 4px 0 0;font-weight:800">${code} — ${d.name}</div>
       <span style="color:#64748b;font-size:.8rem">No trucks assigned to this warehouse today.</span>
     </div>`;
   }
-  const rows = trucks.map((t,i)=>{
+  const totalDrops = trucks.reduce((a,t)=>a+t.stops.length,0);
+  const rows = trucks.map((t)=>{
     const color = TRUCK_COLORS[currentPlan.indexOf(t) % TRUCK_COLORS.length];
-    const stops = t.stops.map(s=>`<div style="padding:2px 0;border-bottom:1px solid #f1f5f9;font-size:.72rem">
-      <b>${s.seq}.</b> ${s.customer_name} <span style="color:#94a3b8">${s.vol.toLocaleString()} kg</span>
-    </div>`).join('');
-    return `<div style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+    const stops = t.stops.map(s=>`
+      <div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #f1f5f9">
+        <div style="background:${color};color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:800;flex-shrink:0">${s.seq}</div>
+        <span style="font-size:.72rem;flex:1">${s.customer_name} <span style="color:#94a3b8">${s.vol.toLocaleString()} kg</span></span>
+        <button onclick="leafletMap.closePopup();isolateStopOnMap('${t.truck_id}',${s.seq})"
+          title="Isolate this client on map"
+          style="font-size:.6rem;padding:1px 5px;border:1px solid #f59e0b;color:#92400e;background:#fffbeb;border-radius:3px;cursor:pointer;white-space:nowrap;font-family:inherit">
+          &#x1F4CD;
+        </button>
+      </div>`).join('');
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
         <div style="background:${color};color:#fff;border-radius:4px;padding:2px 7px;font-weight:800;font-size:.78rem">${t.truck_id}</div>
-        <span style="font-size:.75rem;color:#475569">${t.truck_type} · ${t.acc_weight.toLocaleString()} kg · ${t.stops.length} drops</span>
+        <span style="font-size:.72rem;color:#475569;flex:1">${t.truck_type} · ${t.acc_weight.toLocaleString()} kg · ${t.stops.length} drops</span>
+        <button onclick="leafletMap.closePopup();isolateTruckFromWH('${t.truck_id}')"
+          title="Show only this truck on map"
+          style="font-size:.6rem;padding:1px 6px;border:1px solid ${color};color:${color};background:#fff;border-radius:3px;cursor:pointer;font-family:inherit;font-weight:700">
+          &#x1F441; Only
+        </button>
       </div>
-      <div style="max-height:120px;overflow-y:auto">${stops}</div>
+      <div style="max-height:130px;overflow-y:auto;padding-left:2px">${stops}</div>
     </div>`;
-  }).join('<hr style="margin:8px 0;border:none;border-top:1px solid #e2e8f0">');
-  return `<div style="font-family:Segoe UI,sans-serif;min-width:250px;max-width:310px">
-    <div style="background:${WH_GROUP_COLORS[d.group]||'#1e3a5f'};color:#fff;padding:7px 10px;margin:-10px -10px 10px;border-radius:4px 4px 0 0;font-weight:800">
-      ${code} — ${d.name} <span style="font-weight:400;font-size:.78rem">(${trucks.length} truck${trucks.length>1?'s':''})</span>
+  }).join('<hr style="margin:6px 0;border:none;border-top:1px solid #e2e8f0">');
+  return `<div style="font-family:Segoe UI,sans-serif;min-width:270px;max-width:330px">
+    <div style="background:${bgColor};color:#fff;padding:7px 10px;margin:-10px -10px 8px;border-radius:4px 4px 0 0;font-weight:800">
+      ${code} — ${d.name}
+      <div style="font-size:.72rem;font-weight:400;margin-top:2px;opacity:.85">${trucks.length} truck${trucks.length>1?'s':''} · ${totalDrops} client${totalDrops>1?'s':''} shown on map</div>
     </div>
     ${rows}
+    <div style="margin-top:6px;text-align:right">
+      <button onclick="leafletMap.closePopup();clearIsolation()"
+        style="font-size:.65rem;padding:2px 8px;border:1px solid #cbd5e1;color:#64748b;background:#f8fafc;border-radius:3px;cursor:pointer;font-family:inherit">
+        ✕ Clear isolation
+      </button>
+    </div>
   </div>`;
 }
 
@@ -4313,34 +4385,62 @@ function renderWarehouseMarkers(){
 
 function isolateWarehouse(code) {
   if (isolatedWH === code) {
+    // Second click on same CSW — clear everything
     isolatedWH = null;
-    currentPlan.forEach((_,ti) => {
-      const card = document.getElementById('tc-'+ti); if (!card) return;
-      card.classList.remove('isolated','dimmed');
-    });
-    renderLegend();
-    showToast('Showing all warehouses','info');
+    clearIsolation();
+    showToast('Showing all warehouses', 'info');
     return;
   }
   isolatedWH = code;
-  const myTrucks = currentPlan.filter(t =>
-    t.pickup_wh === code || (t.all_whs||[]).includes(code)
-  );
+
+  // Populate isolatedTrucks with only trucks from this CSW
+  isolatedTrucks.clear();
+  currentPlan.forEach(t => {
+    if (t.pickup_wh === code || (t.all_whs||[]).includes(code))
+      isolatedTrucks.add(t.truck_id);
+  });
+
+  // applyIsolation handles map layers, card classes, legend & fitBounds
+  applyIsolation();
+  renderLegend();
+
+  // Scroll the panel to the first matching truck card
   const firstTi = currentPlan.findIndex(t =>
     t.pickup_wh === code || (t.all_whs||[]).includes(code)
   );
-  currentPlan.forEach((t,ti) => {
-    const card = document.getElementById('tc-'+ti); if (!card) return;
-    const mine = t.pickup_wh === code || (t.all_whs||[]).includes(code);
-    card.classList.toggle('isolated', mine);
-    card.classList.toggle('dimmed', !mine);
-  });
   if (firstTi >= 0) {
     const card = document.getElementById('tc-'+firstTi);
     if (card) card.scrollIntoView({behavior:'smooth', block:'start'});
   }
+
+  showToast(code + ': ' + isolatedTrucks.size + ' truck(s) shown on map', 'success');
+}
+
+function isolateStopOnMap(truckId, seq) {
+  // Toggle off if same stop clicked again
+  if (isolatedStop && isolatedStop.truckId === truckId && isolatedStop.seq === seq) {
+    isolatedStop = null;
+    // Keep truck isolation but restore all markers in that truck
+    applyIsolation();
+    showToast('Showing full truck route', 'info');
+    return;
+  }
+  isolatedStop = { truckId, seq };
+  // Also isolate the truck layer so other trucks are hidden
+  isolatedTrucks.clear();
+  isolatedTrucks.add(truckId);
+  isolatedWH = null;
+  applyIsolation();
   renderLegend();
-  showToast(code+': '+myTrucks.length+' truck(s) isolated','success');
+  // Scroll plan panel to truck card
+  const ti = currentPlan.findIndex(t => t.truck_id === truckId);
+  if (ti >= 0) {
+    const card = document.getElementById('tc-'+ti);
+    if (card) card.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  const truck = currentPlan.find(t => t.truck_id === truckId);
+  const stop  = truck && truck.stops.find(s => s.seq === seq);
+  showToast('📍 ' + (stop ? stop.customer_name : 'Client') + ' isolated on map', 'success');
 }
 
 // ======================================================
@@ -4389,12 +4489,17 @@ function renderMap() {
           <span style="background:#f1f5f9;border-radius:4px;padding:2px 5px;margin-right:2px">${stop.wh||''}</span>
           <span style="background:#f1f5f9;border-radius:4px;padding:2px 5px">${stop.match_area||stop.area||''}</span>
         </div>
-        <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+        <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${mapsLink}
           <button onclick="highlightTruckFromMap('${truck.truck_id}')"
             style="font-size:.72rem;border:1px solid ${color};color:${color};background:#fff;
                    border-radius:4px;padding:2px 8px;cursor:pointer;font-family:inherit">
             &#x2192; Show in Plan
+          </button>
+          <button onclick="isolateStopOnMap('${truck.truck_id}',${stop.seq});leafletMap.closePopup()"
+            style="font-size:.72rem;border:1px solid #f59e0b;color:#92400e;background:#fffbeb;
+                   border-radius:4px;padding:2px 8px;cursor:pointer;font-family:inherit;font-weight:600">
+            &#x1F4CD; Isolate Client
           </button>
         </div>
       </div>`,{maxWidth:300});
